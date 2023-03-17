@@ -2,14 +2,10 @@
 # link interactive: https://juliadynamics.github.io/Agents.jl/stable/agents_visualizations/
 # link: https://www.washingtonpost.com/graphics/2020/world/corona-simulator/
 
-# using Distributed
-# @everywhere begin
 using Agents, Random
 using InteractiveDynamics
 using GLMakie
 using DrWatson: @dict
-# end
-# addprocs(4)
 
 # posso simulare le interazioni sociali di individui tramite 
 # l'uso di agenti che si comportano come delle palline che rimbalzano.
@@ -106,33 +102,30 @@ function model_step!(model)
     end
 end
 
-# TODO: completare funzione con: automazione numero vaccini per day 
-# (aumento in caso di bisogno e riduzione se non)
+# TODO: automazione numero vaccini per day (aumento in caso di bisogno e riduzione se non)
+# TODO: controllo sul numero di morti e sulla mortalita' del virus per misure piu' severe
 # FIXME: performance drop
 function update_params!(model)
-    # ottenere numero di infetti (in relazione al numero di step effettuati)
     infected = count(i.status == :I for i in collect(allagents(model)))
-    # ottenere numero di morti (in relazione al numero di step effettuati)
-    # dead = model.N - nagents(model)
+    vaccinated = count(i.status == :V for i in collect(allagents(model)))
+    recovered = count(i.status == :V for i in collect(allagents(model)))
     # se necessario applicare quarantena
-    if infected ≥ nagents(model) * 0.2 && model.is_isolated == 0 # valore arbitrario
-        InteractiveDynamics.set_value!(model.properties, :is_isolated, 1) # key = :is_isolated=1/0, :is_vaccine=1
+    if infected ≥ nagents(model) * 0.01 && model.is_isolated == 0 # valore arbitrario
+        InteractiveDynamics.set_value!(model.properties, :is_isolated, 1)
     end
     # lavorare ad un vaccino (aspettare n step)
     # al termine degli n step applicare vaccino 
-    if model.is_vaccine == 0 && rand(model.rng) ≤ 0.2 # valore arbitrario per decidere se vaccino is ready
-        InteractiveDynamics.set_value!(model.properties, :is_vaccine, 1) # key = :is_isolated=1/0, :is_vaccine=1
+    if model.is_vaccine == 0 && rand(model.rng) ≤ 0.001 # valore arbitrario per decidere se vaccino is ready
+        InteractiveDynamics.set_value!(model.properties, :is_vaccine, 1)
     end
     # quando x percentuale della popolazione ha almeno n dosi di vaccino eliminare quarantena
-    vaccinated = count(i.status == :V for i in collect(allagents(model)))
-    recovered = count(i.status == :V for i in collect(allagents(model)))
+    # tenere a mente come le dosi di vaccino siano equivalenti a (vaccinati + recovered)
     if vaccinated + recovered > nagents(model) * 0.8 && model.is_isolated == 1
         InteractiveDynamics.set_value!(model.properties, :is_isolated, 0)
     end
 end
 
 function agent_step!(agent, model)
-    # update_params!(model)
     move_agent!(agent, model, model.dt)
     vaccine!(agent, model)
     quarantine!(agent, model)
@@ -160,8 +153,11 @@ function transmit!(a1, a2, rp)
     healthy.status = :I
     # semplificazione cambio idea da noquarantine a quarantine
     # dopo essere stati esposti al virus
-    if agent.noQuarantine
-        agent.noQuarantine = rand(model.rng) ≤ 0.5 ? false : true # valore arbitrario
+    if healthy.noQuarantine
+        healthy.noQuarantine = rand(model.rng) ≤ 0.5 ? false : true # valore arbitrario
+    end
+    if infected.noQuarantine
+        infected.noQuarantine = rand(model.rng) ≤ 0.5 ? false : true # valore arbitrario
     end
 end
 
@@ -198,7 +194,6 @@ function vaccine!(agent, model)
         # semplificazione del massimo numero di vaccini 
         # effettuabili durante un intero giorno di lavoro
         if rand(model.rng) ≤ model.max_vaccine_per_day
-            # attuale spike vaccinale dei primi 5 giorni non mi convince
             agent.status = :V
             agent.dose += 1
         end
@@ -219,6 +214,7 @@ function quarantine!(agent, model)
     end
 end
 
+# TODO: implementare riduzione rischio sintomi gravi → mortalita' se vaccinati
 function recover_or_die!(agent, model)
     if agent.days_infected ≥ model.infection_period * steps_per_day
         # semplificazione aumento mortalita' tra gli individui fragili
@@ -252,8 +248,7 @@ params = Dict(
     # :is_isolated => 0:1:1,
     :death_rate => 0:0.001:1,
     :max_vaccine_per_day => 0:0.0001:0.1,
-    # i parametri commentati sono parametri attualmente
-    # non utilizzati nell'interactive window
+    # parametri attualmente non utilizzati attivamente
     #:reinfection_probability => 0:0.01:1,
     #:βmin => 0:0.01:1,
     #:βmax => 0:0.01:1,
@@ -264,7 +259,7 @@ params = Dict(
 )
 
 # monitoro i valori del modello 
-colors(a) = a.status == :S ? "cornsilk4" : a.status == :I ? "red" : a.status == :V ? "blue" : a.status == :Q ? "brown" : a.status == :R ? "green" : "black"
+colors(a) = a.status == :S ? "cornsilk4" : a.status == :I ? "red" : a.status == :V ? "blue" : a.status == :Q ? "brown" : "green"
 
 susceptible(x) = count(i == :S for i in x)
 infected(x) = count(i == :I for i in x)
@@ -272,7 +267,8 @@ vaccinated(x) = count(i == :V for i in x)
 quarantined(x) = count(i == :Q for i in x)
 recovered(x) = count(i == :R for i in x)
 
-dead(model) = model.N - nagents(model) # questo dato lo ottego dal modello non dall'agente!
+# questo dato lo ottego dal modello non dall'agente!
+dead(model) = model.N - nagents(model) 
 
 adata = [(:status, susceptible), (:status, infected), (:status, vaccinated), (:status, quarantined), (:status, recovered)]
 mdata = [dead]
@@ -286,17 +282,17 @@ standard_params = (;
     detection_time = 5, # valore arbitrario
     quarantine_time = 10, # valore arbitrario
     reinfection_probability = 0.15, # 1 dose moderna
-    is_vaccine = 0, # true - false
-    is_isolated = 0, # true - false
+    is_vaccine = 0, # true:1 - false:0
+    is_isolated = 0, # true:1 - false:0
     interaction_radius = 0.012, # valore arbitrario
     dt = 1.0,
-    speed = 0.002,
+    speed = 0.002, # valore arbitrario
     death_rate = 0.044, # da WHO
     N = 500,
     initial_infected = 5,
     seed = 123,
-    βmin = 0.1,
-    βmax = 0.8,
+    βmin = 0.1, # valore arbitrario
+    βmax = 0.8, # valore arbitrario
     frail = 0.01, # valore arbitrario
     max_vaccine_per_day = 0.0085, # valore arbitrario 500k/59M
     space_dimension = (1.0, 1.0),
