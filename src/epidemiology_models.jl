@@ -104,11 +104,10 @@ end
 
 # TODO: automazione numero vaccini per day (aumento in caso di bisogno e riduzione se non)
 # TODO: controllo sul numero di morti e sulla mortalita' del virus per misure piu' severe
-# FIXME: performance drop
 function update_params!(model)
     infected = count(i.status == :I for i in collect(allagents(model)))
+    recovered = count(i.status == :R for i in collect(allagents(model)))
     vaccinated = count(i.status == :V for i in collect(allagents(model)))
-    recovered = count(i.status == :V for i in collect(allagents(model)))
     # se necessario applicare quarantena
     if infected ≥ nagents(model) * 0.01 && model.is_isolated == 0 # valore arbitrario
         InteractiveDynamics.set_value!(model.properties, :is_isolated, 1)
@@ -118,9 +117,8 @@ function update_params!(model)
     if model.is_vaccine == 0 && rand(model.rng) ≤ 0.001 # valore arbitrario per decidere se vaccino is ready
         InteractiveDynamics.set_value!(model.properties, :is_vaccine, 1)
     end
-    # quando x percentuale della popolazione ha almeno n dosi di vaccino eliminare quarantena
-    # tenere a mente come le dosi di vaccino siano equivalenti a (vaccinati + recovered)
-    if vaccinated + recovered > nagents(model) * 0.8 && model.is_isolated == 1
+    # quando il numero di recovered + vaccinated ≥ 80% tolgo la quarantena
+    if recovered + vaccinated ≥ nagents(model) * 0.8 && model.is_isolated == 1 # valore arbitrario
         InteractiveDynamics.set_value!(model.properties, :is_isolated, 0)
     end
 end
@@ -143,7 +141,7 @@ function transmit!(a1, a2, rp)
     βinf = healthy.isFrail ? infected.β * 2 : infected.β
     # semplificazione della quarantena in cui un individuo
     # se in quarantena ha una diminuzione di rischio infezione (/2)
-    βinf = healthy.status == :Q ? βinf / 2 : βinf
+    βinf = healthy.status == :Q ? βinf * 0.5 : βinf
     rand(model.rng) > βinf && return
 
     if healthy.status == :R || healthy.status == :V
@@ -169,7 +167,7 @@ function update!(agent, model)
         agent.days_infected += 1
         agent.days_quarantined += 1
         # possibilità di infrangere la quarantena
-        if rand(model.rng) ≤ 0.2 # valore randomico
+        if rand(model.rng) ≤ 0.15 # valore randomico
             agent.status = :I
             agent.mass = 1.0
             agent.vel = sincos(2π * rand(model.rng)) .* model.speed
@@ -190,7 +188,8 @@ function vaccine!(agent, model)
         if agent.status == :R
             rand(model.rng) > 0.8 && return # valore arbitrario
         end
-        agent.dose ≥ 3 && return # hard cap sul numero di dosi effettuabili
+        # hard cap sul numero di dosi effettuabili
+        agent.dose ≥ 3 && return 
         # semplificazione del massimo numero di vaccini 
         # effettuabili durante un intero giorno di lavoro
         if rand(model.rng) ≤ model.max_vaccine_per_day
@@ -218,7 +217,11 @@ end
 function recover_or_die!(agent, model)
     if agent.days_infected ≥ model.infection_period * steps_per_day
         # semplificazione aumento mortalita' tra gli individui fragili
-        death = agent.isFrail ? model.death_rate * 2 : model.death_rate
+        death = model.death_rate
+        death = agent.isFrail ? death * 2 : death
+        # semplificazione diminuzione rischio sintomi gravi con vaccino
+        # e quindi diminuzione mortalità 
+        death = agent.status == :V ? death * 0.1 : death # valore arbitrario
         if rand(model.rng) ≤ death
             kill_agent!(agent, model)
         else
@@ -242,13 +245,13 @@ params = Dict(
     :infection_period => 1:1:45,
     :detection_time => 1:1:21,
     :quarantine_time => 1:1:45,
-    :interaction_radius => 0:0.001:1,
     # variabili controllate autonomamente dal modello
     # :is_vaccine => 0:1:1,
     # :is_isolated => 0:1:1,
-    :death_rate => 0:0.001:1,
-    :max_vaccine_per_day => 0:0.0001:0.1,
     # parametri attualmente non utilizzati attivamente
+    # :interaction_radius => 0:0.001:1,
+    # :max_vaccine_per_day => 0:0.0001:0.1,
+    # :death_rate => 0:0.001:1,
     #:reinfection_probability => 0:0.01:1,
     #:βmin => 0:0.01:1,
     #:βmax => 0:0.01:1,
