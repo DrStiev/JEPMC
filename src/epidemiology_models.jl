@@ -102,8 +102,6 @@ function model_step!(model)
     end
 end
 
-# TODO: automazione numero vaccini per day (aumento in caso di bisogno e riduzione se non)
-# TODO: controllo sul numero di morti e sulla mortalita' del virus per misure piu' severe
 function update_params!(model)
     infected = count(i.status == :I for i in collect(allagents(model)))
     recovered = count(i.status == :R for i in collect(allagents(model)))
@@ -213,15 +211,14 @@ function quarantine!(agent, model)
     end
 end
 
-# TODO: implementare riduzione rischio sintomi gravi → mortalita' se vaccinati
 function recover_or_die!(agent, model)
     if agent.days_infected ≥ model.infection_period * steps_per_day
         # semplificazione aumento mortalita' tra gli individui fragili
         death = model.death_rate
         death = agent.isFrail ? death * 2 : death
-        # semplificazione diminuzione rischio sintomi gravi con vaccino
-        # e quindi diminuzione mortalità 
-        death = agent.status == :V ? death * 0.1 : death # valore arbitrario
+        # semplificazione diminuzione rischio sintomi gravi con vaccino (o recovered)
+        # e quindiconseguente diminuzione mortalità 
+        death = agent.dose > 0 ? death * 0.1 : death # valore arbitrario
         if rand(model.rng) ≤ death
             kill_agent!(agent, model)
         else
