@@ -237,81 +237,87 @@ function recover_or_die!(agent, model)
     end
 end
 
-# dizionario con i parametri modificabili
-params = Dict(
-    :infection_period => 1:1:45,
-    :detection_time => 1:1:21,
-    :quarantine_time => 1:1:45,
-    # variabili controllate autonomamente dal modello
-    # :is_vaccine => 0:1:1,
-    # :is_isolated => 0:1:1,
-    # parametri attualmente non utilizzati attivamente
-    # :interaction_radius => 0:0.001:1,
-    # :max_vaccine_per_day => 0:0.0001:0.1,
-    # :death_rate => 0:0.001:1,
-    #:reinfection_probability => 0:0.01:1,
-    #:βmin => 0:0.01:1,
-    #:βmax => 0:0.01:1,
-    #:frail => 0:0.01:1,
-    #:noVax => 0:0.01:1,
-    #:noQuarantine => 0:0.01:1,
-    #:N => 100:100:10_000,
-)
+function start_visual_model()
+    # dizionario con i parametri modificabili
+    params = Dict(
+        :infection_period => 1:1:45,
+        :detection_time => 1:1:21,
+        :quarantine_time => 1:1:45,
+        # variabili controllate autonomamente dal modello
+        # :is_vaccine => 0:1:1,
+        # :is_isolated => 0:1:1,
+        # parametri attualmente non utilizzati attivamente
+        # :interaction_radius => 0:0.001:1,
+        # :max_vaccine_per_day => 0:0.0001:0.1,
+        # :death_rate => 0:0.001:1,
+        #:reinfection_probability => 0:0.01:1,
+        #:βmin => 0:0.01:1,
+        #:βmax => 0:0.01:1,
+        #:frail => 0:0.01:1,
+        #:noVax => 0:0.01:1,
+        #:noQuarantine => 0:0.01:1,
+        #:N => 100:100:10_000,
+    )
 
-# monitoro i valori del modello 
-colors(a) = a.status == :S ? "cornsilk4" : a.status == :I ? "red" : a.status == :V ? "blue" : a.status == :Q ? "brown" : "green"
+    # monitoro i valori del modello 
+    colors(a) = a.status == :S ? "grey80" : a.status == :I ? "red2" : a.status == :V ? "blue3" : a.status == :Q ? "burlywood4" : "green"
 
-susceptible(x) = count(i == :S for i in x)
-infected(x) = count(i == :I for i in x)
-vaccinated(x) = count(i == :V for i in x)
-quarantined(x) = count(i == :Q for i in x)
-recovered(x) = count(i == :R for i in x)
+    susceptible(x) = count(i == :S for i in x)
+    infected(x) = count(i == :I for i in x)
+    vaccinated(x) = count(i == :V for i in x)
+    quarantined(x) = count(i == :Q for i in x)
+    recovered(x) = count(i == :R for i in x)
 
-# questo dato lo ottego dal modello non dall'agente!
-dead(model) = model.N - nagents(model) 
+    # questo dato lo ottego dal modello non dall'agente!
+    dead(model) = model.N - nagents(model) 
 
-adata = [(:status, susceptible), (:status, infected), (:status, vaccinated), (:status, quarantined), (:status, recovered)]
-mdata = [dead]
-plotkwargs = (; ac = colors)
+    adata = [(:status, susceptible), (:status, infected), (:status, vaccinated), (:status, quarantined), (:status, recovered)]
+    mdata = [dead]
+    plotkwargs = (; ac = colors)
 
-# 24 step equivalgono a 1 giorno.
-const steps_per_day = 24
+    # 24 step equivalgono a 1 giorno.
+    steps_per_day = 24
 
-standard_params = (;
-    infection_period = 14, # valore arbitrario
-    detection_time = 5, # valore arbitrario
-    quarantine_time = 10, # valore arbitrario
-    reinfection_probability = 0.15, # 1 dose moderna
-    is_vaccine = 0, # true:1 - false:0
-    is_isolated = 0, # true:1 - false:0
-    interaction_radius = 0.012, # valore arbitrario
-    dt = 1.0,
-    speed = 0.002, # valore arbitrario
-    death_rate = 0.044, # da WHO
-    N = 500,
-    initial_infected = 5,
-    seed = 123,
-    βmin = 0.1, # valore arbitrario
-    βmax = 0.8, # valore arbitrario
-    frail = 0.01, # valore arbitrario
-    max_vaccine_per_day = 0.0085, # valore arbitrario 500k/59M
-    space_dimension = (1.0, 1.0),
-    spacing = 0.02,
-    noVax = 0.1, # valore arbitrario
-    noQuarantine = 0.05, # valore arbitrario
-)
+    standard_params = (;
+        infection_period = 14, # valore arbitrario
+        detection_time = 5, # valore arbitrario
+        quarantine_time = 10, # valore arbitrario
+        reinfection_probability = 0.15, # 1 dose moderna
+        is_vaccine = 0, # true:1 - false:0
+        is_isolated = 0, # true:1 - false:0
+        interaction_radius = 0.012, # valore arbitrario
+        dt = 1.0,
+        speed = 0.002, # valore arbitrario
+        death_rate = 0.044, # da WHO
+        N = 500,
+        initial_infected = 5,
+        seed = 123,
+        βmin = 0.1, # valore arbitrario
+        βmax = 0.8, # valore arbitrario
+        frail = 0.01, # valore arbitrario
+        max_vaccine_per_day = 0.0085, # valore arbitrario 500k/59M
+        space_dimension = (1.0, 1.0),
+        spacing = 0.02,
+        noVax = 0.1, # valore arbitrario
+        noQuarantine = 0.05, # valore arbitrario
+    )
 
-model = model_init(;standard_params...)
+    model = model_init(;standard_params...)
 
-fig, abmobs = abmexploration(model;
-    agent_step! = agent_step!, 
-    model_step! = model_step!, 
-    params, 
-    plotkwargs...,
-    adata, 
-    alabels = ["Susceptible", "Infected", "Vaccinated", "Quarantined", "Recovered"],
-    mdata,
-    mlabels = ["Dead"]
-)
-abmobs
-fig
+    fig, abmobs = abmexploration(model;
+        agent_step! = agent_step!, 
+        model_step! = model_step!, 
+        params, 
+        plotkwargs...,
+        adata, 
+        alabels = ["Susceptible", "Infected", "Vaccinated", "Quarantined", "Recovered"],
+        mdata,
+        mlabels = ["Dead"]
+    )
+    abmobs
+    return fig
+end
+
+# https://github.com/JuliaGraphics/Colors.jl/blob/master/src/names_data.jl
+
+fig = start_visual_model()
