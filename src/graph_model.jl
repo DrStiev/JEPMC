@@ -136,16 +136,16 @@ function create_params(;
 	return params
 end
 
-function model_step!(agent, model)
-	update_params!(agent, model)
+function model_step!(model)
+	update_params!(model)
 end
 
-function update_params!(agent, model)
+function update_params!(model)
 	# TODO: aggiungi controllore automatico parametri modello
-	agent = length(agent)
-	infected = count(a.status == :I for a in agent)
-	recovered = count(a.status == :R for a in agent)
-	vaccinated = count(a.status == :V for a in agent)
+	agent = length(collect(allagents(model)))
+	infected = count(a.status == :I for a in collect(allagents(model)))
+	recovered = count(a.status == :R for a in collect(allagents(model)))
+	vaccinated = count(a.status == :V for a in collect(allagents(model)))
 
 	if infected ≥ agent * 0.01
 		InteractiveDynamics.set_value!(model.properties, :social_distancing, true)
@@ -156,14 +156,14 @@ function update_params!(agent, model)
 	if !model.vaccine && rand(model.rng) ≤ 0.01
 		InteractiveDynamics.set_value!(model.properties, :vaccine, true)
 	end
-	if recovered + vaccinated ≥ agents * 0.8
+	if recovered + vaccinated ≥ agent * 0.8
 		InteractiveDynamics.set_value!(model.properties, :quarantine, false)
 		InteractiveDynamics.set_value!(model.properties, :social_distancing, false)
 	end
 	if infected ≥ agent * 0.8
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, true)
 	end
-	if infected ≤ agents * 0.3 && model.hospital_overwhelmed
+	if infected ≤ agent * 0.3 && model.hospital_overwhelmed
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, false)
 	end
 end
@@ -244,7 +244,9 @@ end
 
 function recover_or_die!(agent, model)
 	if agent.days_infected ≥ model.infection_period
-		if rand(model.rng) ≤ model.death_rate
+		# se vaccinato meno probabile che muori
+		death_rate = agent.vaccine_dose > 0 ? model.death_rate * 0.1 : model.death_rate
+		if rand(model.rng) ≤ death_rate
 			remove_agent!(agent, model)
 		else
 			agent.status = :R
@@ -255,7 +257,92 @@ function recover_or_die!(agent, model)
 	end
 end
 
-# 131 comuni = provincia di Milano
+function agent_status()
+	susceptible(x) = count(i == :S for i in x)
+	infected(x) = count(i == :I for i in x)
+	recovered(x) = count(i == :R for i in x)
+	vaccinated(x) = count(i == :V for i in x)
+	quarantined(x) = count(i == :Q for i in x)
+	adata = [(:status, f) for f in (susceptible, infected, recovered, vaccinated, quarantined, length)]
+	return adata
+end
+
+function plot_model_as_lines(model, agent_step!, model_step!, n)
+	adata = agent_status()
+	# estremamente lenta all'inizio!
+	data, _ = run!(model, agent_step!, model_step!, n; adata = adata) 
+	# data[1:10,:]
+
+	N = sum(model.Ns)
+	x = data.step
+	fig = Figure(resolution = (600, 400))
+	ax = fig[1, 1] = Axis(fig, xlabel = "steps", ylabel = "log10(count)")
+	ls = lines!(ax, x, log10.(data[:, aggname(:status, susceptible)]), color = :grey80)
+	li = lines!(ax, x, log10.(data[:, aggname(:status, infected)]), color = :red2)
+	lr = lines!(ax, x, log10.(data[:, aggname(:status, recovered)]), color = :green)
+	lv = lines!(ax, x, log10.(data[:, aggname(:status, vaccinated)]), color = :blue3)
+	lq = lines!(ax, x, log10.(data[:, aggname(:status, quarantined)]), color = :burlywood4)
+	dead = log10.(N .- data[:, aggname(:status, length)])
+	ld = lines!(ax, x, dead, color = :black)
+	Legend(fig[1, 2], [ls, li, lr, lv, lq, ld], ["susceptible", "infected", "recovered", "vaccinated", "quarantined", "dead"])
+	return fig # non mi convince a pieno 
+end
+
+function interactive_graph_plot(model, agent_step!, model_step!)
+	adata = agent_status()
+	# https://juliadynamics.github.io/Agents.jl/stable/agents_visualizations/#GraphSpace-models-1
+	city_size(agent) = 0.005 * length(agent)
+	function city_color(agent)
+		agent_size = length(agent)
+		infected = count(a.status == :I for a in agent)
+		recovered = count(a.status == :R for a in agent)
+		vaccinated = count(a.status == :V for a in agent)
+		quarantined = count(a.status == :Q for a in agent)
+		return RGBf((infected + quarantined) / agent_size, recovered / agent_size, vaccinated / agent_size)
+	end
+
+	edge_color(model) = fill((:grey, 0.25), Agents.Graphs.ne(model.space.graph))
+	function edge_width(model)
+		w = zeros(Agents.Graphs.ne(model.space.graph))
+		for e in Agents.Graphs.edges(model.space.graph)
+			push!(w, 0.004 * length(model.space.stored_ids[e.src]))
+			push!(w, 0.004 * length(model.space.stored_ids[e.dst]))
+		end
+		return w
+	end
+
+	graphplotkwargs = (
+		layout = GraphMakie.Shell(), # posizione nodi
+		arrow_show = true, # mostrare archi orientati
+		edge_color = edge_color,
+		edge_width = edge_width,
+		edge_plottype = :linesegments # needed for tapered edge widths
+	)
+
+	# parametri interattivi modello
+	params = Dict(
+		:infection_period => 1:1:45,
+		:detection_time => 1:1:21,
+		:quarantine_time => 1:1:45,
+	)
+
+	# FIXME: implementare model_step!
+	# TODO: vedi abm_model.jl
+	fig, abmobs = abmexploration(model;
+		agent_step! = agent_step!, 
+		model_step! = model_step!,
+		params,
+		as = city_size, 
+		ac = city_color, 
+		graphplotkwargs,
+		adata,
+		alabels = ["Susceptible", "Infected", "Recovered", "Vaccinated", "Quarantined", "Dead"],
+	)
+	abmobs
+	fig # ERROR: Buffer thickness does not have the same length as the other buffers.
+	return fig, abmobs
+end
+
 params = create_params(
 	C = 8,
 	min_population = 50,
@@ -269,78 +356,9 @@ params = create_params(
 	)
 model = model_init(; params...)
 
-susceptible(x) = count(i == :S for i in x)
-infected(x) = count(i == :I for i in x)
-recovered(x) = count(i == :R for i in x)
-vaccinated(x) = count(i == :V for i in x)
-quarantined(x) = count(i == :Q for i in x)
-adata = [(:status, f) for f in (susceptible, infected, recovered, vaccinated, quarantined, length)]
+fig = plot_model_as_lines(model, agent_step!, model_step!, 1000)
+fig
 
-# estremamente lenta all'inizio!
-data, _ = run!(model, agent_step!, 1000; adata = adata) 
-data[1:10,:]
-
-N = sum(model.Ns)
-x = data.step
-fig = Figure(resolution = (600, 400))
-ax = fig[1, 1] = Axis(fig, xlabel = "steps", ylabel = "log10(count)")
-ls = lines!(ax, x, log10.(data[:, aggname(:status, susceptible)]), color = :grey80)
-li = lines!(ax, x, log10.(data[:, aggname(:status, infected)]), color = :red2)
-lr = lines!(ax, x, log10.(data[:, aggname(:status, recovered)]), color = :green)
-lv = lines!(ax, x, log10.(data[:, aggname(:status, vaccinated)]), color = :blue3)
-lq = lines!(ax, x, log10.(data[:, aggname(:status, quarantined)]), color = :burlywood4)
-dead = log10.(N .- data[:, aggname(:status, length)])
-ld = lines!(ax, x, dead, color = :black)
-Legend(fig[1, 2], [ls, li, lr, lv, lq, ld], ["susceptible", "infected", "recovered", "vaccinated", "quarantined", "dead"])
-fig # non mi convince a pieno 
-
-# https://juliadynamics.github.io/Agents.jl/stable/agents_visualizations/#GraphSpace-models-1
-city_size(agent) = 0.005 * length(agent)
-function city_color(agent)
-	agent_size = length(agent)
-	infected = count(a.status == :I for a in agent)
-	recovered = count(a.status == :R for a in agent)
-	vaccinated = count(a.status == :V for a in agent)
-	quarantined = count(a.status == :Q for a in agent)
-	return RGBf((infected + quarantined) / agent_size, recovered / agent_size, vaccinated / agent_size)
-end
-
-edge_color(model) = fill((:grey, 0.25), Agents.Graphs.ne(model.space.graph))
-function edge_width(model)
-	w = zeros(Agents.Graphs.ne(model.space.graph))
-	for e in Agents.Graphs.edges(model.space.graph)
-		push!(w, 0.004 * length(model.space.stored_ids[e.src]))
-		push!(w, 0.004 * length(model.space.stored_ids[e.dst]))
-	end
-	return w
-end
-
-graphplotkwargs = (
-	layout = GraphMakie.Shell(), # posizione nodi
-	arrow_show = true, # mostrare archi orientati
-	edge_color = edge_color,
-	edge_width = edge_width,
-	edge_plottype = :linesegments # needed for tapered edge widths
-)
-
-# parametri interattivi modello
-params = Dict(
-	:infection_period => 1:1:45,
-	:detection_time => 1:1:21,
-	:quarantine_time => 1:1:45,
-)
-
-# FIXME: implementare model_step!
-# TODO: vedi abm_model.jl
-fig, abmobs = abmexploration(model;
-	agent_step! = agent_step!, 
-	model_step! = model_step!,
-	params,
-	as = city_size, 
-	ac = city_color, 
-	graphplotkwargs,
-	adata,
-	alabels = ["Susceptible", "Infected", "Recovered", "Vaccinated", "Quarantined", "Dead"],
-)
+fig, abmobs = interactive_graph_plot(model, agent_step!, model_step!)
 abmobs
 fig # ERROR: Buffer thickness does not have the same length as the other buffers.
