@@ -57,10 +57,8 @@ function model_init(;
 		quarantine,
 		vaccine,
 		hospital_overwhelmed,
-		#β_det,
 		migration_rates,
 		infection_period,
-		#infection_period,
 		reinfection_probability,
 		detection_time,
 		quarantine_time,
@@ -175,7 +173,7 @@ function agent_step!(agent, model)
 	end
 	transmit!(agent, model)
 	vaccine!(agent, model)
-	update!(agent, model)
+	update!(agent)
 	recover_or_die!(agent, model)
 end
 
@@ -233,7 +231,7 @@ function vaccine!(agent, model)
 	end
 end
 
-function update!(agent, model) 
+function update!(agent) 
 	if agent.status == :I
 		agent.days_infected += 1
 	end
@@ -257,39 +255,20 @@ function recover_or_die!(agent, model)
 	end
 end
 
-function agent_status()
+function model_status()
 	susceptible(x) = count(i == :S for i in x)
 	infected(x) = count(i == :I for i in x)
 	recovered(x) = count(i == :R for i in x)
 	vaccinated(x) = count(i == :V for i in x)
 	quarantined(x) = count(i == :Q for i in x)
-	adata = [(:status, f) for f in (susceptible, infected, recovered, vaccinated, quarantined, length)]
-	return adata
+	adata = [(:status, f) for f in (susceptible, infected, recovered, vaccinated, quarantined)]
+	dead(model) = sum(model.Ns) - nagents(model)
+	mdata = [dead]
+	return adata, mdata
 end
 
-function plot_model_as_lines(model, agent_step!, model_step!, n)
-	adata = agent_status()
-	# estremamente lenta all'inizio!
-	data, _ = run!(model, agent_step!, model_step!, n; adata = adata) 
-	# data[1:10,:]
-
-	N = sum(model.Ns)
-	x = data.step
-	fig = Figure(resolution = (600, 400))
-	ax = fig[1, 1] = Axis(fig, xlabel = "steps", ylabel = "log10(count)")
-	ls = lines!(ax, x, log10.(data[:, aggname(:status, susceptible)]), color = :grey80)
-	li = lines!(ax, x, log10.(data[:, aggname(:status, infected)]), color = :red2)
-	lr = lines!(ax, x, log10.(data[:, aggname(:status, recovered)]), color = :green)
-	lv = lines!(ax, x, log10.(data[:, aggname(:status, vaccinated)]), color = :blue3)
-	lq = lines!(ax, x, log10.(data[:, aggname(:status, quarantined)]), color = :burlywood4)
-	dead = log10.(N .- data[:, aggname(:status, length)])
-	ld = lines!(ax, x, dead, color = :black)
-	Legend(fig[1, 2], [ls, li, lr, lv, lq, ld], ["susceptible", "infected", "recovered", "vaccinated", "quarantined", "dead"])
-	return fig # non mi convince a pieno 
-end
-
-function interactive_graph_plot(model, agent_step!, model_step!)
-	adata = agent_status()
+function interactive_graph_plot(model, agent_step!, model_step!, params)
+	adata, mdata = model_status()
 	# https://juliadynamics.github.io/Agents.jl/stable/agents_visualizations/#GraphSpace-models-1
 	city_size(agent) = 0.005 * length(agent)
 	function city_color(agent)
@@ -308,26 +287,19 @@ function interactive_graph_plot(model, agent_step!, model_step!)
 			push!(w, 0.004 * length(model.space.stored_ids[e.src]))
 			push!(w, 0.004 * length(model.space.stored_ids[e.dst]))
 		end
+		# FIXED → perchè inseriva 1/3 di valori in più tutti a zero?
+		w = filter(>(0), w)
 		return w
 	end
 
 	graphplotkwargs = (
 		layout = GraphMakie.Shell(), # posizione nodi
-		arrow_show = true, # mostrare archi orientati
+		arrow_show = false, # mostrare archi orientati
 		edge_color = edge_color,
 		edge_width = edge_width,
 		edge_plottype = :linesegments # needed for tapered edge widths
 	)
 
-	# parametri interattivi modello
-	params = Dict(
-		:infection_period => 1:1:45,
-		:detection_time => 1:1:21,
-		:quarantine_time => 1:1:45,
-	)
-
-	# FIXME: implementare model_step!
-	# TODO: vedi abm_model.jl
 	fig, abmobs = abmexploration(model;
 		agent_step! = agent_step!, 
 		model_step! = model_step!,
@@ -336,10 +308,12 @@ function interactive_graph_plot(model, agent_step!, model_step!)
 		ac = city_color, 
 		graphplotkwargs,
 		adata,
-		alabels = ["Susceptible", "Infected", "Recovered", "Vaccinated", "Quarantined", "Dead"],
+		alabels = ["Susceptible", "Infected", "Recovered", "Vaccinated", "Quarantined"],
+		mdata,
+		mlabels = ["Dead"]
 	)
 	abmobs
-	fig # ERROR: Buffer thickness does not have the same length as the other buffers.
+	fig
 	return fig, abmobs
 end
 
@@ -355,10 +329,14 @@ params = create_params(
 	death_rate = 0.044,
 	)
 model = model_init(; params...)
-
-fig = plot_model_as_lines(model, agent_step!, model_step!, 1000)
-fig
-
-fig, abmobs = interactive_graph_plot(model, agent_step!, model_step!)
+# parametri interattivi modello
+params = Dict(
+	:infection_period => 1:1:45,
+	:detection_time => 1:1:21,
+	:quarantine_time => 1:1:45,
+)
+# TODO: improve performance
+# TODO: improve graphics
+fig, abmobs = interactive_graph_plot(model, agent_step!, model_step!, params)
 abmobs
-fig # ERROR: Buffer thickness does not have the same length as the other buffers.
+fig
