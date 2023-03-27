@@ -2,6 +2,9 @@
 # https://docs.juliahub.com/Agents/nTsV8/3.6.1/examples/sir/
 # https://juliadynamics.github.io/Agents.jl/stable/examples/schoolyard/
 
+# TODO: improve performance
+# TODO: improve graphics
+
 using Agents, Random
 using Distributions: Poisson, DiscreteNonParametric
 using InteractiveDynamics
@@ -17,6 +20,24 @@ using GraphMakie
 	status::Symbol #:S, :I, :R, :V, :Q
 end
 
+# Dict da usare solamente se i parametri sono dello stesso tipo
+Base.@kwdef mutable struct Parameters
+	Ns::Vector{Int64}
+	migration_rates::Float64
+	β_und::Float64
+	β_det::Float64
+	social_distancing::Bool
+	quarantine::Bool
+	vaccine::Bool
+	hospital_overwhelmed::Bool
+	infection_period::Int
+	detection_time::Int
+	quarantine_time::Int
+	reinfection_probability::Float64
+	death_rate::Float64
+	Is::Vector{Int64}
+end
+
 function model_init(;
 	Ns,
 	migration_rates,
@@ -27,9 +48,9 @@ function model_init(;
 	vaccine = false, # diminuisce β_und e β_det
 	hospital_overwhelmed = false, # aumenta β_det
 	infection_period = 30,
-	reinfection_probability = 0.05,
 	detection_time = 14,
 	quarantine_time = 14,
+	reinfection_probability = 0.05,
 	death_rate = 0.02,
 	Is = [zeros(Int, length(Ns) - 1)..., 1],
 	seed = 0,
@@ -48,24 +69,22 @@ function model_init(;
 		migration_rates[c, :] ./= migration_rates_sum[c]
 	end
 
-	properties = @dict(
+	properties = Parameters(
 		Ns,
-		Is,
+		migration_rates,
 		β_und,
 		β_det,
 		social_distancing,
 		quarantine,
 		vaccine,
 		hospital_overwhelmed,
-		migration_rates,
 		infection_period,
-		reinfection_probability,
 		detection_time,
 		quarantine_time,
-		C,
-		death_rate
+		reinfection_probability,
+		death_rate,
+		Is	
 	)
-
 	space = GraphSpace(Agents.Graphs.complete_graph(C))
 	model = ABM(Person, space; properties, rng)
 
@@ -90,10 +109,10 @@ function create_params(;
 	min_population = 50,
 	max_population = 5000,
 	infection_period = 30,
-	reinfection_probability = 0.05,
+	reinfection_probability = 0.15, # valore moderna 1 dose
 	detection_time = 14, 
 	quarantine_time = 14,
-	death_rate = 0.02,
+	death_rate = 0.044, # valore WHO covid
 	Is = [zeros(Int, C-1)...,1],
 	seed = 19,
 	)
@@ -115,53 +134,53 @@ function create_params(;
 	migration_rates = (migration_rates .* max_travel_rate) ./ maxM
 	migration_rates[diagind(migration_rates)] .= 1.0
 
-	params = @dict(
+	params = Parameters(
 		Ns,
+		migration_rates,
 		β_und,
 		β_det,
 		social_distancing,
 		quarantine,
 		vaccine,
 		hospital_overwhelmed,
-		migration_rates,
 		infection_period,
-		reinfection_probability,
 		detection_time,
 		quarantine_time,
+		reinfection_probability,
 		death_rate,
 		Is
 	)
 	return params
 end
 
-function model_step!(model)
-	update_params!(model)
+function model_step!(model, agent)
+	update_params!(model, agent)
 end
 
-function update_params!(model)
-	# TODO: aggiungi controllore automatico parametri modello
-	agent = length(collect(allagents(model)))
-	infected = count(a.status == :I for a in collect(allagents(model)))
-	recovered = count(a.status == :R for a in collect(allagents(model)))
-	vaccinated = count(a.status == :V for a in collect(allagents(model)))
+function update_params!(model, agent)
+	agents = count(agent)
+	infected = count(a.status == :I for a in agent)
+	recovered = count(a.status == :R for a in agent)
+	vaccinated = count(a.status == :V for a in agent)
 
-	if infected ≥ agent * 0.01
+	if infected ≥ agents * 0.01 && !model.social_distancing
 		InteractiveDynamics.set_value!(model.properties, :social_distancing, true)
 	end
-	if infected ≥ agent * 0.05
+	if infected ≥ agents * 0.05 && !model.quarantine
 		InteractiveDynamics.set_value!(model.properties, :quarantine, true)
 	end
 	if !model.vaccine && rand(model.rng) ≤ 0.01
 		InteractiveDynamics.set_value!(model.properties, :vaccine, true)
 	end
-	if recovered + vaccinated ≥ agent * 0.8
+	if recovered + vaccinated ≥ agents * 0.8 && model.quarantine && model.social_distancing
 		InteractiveDynamics.set_value!(model.properties, :quarantine, false)
 		InteractiveDynamics.set_value!(model.properties, :social_distancing, false)
+		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, false)
 	end
-	if infected ≥ agent * 0.8
+	if infected ≥ agents * 0.8 && !model.hospital_overwhelmed
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, true)
 	end
-	if infected ≤ agent * 0.3 && model.hospital_overwhelmed
+	if infected ≤ agents * 0.3 && model.hospital_overwhelmed
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, false)
 	end
 end
@@ -221,7 +240,6 @@ end
 
 function vaccine!(agent, model)
 	!model.vaccine && return
-	# TODO: variabile numero di dosi del modello modificabile da controllore
 	agent.vaccine_dose ≥ 3 && return
 	if agent.status == :S || agent.status == :R || agent.status == :V
 		if rand(model.rng) ≤ 0.0085
@@ -316,27 +334,3 @@ function interactive_graph_plot(model, agent_step!, model_step!, params)
 	fig
 	return fig, abmobs
 end
-
-params = create_params(
-	C = 8,
-	min_population = 50,
-	max_population = 5000,
-	max_travel_rate = 0.01, 
-	infection_period = 14, 
-	reinfection_probability = 0.15,
-	detection_time = 5,
-	quarantine_time = 10,
-	death_rate = 0.044,
-	)
-model = model_init(; params...)
-# parametri interattivi modello
-params = Dict(
-	:infection_period => 1:1:45,
-	:detection_time => 1:1:21,
-	:quarantine_time => 1:1:45,
-)
-# TODO: improve performance
-# TODO: improve graphics
-fig, abmobs = interactive_graph_plot(model, agent_step!, model_step!, params)
-abmobs
-fig
