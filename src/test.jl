@@ -1,9 +1,9 @@
 using Distributed # distributed computing
 
-addprocs(4)
+addprocs(10)
 @time @everywhere include("graph_model.jl")
 
-params = create_params(
+@time params = create_params(
 	C = 8,
 	min_population = 50,
 	max_population = 5000,
@@ -14,13 +14,13 @@ params = create_params(
 	quarantine_time = 10,
 	death_rate = 0.044,
 	)
-model = model_init(; params...)
+@time model = model_init(; params...)
 # parametri interattivi modello
-params = Dict(
+@time params = Dict(
 	:infection_period => 1:1:45,
 	:detection_time => 1:1:21,
 	:quarantine_time => 1:1:45,
 )
-fig, abmobs = interactive_graph_plot(model, agent_step!, model_step!, params)
-abmobs
-fig
+@time fig, abmobs = interactive_graph_plot(model, params)
+@time abmobs
+@time fig

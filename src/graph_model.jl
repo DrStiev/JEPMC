@@ -20,24 +20,6 @@ using GraphMakie
 	status::Symbol #:S, :I, :R, :V, :Q
 end
 
-# Dict da usare solamente se i parametri sono dello stesso tipo
-Base.@kwdef mutable struct Parameters
-	Ns::Vector{Int64}
-	migration_rates::Float64
-	β_und::Float64
-	β_det::Float64
-	social_distancing::Bool
-	quarantine::Bool
-	vaccine::Bool
-	hospital_overwhelmed::Bool
-	infection_period::Int
-	detection_time::Int
-	quarantine_time::Int
-	reinfection_probability::Float64
-	death_rate::Float64
-	Is::Vector{Int64}
-end
-
 function model_init(;
 	Ns,
 	migration_rates,
@@ -69,7 +51,7 @@ function model_init(;
 		migration_rates[c, :] ./= migration_rates_sum[c]
 	end
 
-	properties = Parameters(
+	properties = @dict(
 		Ns,
 		migration_rates,
 		β_und,
@@ -83,7 +65,8 @@ function model_init(;
 		quarantine_time,
 		reinfection_probability,
 		death_rate,
-		Is	
+		Is,
+		C	
 	)
 	space = GraphSpace(Agents.Graphs.complete_graph(C))
 	model = ABM(Person, space; properties, rng)
@@ -134,7 +117,7 @@ function create_params(;
 	migration_rates = (migration_rates .* max_travel_rate) ./ maxM
 	migration_rates[diagind(migration_rates)] .= 1.0
 
-	params = Parameters(
+	params = @dict(
 		Ns,
 		migration_rates,
 		β_und,
@@ -153,16 +136,27 @@ function create_params(;
 	return params
 end
 
-function model_step!(model, agent)
-	update_params!(model, agent)
+function model_step!(model)
+	update_params!(model)
 end
 
-function update_params!(model, agent)
-	agents = count(agent)
-	infected = count(a.status == :I for a in agent)
-	recovered = count(a.status == :R for a in agent)
-	vaccinated = count(a.status == :V for a in agent)
+function agent_step!(agent, model)
+	quarantine!(agent, model)
+	if agent.status != :Q
+		migrate!(agent, model)
+	end
+	transmit!(agent, model)
+	vaccine!(agent, model)
+	update!(agent)
+	recover_or_die!(agent, model)
+end
 
+function update_params!(model)
+	agents = length(collect(allagents(model)))
+	infected = count(a.status == :I for a in collect(allagents(model)))
+	recovered = count(a.status == :R for a in collect(allagents(model)))
+	vaccinated = count(a.status == :V for a in collect(allagents(model)))
+	
 	if infected ≥ agents * 0.01 && !model.social_distancing
 		InteractiveDynamics.set_value!(model.properties, :social_distancing, true)
 	end
@@ -177,23 +171,13 @@ function update_params!(model, agent)
 		InteractiveDynamics.set_value!(model.properties, :social_distancing, false)
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, false)
 	end
-	if infected ≥ agents * 0.8 && !model.hospital_overwhelmed
+	if infected ≥ agents * 0.5 && !model.hospital_overwhelmed
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, true)
+		InteractiveDynamics.set_value!(model.properties, :quarantine, true)
 	end
 	if infected ≤ agents * 0.3 && model.hospital_overwhelmed
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, false)
 	end
-end
-
-function agent_step!(agent, model)
-	quarantine!(agent, model)
-	if agent.status != :Q
-		migrate!(agent, model)
-	end
-	transmit!(agent, model)
-	vaccine!(agent, model)
-	update!(agent)
-	recover_or_die!(agent, model)
 end
 
 function quarantine!(agent, model)
@@ -230,7 +214,8 @@ function transmit!(agent, model)
 	for contactID in ids_in_position(agent, model)
 		contact = model[contactID]
 		if contact.status == :S || 
-			((contact.status == :R || contact.status == :V) && rand(model.rng) ≤ (model.reinfection_probability/(contact.vaccine_dose*2-1)))
+			((contact.status == :R || contact.status == :V) && 
+			(rand(model.rng) ≤ (model.reinfection_probability/(contact.vaccine_dose*2-1))))
 			contact.status = :I
 			n -= 1
 			n <= 0 && return
@@ -285,7 +270,7 @@ function model_status()
 	return adata, mdata
 end
 
-function interactive_graph_plot(model, agent_step!, model_step!, params)
+function interactive_graph_plot(model, params)
 	adata, mdata = model_status()
 	# https://juliadynamics.github.io/Agents.jl/stable/agents_visualizations/#GraphSpace-models-1
 	city_size(agent) = 0.005 * length(agent)
@@ -306,12 +291,13 @@ function interactive_graph_plot(model, agent_step!, model_step!, params)
 			push!(w, 0.004 * length(model.space.stored_ids[e.dst]))
 		end
 		# FIXED → perchè inseriva 1/3 di valori in più tutti a zero?
-		w = filter(>(0), w)
+		# w = filter(>(0), w)
+		filter!(>(0), w)
 		return w
 	end
 
 	graphplotkwargs = (
-		layout = GraphMakie.Shell(), # posizione nodi
+		layout = GraphMakie.Spring(), # posizione nodi
 		arrow_show = false, # mostrare archi orientati
 		edge_color = edge_color,
 		edge_width = edge_width,
