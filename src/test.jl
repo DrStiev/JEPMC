@@ -24,3 +24,5 @@ addprocs(10)
 @time fig = interactive_graph_plot(model, interactive_params)
 # @time abmobs
 @time fig
+
+# il modello scoppia in performance

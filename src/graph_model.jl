@@ -143,9 +143,9 @@ function model_step!(model)
 end
 
 function agent_step!(agent, model)
-	quarantine!(agent, model)
 	migrate!(agent, model)
 	transmit!(agent, model)
+	quarantine!(agent, model)
 	vaccine!(agent, model)
 	update!(agent)
 	recover_or_die!(agent, model)
@@ -156,14 +156,15 @@ function update_params!(model)
 	infected = count(a.status == :I for a in collect(allagents(model)))
 	recovered = count(a.status == :R for a in collect(allagents(model)))
 	vaccinated = count(a.status == :V for a in collect(allagents(model)))
+	quarantined = count(a.status == :Q for a in collect(allagents(model)))
 	
-	if infected ≥ agents * 0.01 && !model.social_distancing
+	if infected ≥ agents * 0.1 && !model.social_distancing
 		InteractiveDynamics.set_value!(model.properties, :social_distancing, true)
 	end
-	if infected ≥ agents * 0.05 && !model.quarantine
+	if infected ≥ agents * 0.15 && !model.quarantine
 		InteractiveDynamics.set_value!(model.properties, :quarantine, true)
 	end
-	if !model.vaccine && rand(model.rng) ≤ 0.01
+	if !model.vaccine && rand(model.rng) ≤ 0.001
 		InteractiveDynamics.set_value!(model.properties, :vaccine, true)
 	end
 	if recovered + vaccinated ≥ agents * 0.8 && model.quarantine && model.social_distancing
@@ -171,11 +172,12 @@ function update_params!(model)
 		InteractiveDynamics.set_value!(model.properties, :social_distancing, false)
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, false)
 	end
-	if infected ≥ agents * 0.5 && !model.hospital_overwhelmed
+	if infected ≥ agents * 0.3 && !model.hospital_overwhelmed
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, true)
 		InteractiveDynamics.set_value!(model.properties, :quarantine, true)
 	end
-	if infected ≤ agents * 0.3 && model.hospital_overwhelmed
+	# forse troppi argomenti
+	if infected < agents * 0.3 && model.hospital_overwhelmed && (model.quarantine || model.vaccine) && model.social_distancing
 		InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, false)
 	end
 end
@@ -188,6 +190,8 @@ function quarantine!(agent, model)
 end
 
 function migrate!(agent, model)
+	# se sei in quarantena non puoi muoverti
+	agent.status == :Q && return
 	pid = agent.pos
 	m = StatsBase.sample(model.rng, 1:(model.C), StatsBase.Weights(model.migration_rates[pid, :]))
 	if m ≠ pid
@@ -208,12 +212,12 @@ function transmit!(agent, model)
 
 	for contactID in ids_in_position(agent, model)
 		contact = model[contactID]
-		if contact.status == :S || contact.status == :R || contact.status == :V 
-			if rand(model.rng) ≤ model.reinfection_probability/(contact.vaccine_dose*2-1)
+		if contact.status == :S || 
+			((contact.status == :R || contact.status == :V) && 
+			rand(model.rng) ≤ model.reinfection_probability / (contact.vaccine_dose * 2 - 1))
 				contact.status = :I
 				n -= 1
 				n <= 0 && return
-			end
 		end
 	end
 end
@@ -234,7 +238,16 @@ function update!(agent)
 		agent.days_infected += 1
 	end
 	if agent.status == :Q
-		agent.days_infected += 1
+		agent.days_quarantined += 1
+		if agent.days_infected > 0
+			# finisce la quarantena ma non il periodo infettivo
+			if agent.days_quarantined ≥ model.quarantine_time && agent.days_infected < model.infection_period
+				# estendo la quarantena
+				# integer divide: x / y, truncated to an integer
+				agent.days_quarantined -= model.quarantine_time ÷ 2
+			end
+			agent.days_infected += 1
+		end
 	end
 end
 
@@ -247,8 +260,13 @@ function recover_or_die!(agent, model)
 		else
 			agent.status = :R
 			agent.days_infected = 0
-			agent.days_quarantined = 0
 			agent.vaccine_dose += 1
+			# fine infettivita' ma non quarantena
+			if agent.days_quarantined > 0 && agent.days_quarantined < model.quarantine_time
+				agent.status = :Q
+			else
+				agent.days_quarantined = 0
+			end
 		end
 	end
 end
