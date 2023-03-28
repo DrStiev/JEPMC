@@ -12,6 +12,7 @@ using GLMakie
 using DrWatson: @dict
 using LinearAlgebra: diagind
 using GraphMakie
+using StatsBase
 
 @agent Person GraphAgent begin
 	days_infected::Int
@@ -91,9 +92,9 @@ function create_params(;
 	max_travel_rate,
 	min_population = 50,
 	max_population = 5000,
-	infection_period = 30,
+	infection_period = 18,
 	reinfection_probability = 0.15, # valore moderna 1 dose
-	detection_time = 14, 
+	detection_time = 5, 
 	quarantine_time = 14,
 	death_rate = 0.044, # valore WHO covid
 	Is = [zeros(Int, C-1)...,1],
@@ -136,15 +137,14 @@ function create_params(;
 	return params
 end
 
+# TODO: rivedi tutta la logica!
 function model_step!(model)
 	update_params!(model)
 end
 
 function agent_step!(agent, model)
 	quarantine!(agent, model)
-	if agent.status != :Q
-		migrate!(agent, model)
-	end
+	migrate!(agent, model)
 	transmit!(agent, model)
 	vaccine!(agent, model)
 	update!(agent)
@@ -189,8 +189,7 @@ end
 
 function migrate!(agent, model)
 	pid = agent.pos
-	d = DiscreteNonParametric(1:(model.C), model.migration_rates[pid, :])
-	m = rand(d)
+	m = StatsBase.sample(model.rng, 1:(model.C), StatsBase.Weights(model.migration_rates[pid, :]))
 	if m ≠ pid
 		move_agent!(agent, m, model)
 	end
@@ -198,27 +197,23 @@ end
 
 function transmit!(agent, model)
 	agent.status == :S && return
-	rate = if agent.days_infected < model.detection_time
-		model.β_und[agent.pos] = model.social_distancing ? model.β_und[agent.pos] * 0.8 : model.β_und[agent.pos]
-		# meno persone per strada
-		model.β_und[agent.pos] = agent.status == :Q ? model.β_und[agent.pos] * 0.5 : model.β_und[agent.pos]
-	else
-		model.β_det[agent.pos] = model.hospital_overwhelmed ? model.β_det[agent.pos] * 1.5 : model.β_det[agent.pos]
-		# più difficile contagiare una persona chiusa in casa
-		model.β_det[agent.pos] = agent.status == :Q ? model.β_det[agent.pos] * 0.1 : model.β_det[agent.pos]
-	end
-
+	rate = agent.days_infected < model.detection_time ? model.β_und[agent.pos] : model.β_det[agent.pos]
+	# le persone stanno più lontane, meno rischio
+	rate = model.social_distancing ? rate * 0.8 : rate
+	# se una persona è in casa meno rischio
+	rate = agent.status == :Q ? rate * 0.1 : rate
+	
 	n = rate * abs(randn(model.rng))
 	n <= 0 && return
 
 	for contactID in ids_in_position(agent, model)
 		contact = model[contactID]
-		if contact.status == :S || 
-			((contact.status == :R || contact.status == :V) && 
-			(rand(model.rng) ≤ (model.reinfection_probability/(contact.vaccine_dose*2-1))))
-			contact.status = :I
-			n -= 1
-			n <= 0 && return
+		if contact.status == :S || contact.status == :R || contact.status == :V 
+			if rand(model.rng) ≤ model.reinfection_probability/(contact.vaccine_dose*2-1)
+				contact.status = :I
+				n -= 1
+				n <= 0 && return
+			end
 		end
 	end
 end
@@ -304,7 +299,7 @@ function interactive_graph_plot(model, params)
 		edge_plottype = :linesegments # needed for tapered edge widths
 	)
 
-	fig, abmobs = abmexploration(model;
+	fig, ax, abmobs = abmplot(model;
 		agent_step! = agent_step!, 
 		model_step! = model_step!,
 		params,
@@ -312,11 +307,51 @@ function interactive_graph_plot(model, params)
 		ac = city_color, 
 		graphplotkwargs,
 		adata,
-		alabels = ["Susceptible", "Infected", "Recovered", "Vaccinated", "Quarantined"],
+		# alabels = ["Susceptible", "Infected", "Recovered", "Vaccinated", "Quarantined"],
 		mdata,
-		mlabels = ["Dead"]
+		# mlabels = ["Dead"]
 	)
-	abmobs
-	fig
-	return fig, abmobs
+	# creo un nuovo plot layout
+	plot_layout = fig[:, end + 1] = GridLayout()
+	# creo un sublayout
+	count_layout = plot_layout[1, 1] = GridLayout()
+
+	# print(abmobs.adf)
+	# print(abmobs.mdf)
+
+	infected = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_status))
+	susceptible = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).susceptible_status))
+	recovered = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_status))
+	vaccinated = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).vaccinated_status))
+	quarantined = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).quarantined_status))
+	dead = @lift(Point2f.($(abmobs.mdf).dead))
+
+	ax_s = Axis(count_layout[1, 1]; ylabel = "Susceptible", xlabel = "Giorni")
+	scatterlines!(ax_s, susceptible; color = "grey80", label = "Susceptible")
+	ax_i = Axis(count_layout[2, 1]; ylabel = "Infected", xlabel = "Giorni")
+	scatterlines!(ax_i, infected; color = "red2", label = "Infected")
+	ax_r = Axis(count_layout[3, 1]; ylabel = "Recovered", xlabel = "Giorni")
+	scatterlines!(ax_r, recovered; color = "green", label = "Recovered")
+	ax_q = Axis(count_layout[4, 1]; ylabel = "Quarantined", xlabel = "Giorni")
+	scatterlines!(ax_q, quarantined; color = "burlywood4", label = "Quarantined")
+	ax_v = Axis(count_layout[5, 1]; ylabel = "Vaccinated", xlabel = "Giorni")
+	scatterlines!(ax_v, vaccinated; color = "blue3", label = "Vaccinated")
+	ax_d = Axis(count_layout[6, 1]; ylabel = "Dead", xlabel = "Giorni")
+	scatterlines!(ax_d, dead; color = :black, label = "Dead")
+	# Legend(count_layout[1, 2], ax_counts; bgcolor = :lightgrey)
+	# Makie.Legend()
+
+	# ad ogni aggiornamento dell'observable aggiusto gli assi
+	on(abmobs.model) do m
+		autolimits!(ax_s)
+		autolimits!(ax_i)
+		autolimits!(ax_r)
+		autolimits!(ax_v)
+		autolimits!(ax_q)
+		autolimits!(ax_d)
+	end
+
+	# abmobs
+	# fig
+	return fig #, abmobs
 end
