@@ -1,9 +1,15 @@
-using Distributed # distributed computing
+using Pkg
+Pkg.activate(".")
+Pkg.instantiate()
+# Pkg.precompile()
+# Pkg.resolve()
 
-addprocs(10)
-@time @everywhere include("graph_model.jl")
+@time include("file_reader.jl")
+@time include("graph_model.jl")
+@time include("graph_plot.jl")
+@time include("controller.jl")
 
-@time params = create_params(
+params = graph_model.create_params(
 	C = 8,
 	min_population = 50,
 	max_population = 5000,
@@ -14,15 +20,9 @@ addprocs(10)
 	quarantine_time = 14,
 	death_rate = 0.044,
 	)
-@time model = model_init(; params...)
-# parametri interattivi modello
-@time interactive_params = Dict(
-	:infection_period => 1:1:45,
-	:detection_time => 1:1:21,
-	:quarantine_time => 1:1:45,
-)
-@time fig = interactive_graph_plot(model, interactive_params)
-# @time abmobs
-@time fig
+@time model = graph_model.model_init(; params...)
+abmobs = graph_model.get_observable(model; graph_model.agent_step!)
+abmobs
 
-# il modello scoppia in performance
+fig = graph_plot.hist(model)
+@time graph_plot.rec_animation(model, fig, 1000)
