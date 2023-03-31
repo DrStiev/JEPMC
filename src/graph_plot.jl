@@ -7,7 +7,7 @@ module graph_plot
 
     include("graph_model.jl")
 
-    function hist(model)
+    function hist_animation(model, step)
         abmobs = ABMObservable(model; graph_model.agent_step!)
 
         infected_fraction(m, x) = count(m[id].status == :I for id in x) / length(x)
@@ -22,12 +22,8 @@ module graph_plot
         fig = Figure(resolution = (600, 400))
         ax = Axis(fig[1, 1]; title, xlabel = "City", ylabel = "Population")
         barplot!(ax, model.Ns; strokecolor = :black, strokewidth = 1, color)
-        return fig
-    end
 
-    function rec_animation(model, figure, step)
-        abmobs = ABMObservable(model; graph_model.agent_step!)
-        record(figure, "covid_evolution.mp4"; framerate = 5) do io
+        record(fig, "covid_evolution.mp4"; framerate = 5) do io
             for _ in 1:step
                 recordframe!(io)
                 Agents.step!(abmobs, 1)
@@ -36,82 +32,22 @@ module graph_plot
         end
     end
 
-    # function model_status()
-    #     susceptible(x) = count(i == :S for i in x)
-    #     infected(x) = count(i == :I for i in x)
-    #     recovered(x) = count(i == :R for i in x)
-    #     adata = [(:status, f) for f in (susceptible, infected, recovered)]
-    #     dead(model) = sum(model.Ns) - nagents(model)
-    #     mdata = [dead]
-    #     return adata, mdata
-    # end
+    function line_plot(model, step)
+        infected(x) = count(i == :I for i in x)
+        recovered(x) = count(i == :R for i in x)
 
-    # function plot(model)
-    #     adata, mdata = model_status()
-    #     # https://juliadynamics.github.io/Agents.jl/stable/agents_visualizations/#GraphSpace-models-1
-    #     city_size(agent) = 0.005 * length(agent)
-    #     function city_color(agent)
-    #         agent_size = length(agent)
-    #         infected = count(a.status == :I for a in agent)
-    #         recovered = count(a.status == :R for a in agent)
-    #         return RGBf(infected / agent_size, recovered / agent_size, 0)
-    #     end
+        to_collect = [(:status, f) for f in (infected, recovered, length)]
+        data, _ = run!(model, graph_model.agent_step!, step; adata = to_collect)
 
-    #     edge_color(model) = fill((:grey, 0.25), Agents.Graphs.ne(model.space.graph))
-    #     function edge_width(model)
-    #         w = zeros(Agents.Graphs.ne(model.space.graph))
-    #         for e in Agents.Graphs.edges(model.space.graph)
-    #             push!(w, 0.004 * length(model.space.stored_ids[e.src]))
-    #             push!(w, 0.004 * length(model.space.stored_ids[e.dst]))
-    #         end
-    #         filter!(>(0), w)
-    #         return w
-    #     end
-
-    #     graphplotkwargs = (
-    #         layout = GraphMakie.Shell(), # posizione nodi
-    #         arrow_show = false, # mostrare archi orientati
-    #         edge_color = edge_color,
-    #         edge_width = edge_width,
-    #         edge_plottype = :linesegments # needed for tapered edge widths
-    #     )
-
-    #     fig, ax, abmobs = abmplot(model;
-    #         agent_step! = agent_step!, 
-    #         model_step! = dummystep, # model_step!,
-    #         # params,
-    #         as = city_size, 
-    #         ac = city_color, 
-    #         graphplotkwargs,
-    #         adata,
-    #         mdata,
-    #     )
-    #     # creo un nuovo plot layout
-    #     plot_layout = fig[:, end + 1] = GridLayout()
-    #     # creo un sublayout
-    #     count_layout = plot_layout[1, 1] = GridLayout()
-
-    #     infected = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_status))
-    #     susceptible = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).susceptible_status))
-    #     recovered = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_status))
-    #     dead = @lift(Point2f.($(abmobs.mdf).dead))
-
-    #     ax_s = Axis(count_layout[1, 1]; ylabel = "Susceptible", xlabel = "Giorni")
-    #     scatterlines!(ax_s, susceptible; color = "grey80", label = "Susceptible")
-    #     ax_i = Axis(count_layout[2, 1]; ylabel = "Infected", xlabel = "Giorni")
-    #     scatterlines!(ax_i, infected; color = "red2", label = "Infected")
-    #     ax_r = Axis(count_layout[3, 1]; ylabel = "Recovered", xlabel = "Giorni")
-    #     scatterlines!(ax_r, recovered; color = "green", label = "Recovered")
-    #     ax_d = Axis(count_layout[4, 1]; ylabel = "Dead", xlabel = "Giorni")
-    #     scatterlines!(ax_d, dead; color = :black, label = "Dead")
-
-    #     # ad ogni aggiornamento dell'observable aggiusto gli assi
-    #     on(abmobs.model) do m
-    #         autolimits!(ax_s)
-    #         autolimits!(ax_i)
-    #         autolimits!(ax_r)
-    #         autolimits!(ax_d)
-    #     end
-    #     return fig, abmobs
-    # end
+        N = sum(model.Ns)
+        x = data.step
+        fig = Figure(resolution = (600,400))
+        ax = fig[1, 1] = Axis(fig, xlabel = "steps", ylabel = "log10(count)")
+        li = lines!(ax, x, log10.(data[:, aggname(:status, infected)]), color = :red)
+        lr = lines!(ax, x, log10.(data[:, aggname(:status, recovered)]), color = :green)
+        dead = log10.(N .- data[:, aggname(:status, length)])
+        ld = lines!(ax, x, dead, color = :black)
+        Legend(fig[1, 2], [li, lr, ld], ["Infected", "Recovered", "Dead"])
+        fig
+    end
 end

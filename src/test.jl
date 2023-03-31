@@ -22,7 +22,6 @@ params = graph_model.create_params(
 	)
 @time model = graph_model.model_init(; params...)
 abmobs = graph_model.get_observable(model; graph_model.agent_step!)
-abmobs
 
-fig = graph_plot.hist(model)
-@time graph_plot.rec_animation(model, fig, 1000)
+# @time graph_plot.hist_animation(model, 100)
+@time graph_plot.line_plot(model, 200)
