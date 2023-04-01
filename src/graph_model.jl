@@ -11,18 +11,20 @@ module graph_model
 
 	@agent Person GraphAgent begin
 		days_infected::Int
-		status::Symbol #:S, :I, :R
+		vaccine_dose::Int
+		status::Symbol #:S, :I, :R, :Q, :V
 	end
 
 	function model_init(;
 		Ns,
 		migration_rates,
 		β_und,
-		β_det,
-		social_distancing = false, # diminuisce β_und
-		quarantine = false, # diminuisce β_und e β_det
-		vaccine = false, # diminuisce β_und e β_det
+		β_det, # infettività status :Q
+		social_distancing = false, # diminuisce β_und e β_det
+		quarantine = false, 
+		vaccine = false, 
 		hospital_overwhelmed = false, # aumenta β_det
+		mask = false, # diminuisce β_und e β_det
 		infection_period = 30,
 		detection_time = 14,
 		quarantine_time = 14,
@@ -54,6 +56,7 @@ module graph_model
 			quarantine,
 			vaccine,
 			hospital_overwhelmed,
+			mask,
 			infection_period,
 			detection_time,
 			quarantine_time,
@@ -98,7 +101,7 @@ module graph_model
 		Ns = rand(min_population:max_population, C)
 		β_und = rand(0.3:0.2:0.6, C)
 		β_det = β_und ./ 10
-		social_distancing = quarantine = vaccine = hospital_overwhelmed = false
+		social_distancing = quarantine = vaccine = hospital_overwhelmed = mask = false
 
 		Random.seed!(seed)
 		migration_rates = zeros(C,C)
@@ -120,6 +123,7 @@ module graph_model
 			quarantine,
 			vaccine,
 			hospital_overwhelmed,
+			mask,
 			infection_period,
 			detection_time,
 			quarantine_time,
@@ -133,11 +137,13 @@ module graph_model
 	function agent_step!(agent, model)
 		migrate!(agent, model)
 		transmit!(agent, model)
-		update!(agent)
+		update!(agent, model)
 		recover_or_die!(agent, model)
 	end
 
 	function migrate!(agent, model)
+		# se in quarantena non può muoversi
+		agent.status == :Q && return
 		pid = agent.pos
 		m = StatsBase.sample(model.rng, 1:(model.C), StatsBase.Weights(model.migration_rates[pid, :]))
 		if m ≠ pid
@@ -145,25 +151,60 @@ module graph_model
 		end
 	end
 
+	# TODO: possibilità di malcontento oppure troppo difficile da modellare?
 	function transmit!(agent, model)
-		agent.status == :S && return
+		# se non infetto non può infettare
+		agent.status != :I && return
+		# aumento infettività se ospedali full aumento rischio solo per β_det
+		model.β_det[agent.pos] = model.hospital_overwhelmed ? model.β_det[agent.pos] + (model.β_und[agent.pos] * 0.5) : model.β_det[agent.pos]
 		rate = agent.days_infected < model.detection_time ? model.β_und[agent.pos] : model.β_det[agent.pos]
+		# riduzione infettività se applico distanziamento sociale
+		rate = model.social_distancing ? rate - (rate * 0.8) : rate
+		# riduzione infettività se applico mascherine
+		rate = model.mask ? rate - (rate * 0.75) : rate
 		
 		n = rate * abs(randn(model.rng))
-		n <= 0 && return
+		n ≤ 0 && return
 
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
 			if contact.status == :S || 
-				(contact.status == :R && rand(model.rng) ≤ model.reinfection_probability)
+				((contact.status == :R || contact.status == :V) && 
+				rand(model.rng) ≤ model.reinfection_probability / (contact.vaccine_dose * 2 - 1))
 					contact.status = :I
 					n -= 1
-					n <= 0 && return
+					n ≤ 0 && return
 			end
 		end
 	end
 
-	update!(agent)  = agent.status == :I && (agent.days_infected +=1)
+	function update!(agent, model) 
+		if agent.status == :I 
+			agent.days_infected +=1
+		end
+		if model.quarantine && 
+			agent.status == :I && 
+			agent.days_infected ≥ model.detection_time
+			agent.status == :Q
+		end
+		if model.vaccine 
+			# random value
+			n = 0.0085 * abs(randn(model.rng))
+			n ≤ 0 && return
+
+			# TODO: copertura vaccinale con periodo di attesa
+			for contactID in ids_in_position(agent, model)
+				contact = model[contactID]
+				if (contact.status == :S || contact.status == :R || contact.status == :V) &&
+					contact.vaccine_dose < 3
+						contact.status = :V
+						contact.vaccine_dose += 1
+						n -= 1
+						n ≤ 0 && return
+				end
+			end
+		end
+	end
 
 	function recover_or_die!(agent, model)
 		if agent.days_infected ≥ model.infection_period
@@ -172,6 +213,7 @@ module graph_model
 			else
 				agent.status = :R
 				agent.days_infected = 0
+				agent.vaccine_dose += 1
 			end
 		end
 	end

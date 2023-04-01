@@ -21,7 +21,7 @@ params = graph_model.create_params(
 	death_rate = 0.044,
 	)
 @time model = graph_model.model_init(; params...)
-abmobs = graph_model.get_observable(model; graph_model.agent_step!)
-
 # @time graph_plot.hist_animation(model, 100)
 @time graph_plot.line_plot(model, 200)
+
+abmobs = graph_model.get_observable(model; graph_model.agent_step!)
