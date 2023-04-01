@@ -3,7 +3,9 @@ module file_reader
     using DataFrames, DelimitedFiles
     using DrWatson: @dict
 
-    # TODO: leggo file csv, poi trasformo in dataframe e infine estrapolo parametri in @dict
-    input = "csv_files/example.csv"
-    df = DataFrame(CSV.File(input))
+    function extract_param_from_csv(input)
+        df = DataFrame(CSV.File(input))
+        params = Dict(pairs(eachcol(df)))
+        return params
+    end
 end

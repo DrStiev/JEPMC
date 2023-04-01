@@ -9,6 +9,8 @@ Pkg.instantiate()
 @time include("graph_plot.jl")
 @time include("controller.jl")
 
+@time params = file_reader.extract_param_from_csv("csv_files/example.csv")
+
 params = graph_model.create_params(
 	C = 8,
 	min_population = 50,
@@ -22,6 +24,7 @@ params = graph_model.create_params(
 	)
 @time model = graph_model.model_init(; params...)
 # @time graph_plot.hist_animation(model, 100)
-@time graph_plot.line_plot(model, 200)
+@time fig, data = graph_plot.line_plot(model, 30)
+fig
 
 abmobs = graph_model.get_observable(model; graph_model.agent_step!)

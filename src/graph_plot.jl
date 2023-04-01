@@ -33,21 +33,27 @@ module graph_plot
     end
 
     function line_plot(model, step)
+        # susceptible(x) = count(i == :S for i in x)
         infected(x) = count(i == :I for i in x)
         recovered(x) = count(i == :R for i in x)
+        quarantined(x) = count(i == :Q for i in x)
+        vaccinated(x) = count(i == :V for i in x)
 
-        to_collect = [(:status, f) for f in (infected, recovered, length)]
+        to_collect = [(:status, f) for f in (infected, recovered, quarantined, vaccinated, length)]
         data, _ = run!(model, graph_model.agent_step!, step; adata = to_collect)
 
         N = sum(model.Ns)
         x = data.step
-        fig = Figure(resolution = (600,400))
+        fig = Figure(resolution = (600, 400))
         ax = fig[1, 1] = Axis(fig, xlabel = "steps", ylabel = "log10(count)")
-        li = lines!(ax, x, log10.(data[:, aggname(:status, infected)]), color = :red)
-        lr = lines!(ax, x, log10.(data[:, aggname(:status, recovered)]), color = :green)
+        # ls = scatterlines!(ax, x, log10.(data[:, aggname(:status, susceptible)]), color = "grey80")
+        li = scatterlines!(ax, x, log10.(data[:, aggname(:status, infected)]), color = "red2")
+        lr = scatterlines!(ax, x, log10.(data[:, aggname(:status, recovered)]), color = "green")
+        lq = scatterlines!(ax, x, log10.(data[:, aggname(:status, quarantined)]), color = "burlywood4")
+        lv = scatterlines!(ax, x, log10.(data[:, aggname(:status, vaccinated)]), color = "blue3")
         dead = log10.(N .- data[:, aggname(:status, length)])
-        ld = lines!(ax, x, dead, color = :black)
-        Legend(fig[1, 2], [li, lr, ld], ["Infected", "Recovered", "Dead"])
-        fig
+        ld = scatterlines!(ax, x, dead, color = "black")
+        Legend(fig[1, 2], [li, lr, lq, lv, ld], ["Infected", "Recovered", "Quarantined", "Vaccinated", "Dead"])
+        return fig, data
     end
 end

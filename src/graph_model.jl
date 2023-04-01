@@ -69,7 +69,7 @@ module graph_model
 		model = ABM(Person, space; properties, rng)
 
 		for city in 1:C, _ in 1:Ns[city]
-			add_agent!(city, model, 0, :S) # Suscettibile
+			add_agent!(city, model, 0, 0, :S) # Suscettibile
 		end
 		# add infected individuals
 		for city in 1:C
@@ -156,7 +156,7 @@ module graph_model
 		# se non infetto non può infettare
 		agent.status != :I && return
 		# aumento infettività se ospedali full aumento rischio solo per β_det
-		model.β_det[agent.pos] = model.hospital_overwhelmed ? model.β_det[agent.pos] + (model.β_und[agent.pos] * 0.5) : model.β_det[agent.pos]
+		model.β_det[agent.pos] = model.hospital_overwhelmed ? model.β_det[agent.pos] + (model.β_det[agent.pos] * 0.5) : model.β_det[agent.pos]
 		rate = agent.days_infected < model.detection_time ? model.β_und[agent.pos] : model.β_det[agent.pos]
 		# riduzione infettività se applico distanziamento sociale
 		rate = model.social_distancing ? rate - (rate * 0.8) : rate
@@ -168,17 +168,35 @@ module graph_model
 
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
-			if contact.status == :S || 
-				((contact.status == :R || contact.status == :V) && 
-				rand(model.rng) ≤ model.reinfection_probability / (contact.vaccine_dose * 2 - 1))
+			# ugly code
+			if contact.status == :S || contact.status == :R || contact.status == :V 
+				if contact.status == :R || contact.status == :V
+					rp = contact.vaccine_dose > 1 ? 
+						model.reinfection_probability / sum(1:sum(1:contact.vaccine_dose)-1) : 
+						model.reinfection_probability
+					if rand(model.rng) ≤ rp
+						contact.status = :I
+						n -= 1
+						n ≤ 0 && return
+					end
+				else
 					contact.status = :I
 					n -= 1
 					n ≤ 0 && return
+				end
 			end
 		end
 	end
 
-	function update!(agent, model) 
+	function update!(agent, model)
+		# if !model.hospital_overwhelmed && 
+		# 	(count(i.status == :I for i in collect(allagents(model))) ≥ nagents(model) * 0.25)
+		# 	InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, true)
+		# end
+		# if model.hospital_overwhelmed &&
+		# 	(count(i.status == :I for i in collect(allagents(model))) < nagents(model) * 0.25)
+		# 	InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, false)
+		# end
 		if agent.status == :I 
 			agent.days_infected +=1
 		end
@@ -219,4 +237,6 @@ module graph_model
 	end
 
 	get_observable(model; agent_step! = agent_step!) = ABMObservable(model; agent_step!)
+
+	# TODO: add run! function that return dataframe?
 end
