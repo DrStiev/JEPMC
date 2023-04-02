@@ -1,5 +1,3 @@
-# https://juliadynamics.github.io/Agents.jl/stable/examples/sir/
-
 # modulo per la creazione del modello e definizione dell'agente
 module graph_model
 
@@ -8,11 +6,16 @@ module graph_model
 	using LinearAlgebra: diagind
 	using StatsBase
 	using InteractiveDynamics
+	using OrdinaryDiffEq
+	using BenchmarkTools
 
+	# TODO: implementare diffusione: https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#SIR_model_with_diffusion
+	# TODO: implementare variazione contagi: https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Variable_contact_rates 
+	# TODO: utilizzo modello SEIQRDS: susceptible → exposed → infected → quarantined → recovered ( → susceptible) → dead
 	@agent Person GraphAgent begin
 		days_infected::Int
-		vaccine_dose::Int
-		status::Symbol #:S, :I, :R, :Q, :V
+		days_of_immunity::Int # dopo che si è guariti si ha un periodo di immunità
+		status::Symbol #:S, :E, :I, :R, :Q (:D viene recuperato dal modello)
 	end
 
 	function model_init(;
@@ -20,13 +23,9 @@ module graph_model
 		migration_rates,
 		β_und,
 		β_det, # infettività status :Q
-		social_distancing = false, # diminuisce β_und e β_det
-		quarantine = false, 
-		vaccine = false, 
-		hospital_overwhelmed = false, # aumenta β_det
-		mask = false, # diminuisce β_und e β_det
 		infection_period = 30,
 		detection_time = 14,
+		exposure_time = 5,
 		quarantine_time = 14,
 		reinfection_probability = 0.05,
 		death_rate = 0.02,
@@ -52,13 +51,9 @@ module graph_model
 			migration_rates,
 			β_und,
 			β_det,
-			social_distancing,
-			quarantine,
-			vaccine,
-			hospital_overwhelmed,
-			mask,
 			infection_period,
 			detection_time,
+			exposure_time,
 			quarantine_time,
 			reinfection_probability,
 			death_rate,
@@ -91,6 +86,7 @@ module graph_model
 		infection_period = 18,
 		reinfection_probability = 0.15, # valore moderna 1 dose
 		detection_time = 5, 
+		exposure_time = 5,
 		quarantine_time = 14,
 		death_rate = 0.044, # valore WHO covid
 		Is = [zeros(Int, C-1)...,1],
@@ -101,7 +97,6 @@ module graph_model
 		Ns = rand(min_population:max_population, C)
 		β_und = rand(0.3:0.2:0.6, C)
 		β_det = β_und ./ 10
-		social_distancing = quarantine = vaccine = hospital_overwhelmed = mask = false
 
 		Random.seed!(seed)
 		migration_rates = zeros(C,C)
@@ -119,13 +114,9 @@ module graph_model
 			migration_rates,
 			β_und,
 			β_det,
-			social_distancing,
-			quarantine,
-			vaccine,
-			hospital_overwhelmed,
-			mask,
 			infection_period,
 			detection_time,
+			exposure_time,
 			quarantine_time,
 			reinfection_probability,
 			death_rate,
@@ -151,76 +142,49 @@ module graph_model
 		end
 	end
 
-	# TODO: possibilità di malcontento oppure troppo difficile da modellare?
 	function transmit!(agent, model)
 		# se non infetto non può infettare
 		agent.status != :I && return
-		# aumento infettività se ospedali full aumento rischio solo per β_det
-		model.β_det[agent.pos] = model.hospital_overwhelmed ? model.β_det[agent.pos] + (model.β_det[agent.pos] * 0.5) : model.β_det[agent.pos]
-		rate = agent.days_infected < model.detection_time ? model.β_und[agent.pos] : model.β_det[agent.pos]
-		# riduzione infettività se applico distanziamento sociale
-		rate = model.social_distancing ? rate - (rate * 0.8) : rate
-		# riduzione infettività se applico mascherine
-		rate = model.mask ? rate - (rate * 0.75) : rate
-		
+
+		rate = agent.status == :Q ? model.β_det[agent.pos] : model.β_und[agent.pos]
 		n = rate * abs(randn(model.rng))
 		n ≤ 0 && return
 
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
-			# ugly code
-			if contact.status == :S || contact.status == :R || contact.status == :V 
-				if contact.status == :R || contact.status == :V
-					rp = contact.vaccine_dose > 1 ? 
-						model.reinfection_probability / sum(1:sum(1:contact.vaccine_dose)-1) : 
-						model.reinfection_probability
-					if rand(model.rng) ≤ rp
-						contact.status = :I
-						n -= 1
-						n ≤ 0 && return
-					end
-				else
-					contact.status = :I
-					n -= 1
-					n ≤ 0 && return
-				end
+			if contact.status == :S || 
+				(contact.status == :R && 
+				contact.days_of_immunity == 0 && 
+				rand(model.rng) ≤ model.reinfection_probability)
+				contact.status = :E
+				n -= 1
+				n ≤ 0 && return
 			end
 		end
 	end
 
+	# TODO: mettimi a posto
 	function update!(agent, model)
-		# if !model.hospital_overwhelmed && 
-		# 	(count(i.status == :I for i in collect(allagents(model))) ≥ nagents(model) * 0.25)
-		# 	InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, true)
-		# end
-		# if model.hospital_overwhelmed &&
-		# 	(count(i.status == :I for i in collect(allagents(model))) < nagents(model) * 0.25)
-		# 	InteractiveDynamics.set_value!(model.properties, :hospital_overwhelmed, false)
-		# end
+		agent.days_infected += 1
+		if agent.status == :E
+			agent.days_infected += 1
+			if agent.days_infected ≥ model.exposure_time
+				agent.status = :I
+				agent.days_infected = 1
+			end
+		end
 		if agent.status == :I 
 			agent.days_infected +=1
-		end
-		if model.quarantine && 
-			agent.status == :I && 
-			agent.days_infected ≥ model.detection_time
-			agent.status == :Q
-		end
-		if model.vaccine 
-			# random value
-			n = 0.0085 * abs(randn(model.rng))
-			n ≤ 0 && return
-
-			# TODO: copertura vaccinale con periodo di attesa
-			for contactID in ids_in_position(agent, model)
-				contact = model[contactID]
-				if (contact.status == :S || contact.status == :R || contact.status == :V) &&
-					contact.vaccine_dose < 3
-						contact.status = :V
-						contact.vaccine_dose += 1
-						n -= 1
-						n ≤ 0 && return
-				end
+			# TODO: regola troppo strict
+			if agent.days_infected ≥ model.detection_time
+				agent.status = :Q
 			end
+		end
+		if agent.status == :Q
+			agent.days_infected += 1
+		end
+		if agent.days_of_immunity > 0
+			agent.days_of_immunity -= 1
 		end
 	end
 
@@ -231,12 +195,8 @@ module graph_model
 			else
 				agent.status = :R
 				agent.days_infected = 0
-				agent.vaccine_dose += 1
+				agent.days_of_immunity = 30 # random value
 			end
 		end
 	end
-
-	get_observable(model; agent_step! = agent_step!) = ABMObservable(model; agent_step!)
-
-	# TODO: add run! function that return dataframe?
 end
