@@ -5,16 +5,7 @@ module graph_plot
 	using GLMakie
     using Agents
 
-    function line_plot(model, step, n)
-        exposed(x) = count(i == :E for i in x)
-        infected(x) = count(i == :I for i in x)
-        recovered(x) = count(i == :R for i in x)
-        quarantined(x) = count(i == :Q for i in x)
-
-        to_collect = [(:status, f) for f in (exposed, infected, recovered, quarantined, length)]
-        data, _ = run!(model, step, n; adata = to_collect)
-
-        N = sum(model.Ns)
+    function line_plot(N, data)
         x = data.step
         fig = Figure(resolution = (600, 400))
         ax = fig[1, 1] = Axis(fig, xlabel = "steps", ylabel = "log10(count)")
@@ -25,6 +16,6 @@ module graph_plot
         dead = log10.(N .- data[:, aggname(:status, length)])
         ld = scatterlines!(ax, x, dead, color = "black")
         Legend(fig[1, 2], [le, li, lr, lq, ld], ["Exposed", "Infected", "Recovered", "Quarantined", "Dead"])
-        return fig, data
+        return fig
     end
 end

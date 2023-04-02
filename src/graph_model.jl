@@ -199,4 +199,15 @@ module graph_model
 			end
 		end
 	end
+
+	function collect(model; step = agent_step!, n = 100)
+		exposed(x) = count(i == :E for i in x)
+        infected(x) = count(i == :I for i in x)
+        recovered(x) = count(i == :R for i in x)
+        quarantined(x) = count(i == :Q for i in x)
+
+        to_collect = [(:status, f) for f in (exposed, infected, recovered, quarantined, length)]
+        data, _ = run!(model, step, n; adata = to_collect)
+		return data
+	end
 end

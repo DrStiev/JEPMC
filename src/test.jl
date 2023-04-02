@@ -24,5 +24,7 @@ params = graph_model.create_params(
 	death_rate = 0.044,
 	)
 @btime model = graph_model.model_init(; params...)
-@btime fig, data = graph_plot.line_plot(model, graph_model.agent_step!, 100)
+@btime data = graph_model.collect(model; graph_model.agent_step!, 100)
+data
+@btime fig = graph_plot.line_plot(sum(model.Ns), data)
 fig
