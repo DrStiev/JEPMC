@@ -1,3 +1,4 @@
+# https://juliadynamics.github.io/Agents.jl/stable/examples/sir/
 # modulo per la creazione del modello e definizione dell'agente
 module graph_model
 
@@ -6,12 +7,9 @@ module graph_model
 	using LinearAlgebra: diagind
 	using StatsBase
 	using InteractiveDynamics
-	using OrdinaryDiffEq
-	using BenchmarkTools
 
-	# TODO: implementare diffusione: https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#SIR_model_with_diffusion
-	# TODO: implementare variazione contagi: https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#Variable_contact_rates 
-	# TODO: utilizzo modello SEIQRDS: susceptible → exposed → infected → quarantined → recovered ( → susceptible) → dead
+	include("ode.jl")
+
 	@agent Person GraphAgent begin
 		days_infected::Int
 		days_of_immunity::Int # dopo che si è guariti si ha un periodo di immunità
@@ -78,53 +76,6 @@ module graph_model
 		return model
 	end
 
-	function create_params(;
-		C,
-		max_travel_rate,
-		min_population = 50,
-		max_population = 5000,
-		infection_period = 18,
-		reinfection_probability = 0.15, # valore moderna 1 dose
-		detection_time = 5, 
-		exposure_time = 5,
-		quarantine_time = 14,
-		death_rate = 0.044, # valore WHO covid
-		Is = [zeros(Int, C-1)...,1],
-		seed = 19,
-		)
-
-		Random.seed!(seed)
-		Ns = rand(min_population:max_population, C)
-		β_und = rand(0.3:0.2:0.6, C)
-		β_det = β_und ./ 10
-
-		Random.seed!(seed)
-		migration_rates = zeros(C,C)
-		for c in 1:C
-			for c2 in 1:C
-				migration_rates[c, c2] = (Ns[c] + Ns[c2]) / Ns[c]
-			end
-		end
-		maxM = maximum(migration_rates)
-		migration_rates = (migration_rates .* max_travel_rate) ./ maxM
-		migration_rates[diagind(migration_rates)] .= 1.0
-
-		params = @dict(
-			Ns,
-			migration_rates,
-			β_und,
-			β_det,
-			infection_period,
-			detection_time,
-			exposure_time,
-			quarantine_time,
-			reinfection_probability,
-			death_rate,
-			Is
-		)
-		return params
-	end
-
 	function agent_step!(agent, model)
 		migrate!(agent, model)
 		transmit!(agent, model)
@@ -143,8 +94,9 @@ module graph_model
 	end
 
 	function transmit!(agent, model)
-		# se non infetto non può infettare
-		agent.status != :I && return
+		# :S e :E non possono infettare per definizione
+		agent.status == :S && return
+		agent.status == :E && return
 
 		rate = agent.status == :Q ? model.β_det[agent.pos] : model.β_und[agent.pos]
 		n = rate * abs(randn(model.rng))
@@ -163,25 +115,20 @@ module graph_model
 		end
 	end
 
-	# TODO: mettimi a posto
 	function update!(agent, model)
-		agent.days_infected += 1
-		if agent.status == :E
+		if agent.status != :S && agent.status != :R
 			agent.days_infected += 1
-			if agent.days_infected ≥ model.exposure_time
-				agent.status = :I
-				agent.days_infected = 1
+			if agent.status == :E
+				if agent.days_infected ≥ ceil(model.exposure_time[agent.pos])
+					agent.status = :I
+					agent.days_infected = 1
+				end
 			end
-		end
-		if agent.status == :I 
-			agent.days_infected +=1
-			# TODO: regola troppo strict
-			if agent.days_infected ≥ model.detection_time
-				agent.status = :Q
+			if agent.status == :I 
+				if agent.days_infected ≥ model.detection_time
+					agent.status = :Q
+				end
 			end
-		end
-		if agent.status == :Q
-			agent.days_infected += 1
 		end
 		if agent.days_of_immunity > 0
 			agent.days_of_immunity -= 1
@@ -201,12 +148,13 @@ module graph_model
 	end
 
 	function collect(model; step = agent_step!, n = 100)
+		susceptible(x) = count(i == :S for i in x)
 		exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
         recovered(x) = count(i == :R for i in x)
         quarantined(x) = count(i == :Q for i in x)
 
-        to_collect = [(:status, f) for f in (exposed, infected, recovered, quarantined, length)]
+        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, quarantined, length)]
         data, _ = run!(model, step, n; adata = to_collect)
 		return data
 	end

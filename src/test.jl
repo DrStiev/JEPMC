@@ -4,27 +4,9 @@ Pkg.instantiate()
 # Pkg.precompile()
 # Pkg.resolve()
 
-@btime include("file_reader.jl")
-@btime include("graph_model.jl")
-@btime include("graph_plot.jl")
-@btime include("controller.jl")
-
-@btime params = file_reader.extract_param_from_csv("csv_files/example.csv")
-
-params = graph_model.create_params(
-	C = 8,
-	min_population = 50,
-	max_population = 5000,
-	max_travel_rate = 0.01, 
-	infection_period = 18, 
-	reinfection_probability = 0.05,
-	detection_time = 5,
-	exposure_time = 5,
-	quarantine_time = 14,
-	death_rate = 0.044,
-	)
-@btime model = graph_model.model_init(; params...)
-@btime data = graph_model.collect(model; graph_model.agent_step!, 100)
-data
-@btime fig = graph_plot.line_plot(sum(model.Ns), data)
-fig
+@time include("params.jl") # ottengo i parametri che passo al modello
+@time include("graph.jl") # creo il modello ad agente
+@time include("ode.jl") # creo un modello ode che fa da supporto al modello ad agente 
+@time include("optimizer.jl") # trovo i parametri piu' adatti al modello cercando di minimizzare specifici parametri
+@time include("controller.jl") # applico tecniche di ML per addestrare un modello e estrapolare policy di gestione
+@time include("plot.jl") # plotto i risultati
