@@ -7,31 +7,31 @@ module graph
 	using Agents, Random, StatsBase
 	using DrWatson: @dict
 	using LinearAlgebra: diagind
-	using InteractiveDynamics, GraphMakie, GLMakie, Plots
+	using Plots, LaTeXStrings, StatsPlots
+	# using InteractiveDynamics, GraphMakie, GLMakie, Plots
 
 	# include("ode.jl")
 	# include("optimizer.jl")
 
 	@agent Person GraphAgent begin
 		days_infected::Int
-		# days_of_immunity::Int # dopo che si è guariti si ha un periodo di immunità
-		status::Symbol #:S, :E, :I, :R, :Q (:D viene recuperato dal modello)
+		immunity::Int
+		status::Symbol #:S, :E, :I, :R (:D viene recuperato dal modello)
 	end
 
 	function model_init(;
 		Ns,
 		migration_rates,
 		β_und,
-		β_det, # infettività status :Q
+		β_det,
 		infection_period = 30,
 		detection_time = 14,
-		exposure_time = 5,
-		quarantine_time = 14,
-		reinfection_probability = 0.05,
+		exposure_time = 0,
+		immunity_period = 365,
 		death_rate = 0.02,
 		Is = [zeros(Int, length(Ns) - 1)..., 1],
-		seed = 0,
-		)
+		seed = 1234,
+	)
 
 		rng = Xoshiro(seed)
 		@assert length(Ns) == length(Is) == 
@@ -54,8 +54,7 @@ module graph
 			infection_period,
 			detection_time,
 			exposure_time,
-			quarantine_time,
-			reinfection_probability,
+			immunity_period,
 			death_rate,
 			Is,
 			C	
@@ -64,7 +63,7 @@ module graph
 		model = ABM(Person, space; properties, rng)
 
 		for city in 1:C, _ in 1:Ns[city]
-			add_agent!(city, model, 0, :S) # Suscettibile
+			add_agent!(city, model, 0, 0, :S) # Suscettibile
 		end
 		# add infected individuals
 		for city in 1:C
@@ -86,8 +85,6 @@ module graph
 	end
 
 	function migrate!(agent, model)
-		# se in quarantena non può muoversi
-		agent.status == :Q && return
 		pid = agent.pos
 		m = StatsBase.sample(model.rng, 1:(model.C), StatsBase.Weights(model.migration_rates[pid, :]))
 		if m ≠ pid
@@ -96,20 +93,16 @@ module graph
 	end
 
 	function transmit!(agent, model)
-		# :S e :E non possono infettare per definizione
-		agent.status == :S && return
-		agent.status == :E && return
+		# solo :I puo' infettare
+		agent.status != :I && return
 
-		rate = agent.status == :Q ? model.β_det[agent.pos] : model.β_und[agent.pos]
+		rate = agent.days_infected ≥ model.detection_time ? model.β_det[agent.pos] : model.β_und[agent.pos]
 		n = rate * abs(randn(model.rng))
 		n ≤ 0 && return
 
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
-			if contact.status == :S || 
-				(contact.status == :R && 
-				# contact.days_of_immunity == 0 && 
-				rand(model.rng) ≤ model.reinfection_probability)
+			if contact.status == :S 
 				contact.status = :E
 				n -= 1
 				n ≤ 0 && return
@@ -119,61 +112,49 @@ module graph
 
 	function update!(agent, model)
 		agent.status == :S && return
-		agent.status == :R && return
 
-		agent.days_infected += 1
+		if agent.status == :I
+			agent.days_infected += 1 
+		end
 		if agent.status == :E
+			agent.days_infected += 1 
 			if agent.days_infected ≥ ceil(model.exposure_time[agent.pos])
 				agent.status = :I
 				agent.days_infected = 1
 			end
 		end
-		if agent.status == :I 
-			if agent.days_infected ≥ model.detection_time
-				agent.status = :Q
-			end
+		agent.immunity -= 1
+		if agent.status == :R && agent.immunity ≤ 0
+			agent.status = :S
+			agent.immunity = 0
 		end
-		# if agent.days_of_immunity > 0
-		# 	agent.days_of_immunity -= 1
-		# end
 	end
 
 	function recover_or_die!(agent, model)
-		if agent.days_infected ≥ model.infection_period
+		if agent.status == :I && 
+			agent.days_infected ≥ model.infection_period
 			if rand(model.rng) ≤ model.death_rate
 				remove_agent!(agent, model)
 			else
 				agent.status = :R
 				agent.days_infected = 0
-				# agent.days_of_immunity = 30 # random value
+				agent.immunity = 270
 			end
 		end
 	end
 
-	function collect(model; step = agent_step!, n = 100)
+	function collect(model; step = agent_step!, n = 1000)
 		susceptible(x) = count(i == :S for i in x)
 		exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
         recovered(x) = count(i == :R for i in x)
-        quarantined(x) = count(i == :Q for i in x)
 
-        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, quarantined, length)]
+        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, length)]
         data, _ = run!(model, step, n; adata = to_collect)
 		return data
 	end
-
-	function line_plot(N, data)
-        x = data.step
-        fig = Figure(resolution = (600, 400))
-        ax = fig[1, 1] = Axis(fig, xlabel = "steps", ylabel = "log10(count)")
-        ls = lines!(ax, x, log10.(data[:, aggname(:susceptible_status)]), color = "grey80")
-        le = lines!(ax, x, log10.(data[:, aggname(:exposed_status)]), color = "aquamarine2")
-        li = lines!(ax, x, log10.(data[:, aggname(:infected_status)]), color = "red2")
-        lr = lines!(ax, x, log10.(data[:, aggname(:recovered_status)]), color = "green")
-        lq = lines!(ax, x, log10.(data[:, aggname(:quarantined_status)]), color = "burlywood4")
-        dead = log10.(N .- data[:, aggname(:length_status)])
-        ld = lines!(ax, x, dead, color = "black")
-        Legend(fig[1, 2], [ls, le, li, lr, lq, ld], ["Susceptible", "Exposed", "Infected", "Recovered", "Quarantined", "Dead"])
-        return fig
-    end     
+	
+	function line_plot(data, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered"], title = "ABM Dynamics")
+		return @df data plot([data.susceptible_status, data.exposed_status, data.infected_status, data.recovered_status], labels = labels, title = title, lw = 2, xlabel = L"Days")
+	end
 end

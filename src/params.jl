@@ -11,19 +11,20 @@ module model_params
     end
 
 	function ode_dummyparams(;
-		S = 1.0,
-		E = 1E-3,
-		I = 0.0,
+		S = 2.2087E4,
+		E = 0.0,
+		I = 1.0,
 		R = 0.0,
 		tspan = (0.0, 1000.0),
-		β = 3/14,
-		γ = 1/14, 
-		σ = 1/7,
-		ω = 1/365, 
-		μ = 1/365*76, 
-		α = 0.044,
+		β = 3/14, # rates of infection
+		γ = 1/14, # rates of recover
+		σ = 1/5, # latency period 
+		ω = 1/270, # immunity period
+		μ = 1/(365*76), # birth and background death
+		α = 0.044, # virus mortality
 		)
-		u0 = [S - E - I - R, E, I , R] # initial condition
+		
+		u0 = [S, E, I , R] # initial condition
 		tspan = tspan # ≈ 3 year
 		p = [β, γ, σ ,ω, μ, α]
 		return u0, tspan, p
@@ -34,19 +35,19 @@ module model_params
         max_travel_rate = 0.01,
         population_range = range(50,5000),
         infection_period = 14,
-        reinfection_probability = 0.15,
+		exposure_time = 5,
+        immunity_period = 270, # immunity period
         detection_time = 5,
-        quarantine_time = 10,
         death_rate = 0.044,
         Is = [zeros(Int, C-1)..., 1],
         seed = 42,
-        )
+    	)
 
         Random.seed!(seed)
 		Ns = rand(population_range, C)
 		β_und = rand(0.2:0.1:0.8, C)
 		β_det = β_und ./ 10
-        exposure_time = rand(Exponential(2), C)
+        exposure_time = rand(Exponential()*exposure_time, C)
 
 		Random.seed!(seed)
 		migration_rates = zeros(C,C)
@@ -67,13 +68,10 @@ module model_params
 			infection_period,
 			detection_time,
 			exposure_time,
-			quarantine_time,
-			reinfection_probability,
+			immunity_period,
 			death_rate,
 			Is
 		)
 		return params
 	end
 end
-
-# p = params.dummyparams(C = 8, max_travel_rate = 0.01)

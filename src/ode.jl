@@ -5,11 +5,10 @@
 module ode
 	using ModelingToolkit, DifferentialEquations, OrdinaryDiffEq
 	using Plots, LaTeXStrings
-	# TODO: test me
-	# TODO: add model diffusion
+
 	function SEIRS!(du, u, p ,t)
 		S, E, I, R = u
-		N = sum(du)
+		N = sum(u)
 		# β: rates of infection, γ: rates of recovery, σ: latency period 
 		# ω: immunity period, μ: birth and background death, α: virus mortality
 		β, γ, σ, ω, μ, α = p 
@@ -31,9 +30,12 @@ module ode
 		return OrdinaryDiffEq.init(prob, method; advance_to_tstop = advance_to_tstop)
 	end
 
-	function line_plot(prob, solver = Tsit5(), labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered"], title = "SEIRS Dynamics")
-		sol = solve(prob, solver)
+	function get_solution(prob)
+		return solve(prob)
+	end
+
+	function line_plot(sol, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered"], title = "SEIRS Dynamics")
 		p = plot(sol, labels = labels, title = title, lw = 2, xlabel = L"Days")
 		return p
 	end
-end
+end 

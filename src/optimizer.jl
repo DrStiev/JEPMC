@@ -5,8 +5,8 @@ module optimizer
 	using Statistics: mean
 	using Agents
 
-	@time include("graph.jl")
-	@time include("params.jl")
+	include("graph.jl")
+	include("params.jl")
 
 	function cost(x)
 		model = graph_model.model_init(; x...)
