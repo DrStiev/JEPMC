@@ -1,18 +1,20 @@
 # https://juliadynamics.github.io/Agents.jl/stable/examples/sir/
 # modulo per la creazione del modello e definizione dell'agente
-module graph_model
+# https://en.wikipedia.org/wiki/Percolation_theory
+# https://en.wikipedia.org/wiki/Erd%C5%91s%E2%80%93R%C3%A9nyi_model
 
-	using Agents, Random
+module graph
+	using Agents, Random, StatsBase
 	using DrWatson: @dict
 	using LinearAlgebra: diagind
-	using StatsBase
-	using InteractiveDynamics
+	using InteractiveDynamics, GraphMakie, GLMakie, Plots
 
-	include("ode.jl")
+	# include("ode.jl")
+	# include("optimizer.jl")
 
 	@agent Person GraphAgent begin
 		days_infected::Int
-		days_of_immunity::Int # dopo che si è guariti si ha un periodo di immunità
+		# days_of_immunity::Int # dopo che si è guariti si ha un periodo di immunità
 		status::Symbol #:S, :E, :I, :R, :Q (:D viene recuperato dal modello)
 	end
 
@@ -62,7 +64,7 @@ module graph_model
 		model = ABM(Person, space; properties, rng)
 
 		for city in 1:C, _ in 1:Ns[city]
-			add_agent!(city, model, 0, 0, :S) # Suscettibile
+			add_agent!(city, model, 0, :S) # Suscettibile
 		end
 		# add infected individuals
 		for city in 1:C
@@ -106,7 +108,7 @@ module graph_model
 			contact = model[contactID]
 			if contact.status == :S || 
 				(contact.status == :R && 
-				contact.days_of_immunity == 0 && 
+				# contact.days_of_immunity == 0 && 
 				rand(model.rng) ≤ model.reinfection_probability)
 				contact.status = :E
 				n -= 1
@@ -116,23 +118,24 @@ module graph_model
 	end
 
 	function update!(agent, model)
-		if agent.status != :S && agent.status != :R
-			agent.days_infected += 1
-			if agent.status == :E
-				if agent.days_infected ≥ ceil(model.exposure_time[agent.pos])
-					agent.status = :I
-					agent.days_infected = 1
-				end
-			end
-			if agent.status == :I 
-				if agent.days_infected ≥ model.detection_time
-					agent.status = :Q
-				end
+		agent.status == :S && return
+		agent.status == :R && return
+
+		agent.days_infected += 1
+		if agent.status == :E
+			if agent.days_infected ≥ ceil(model.exposure_time[agent.pos])
+				agent.status = :I
+				agent.days_infected = 1
 			end
 		end
-		if agent.days_of_immunity > 0
-			agent.days_of_immunity -= 1
+		if agent.status == :I 
+			if agent.days_infected ≥ model.detection_time
+				agent.status = :Q
+			end
 		end
+		# if agent.days_of_immunity > 0
+		# 	agent.days_of_immunity -= 1
+		# end
 	end
 
 	function recover_or_die!(agent, model)
@@ -142,7 +145,7 @@ module graph_model
 			else
 				agent.status = :R
 				agent.days_infected = 0
-				agent.days_of_immunity = 30 # random value
+				# agent.days_of_immunity = 30 # random value
 			end
 		end
 	end
@@ -158,4 +161,19 @@ module graph_model
         data, _ = run!(model, step, n; adata = to_collect)
 		return data
 	end
+
+	function line_plot(N, data)
+        x = data.step
+        fig = Figure(resolution = (600, 400))
+        ax = fig[1, 1] = Axis(fig, xlabel = "steps", ylabel = "log10(count)")
+        ls = lines!(ax, x, log10.(data[:, aggname(:susceptible_status)]), color = "grey80")
+        le = lines!(ax, x, log10.(data[:, aggname(:exposed_status)]), color = "aquamarine2")
+        li = lines!(ax, x, log10.(data[:, aggname(:infected_status)]), color = "red2")
+        lr = lines!(ax, x, log10.(data[:, aggname(:recovered_status)]), color = "green")
+        lq = lines!(ax, x, log10.(data[:, aggname(:quarantined_status)]), color = "burlywood4")
+        dead = log10.(N .- data[:, aggname(:length_status)])
+        ld = lines!(ax, x, dead, color = "black")
+        Legend(fig[1, 2], [ls, le, li, lr, lq, ld], ["Susceptible", "Exposed", "Infected", "Recovered", "Quarantined", "Dead"])
+        return fig
+    end     
 end

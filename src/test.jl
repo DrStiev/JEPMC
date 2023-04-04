@@ -9,4 +9,3 @@ Pkg.instantiate()
 @time include("ode.jl") # creo un modello ode che fa da supporto al modello ad agente 
 @time include("optimizer.jl") # trovo i parametri piu' adatti al modello cercando di minimizzare specifici parametri
 @time include("controller.jl") # applico tecniche di ML per addestrare un modello e estrapolare policy di gestione
-@time include("plot.jl") # plotto i risultati

@@ -1,10 +1,8 @@
-module file_reader
+module model_params
     using CSV, Random, Distributions
     using DataFrames, DelimitedFiles
     using DrWatson: @dict
     using LinearAlgebra: diagind
-
-    include("optimizer.jl")
 
     function extract_param_from_csv(input)
         df = DataFrame(CSV.File(input))
@@ -12,9 +10,28 @@ module file_reader
         return params
     end
 
+	function ode_dummyparams(;
+		S = 1.0,
+		E = 1E-3,
+		I = 0.0,
+		R = 0.0,
+		tspan = (0.0, 1000.0),
+		β = 3/14,
+		γ = 1/14, 
+		σ = 1/7,
+		ω = 1/365, 
+		μ = 1/365*76, 
+		α = 0.044,
+		)
+		u0 = [S - E - I - R, E, I , R] # initial condition
+		tspan = tspan # ≈ 3 year
+		p = [β, γ, σ ,ω, μ, α]
+		return u0, tspan, p
+	end
+
     function dummyparams(;
-        C,
-        max_travel_rate,
+        C = 8,
+        max_travel_rate = 0.01,
         population_range = range(50,5000),
         infection_period = 14,
         reinfection_probability = 0.15,
@@ -27,7 +44,7 @@ module file_reader
 
         Random.seed!(seed)
 		Ns = rand(population_range, C)
-		β_und = rand(0.2:0.1:0.7, C)
+		β_und = rand(0.2:0.1:0.8, C)
 		β_det = β_und ./ 10
         exposure_time = rand(Exponential(2), C)
 
@@ -59,4 +76,4 @@ module file_reader
 	end
 end
 
-p = file_reader.dummyparams(C = 8, max_travel_rate = 0.01)
+# p = params.dummyparams(C = 8, max_travel_rate = 0.01)

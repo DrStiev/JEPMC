@@ -2,10 +2,10 @@
 # https://docs.sciml.ai/Overview/stable/getting_started/fit_simulation/#fit_simulation
 # https://docs.sciml.ai/Overview/stable/getting_started/first_simulation/#first_sim
 # https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology#The_SEIR_model
-module ode_model
+module ode
 	using ModelingToolkit, DifferentialEquations, OrdinaryDiffEq
 	using Plots, LaTeXStrings
-
+	# TODO: test me
 	# TODO: add model diffusion
 	function SEIRS!(du, u, p ,t)
 		S, E, I, R = u
@@ -23,20 +23,17 @@ module ode_model
 		du[4] = dR = γ*I - ω*R - μ*R
 	end
 
-	# u0 = [1.0-1E-3, 1E-3, 0.0, 0.0] # initial condition
-	# tspan = (0.0, 1000.0) # ≈ 3 year
-	# p = [3/14, 1/14, 1/7, 1/365, 1/365*76, 0.044]
-
-	# prob = ODEProblem(seirs!, u0, tspan, p)
-	# sol = solve(prob, Tsit5())
-
-	# p1 = plot(sol, labels = [L"s" L"e" L"i" L"r"], title = "SEIRS Dynamics", lw = 2, xlabel = L"t")
-
 	function get_ODE_problem(f, u0, tspan, p)
 		return ODEProblem(f, u0, tspan, p)
 	end
 
 	function get_ODE_integrator(prob, method = Tsit5(); advance_to_tstop = true)
 		return OrdinaryDiffEq.init(prob, method; advance_to_tstop = advance_to_tstop)
+	end
+
+	function line_plot(prob, solver = Tsit5(), labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered"], title = "SEIRS Dynamics")
+		sol = solve(prob, solver)
+		p = plot(sol, labels = labels, title = title, lw = 2, xlabel = L"Days")
+		return p
 	end
 end
