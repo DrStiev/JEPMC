@@ -11,23 +11,21 @@ module model_params
     end
 
 	function ode_dummyparams(;
-		S = 2.2087E4,
-		E = 0.0,
-		I = 1.0,
-		R = 0.0,
-		D = 0.0, 
+		S = 2.2087E4, E = 0.0, I = 1.0,
+		Q = 0.0, R = 0.0, D = 0.0, 
 		tspan = (0.0, 1000.0),
 		β = 6/14, # rates of infection
 		γ = 1/14, # rates of recover
 		σ = 1/5, # latency period 
 		ω = 1/270, # immunity period
-		μ = 4.563*10E-5, # birth and background death
-		α = 0.009, # virus mortality
+		α = 9*1E-3, # virus mortality
+		δ = 0.15, # percentage of quarantine
+		ξ = 8.4*1E-3, # vaccine per day
 		)
 		
-		u0 = [S, E, I , R, D] # initial condition
+		u0 = [S, E, I , Q, R, D] # initial condition
 		tspan = tspan # ≈ 3 year
-		p = [β, γ, σ ,ω, μ, α]
+		p = [β, γ, σ ,ω, μ, α, δ, ξ]
 		return u0, tspan, p
 	end
 
@@ -35,43 +33,27 @@ module model_params
         C = 8,
         max_travel_rate = 0.01,
         population_range = range(50,5000),
-        infection_period = 14,
-		exposure_time = 5,
-        immunity_period = 270, # immunity period
-        detection_time = 5,
-        death_rate = 0.009,
-        Is = [zeros(Int, C-1)..., 1],
+        β = 6/14, γ = 1/14, σ = 1/5, ω = 1/270, 
+		α = 9*1E-3, δ = 0.15, ξ = 8.4*1E-3,
         seed = 42,
     	)
 
         Random.seed!(seed)
-		Ns = rand(population_range, C)
-		β_und = rand(0.2:0.1:0.8, C)
-		β_det = β_und ./ 10
-        exposure_time = rand(Exponential()*exposure_time, C)
-
-		Random.seed!(seed)
-		migration_rates = zeros(C,C)
+		number_point_of_interest = rand(population_range, C)
+		migration_rate = zeros(C,C)
 		for c in 1:C
 			for c2 in 1:C
 				migration_rates[c, c2] = (Ns[c] + Ns[c2]) / Ns[c]
 			end
 		end
-		maxM = maximum(migration_rates)
-		migration_rates = (migration_rates .* max_travel_rate) ./ maxM
-		migration_rates[diagind(migration_rates)] .= 1.0
+		maxM = maximum(migration_rate)
+		migration_rate = (migration_rate .* max_travel_rate) ./ maxM
+		migration_rate[diagind(migration_rate)] .= 1.0
 
 		params = @dict(
-			Ns,
-			migration_rates,
-			β_und,
-			β_det,
-			infection_period,
-			detection_time,
-			exposure_time,
-			immunity_period,
-			death_rate,
-			Is
+			number_point_of_interest,
+			migration_rate,
+			β, γ, σ, ω, α, δ, ξ
 		)
 		return params
 	end
