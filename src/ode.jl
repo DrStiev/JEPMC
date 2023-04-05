@@ -7,7 +7,7 @@ module ode
 	using Plots, LaTeXStrings
 
 	function SEIRS!(du, u, p ,t)
-		S, E, I, R = u
+		S, E, I, R, D = u
 		N = sum(u)
 		# β: rates of infection, γ: rates of recovery, σ: latency period 
 		# ω: immunity period, μ: birth and background death, α: virus mortality
@@ -20,6 +20,7 @@ module ode
 		du[3] = dI = σ*E - γ*I - (μ+α)*I
 		# recovery - lost immunity - natual death
 		du[4] = dR = γ*I - ω*R - μ*R
+		du[5] = dD = α*I
 	end
 
 	function get_ODE_problem(f, u0, tspan, p)
@@ -34,7 +35,7 @@ module ode
 		return solve(prob)
 	end
 
-	function line_plot(sol, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered"], title = "SEIRS Dynamics")
+	function line_plot(sol, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "SEIRS Dynamics")
 		p = plot(sol, labels = labels, title = title, lw = 2, xlabel = L"Days")
 		return p
 	end

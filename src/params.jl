@@ -15,16 +15,17 @@ module model_params
 		E = 0.0,
 		I = 1.0,
 		R = 0.0,
+		D = 0.0, 
 		tspan = (0.0, 1000.0),
-		β = 3/14, # rates of infection
+		β = 6/14, # rates of infection
 		γ = 1/14, # rates of recover
 		σ = 1/5, # latency period 
 		ω = 1/270, # immunity period
-		μ = 1/(365*76), # birth and background death
-		α = 0.044, # virus mortality
+		μ = 4.563*10E-5, # birth and background death
+		α = 0.009, # virus mortality
 		)
 		
-		u0 = [S, E, I , R] # initial condition
+		u0 = [S, E, I , R, D] # initial condition
 		tspan = tspan # ≈ 3 year
 		p = [β, γ, σ ,ω, μ, α]
 		return u0, tspan, p
@@ -38,7 +39,7 @@ module model_params
 		exposure_time = 5,
         immunity_period = 270, # immunity period
         detection_time = 5,
-        death_rate = 0.044,
+        death_rate = 0.009,
         Is = [zeros(Int, C-1)..., 1],
         seed = 42,
     	)
@@ -71,6 +72,43 @@ module model_params
 			immunity_period,
 			death_rate,
 			Is
+		)
+		return params
+	end
+
+	function c_dummyparams(;
+		infection_period = 14,
+        detection_time = 5,
+        exposure_time = 5,
+        immunity_period = 270, 
+        interaction_radius = 0.012,
+        dt = 1.0,
+        speed = 0.002,
+        death_rate = 0.009, 
+        N = 22087,
+        initial_infected = 1,
+        βmin = 0.2,
+        βmax = 0.8,
+        space_dimension = (1.0, 1.0),
+        spacing = 0.02,
+		steps_per_day = 24,
+		)
+		params = @dict(
+			infection_period,
+			detection_time,
+			exposure_time,
+			immunity_period, 
+			interaction_radius,
+			dt,
+			speed,
+			death_rate, 
+			N,
+			initial_infected,
+			βmin,
+			βmax,
+			space_dimension,
+			spacing,
+			steps_per_day,
 		)
 		return params
 	end

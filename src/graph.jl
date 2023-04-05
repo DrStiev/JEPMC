@@ -118,7 +118,7 @@ module graph
 		end
 		if agent.status == :E
 			agent.days_infected += 1 
-			if agent.days_infected ≥ ceil(model.exposure_time[agent.pos])
+			if agent.days_infected ≥ model.exposure_time[agent.pos]
 				agent.status = :I
 				agent.days_infected = 1
 			end
@@ -138,7 +138,7 @@ module graph
 			else
 				agent.status = :R
 				agent.days_infected = 0
-				agent.immunity = 270
+				agent.immunity = model.immunity_period
 			end
 		end
 	end
