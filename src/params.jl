@@ -12,20 +12,19 @@ module model_params
 
 	function ode_dummyparams(;
 		S = 2.2087E4, E = 0.0, I = 1.0,
-		Q = 0.0, R = 0.0, D = 0.0, 
+		R = 0.0, D = 0.0, 
 		tspan = (0.0, 1000.0),
 		β = 6/14, # rates of infection
-		γ = 1/14, # rates of recover
-		σ = 1/5, # latency period 
-		ω = 1/270, # immunity period
-		α = 9*1E-3, # virus mortality
-		δ = 0.15, # percentage of quarantine
-		ξ = 8.4*1E-3, # vaccine per day
+		γ = 1/20, # rates of recover
+		σ = 1/5.8, # latency period 
+		ω = 1/240, # immunity period
+		α = 9E-3, # virus mortality
+		ξ = 8.4E-3, # vaccine per day
 		)
 		
-		u0 = [S, E, I , Q, R, D] # initial condition
+		u0 = [S, E, I , R, D] # initial condition
 		tspan = tspan # ≈ 3 year
-		p = [β, γ, σ ,ω, μ, α, δ, ξ]
+		p = [β, γ, σ ,ω, α, ξ]
 		return u0, tspan, p
 	end
 
@@ -33,9 +32,8 @@ module model_params
         C = 8,
         max_travel_rate = 0.01,
         population_range = range(50,5000),
-        β = 6/14, γ = 1/14, σ = 1/5, ω = 1/270, 
-		α = 9*1E-3, δ = 0.15, ξ = 8.4*1E-3,
-        seed = 42,
+        β = 6/14, γ = 1/20, σ = 1/5.8, ω = 1/240, 
+		α = 9E-3, ξ = 8.4E-3, seed = 42,
     	)
 
         Random.seed!(seed)
@@ -43,7 +41,7 @@ module model_params
 		migration_rate = zeros(C,C)
 		for c in 1:C
 			for c2 in 1:C
-				migration_rates[c, c2] = (Ns[c] + Ns[c2]) / Ns[c]
+				migration_rate[c, c2] = (number_point_of_interest[c] + number_point_of_interest[c2]) / number_point_of_interest[c]
 			end
 		end
 		maxM = maximum(migration_rate)
@@ -53,7 +51,7 @@ module model_params
 		params = @dict(
 			number_point_of_interest,
 			migration_rate,
-			β, γ, σ, ω, α, δ, ξ
+			β, γ, σ, ω, α, ξ,
 		)
 		return params
 	end
