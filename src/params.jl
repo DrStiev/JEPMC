@@ -4,27 +4,51 @@ module model_params
     using DrWatson: @dict
     using LinearAlgebra: diagind
 
-    function extract_param_from_csv(input)
-        df = DataFrame(CSV.File(input))
-        params = Dict(pairs(eachcol(df)))
-        return params
+    function extract_data_from_csv_ode(input)
+        df = DataFrame(CSV.File(input, delim=",", header=1, select=[1, 5, 6, 8, 10]))
+		df = df[df[!,:geoId] .== "IT", :]
+		tspan = length(df[!, :popData2020]) # ≈ 3 year
+		pop = maximum(df[!, :popData2020])
+		S = pop
+		E = 0
+		I = df[tspan, 2]
+		R = 0
+		D = df[tspan, 3]
+		d = sum(df[!, :deaths])
+		i = sum(df[!, :cases])
+		β = i / pop
+		γ = 1/10.6
+		σ = 1/5.5
+		ω = 1/246.4
+		α = d / i
+		ϵ = 0
+		ξ = 0
+		u0 = [S - E - I - R- D, E, I , R, D] # initial condition
+		p = [β, γ, σ ,ω, α, ϵ, ξ]
+		return u0, tspan, p
     end
 
+	function extract_data_from_csv_abm(input)
+		df = DataFrame(CSV.File(input, delim=",", header=1, select=[1, 5, 6, 8, 10]))
+		df = df[df[!,:geoId] .== "IT", :]
+	end
+
 	function ode_dummyparams(;
-		S = 2.2087E4, E = 0.0, I = 1.0,
-		R = 0.0, D = 0.0, 
+		S = 5.9641488E7, E = 0, I = 229,
+		R = 0, D = 0, 
 		tspan = (0.0, 1000.0),
-		β = 6/14, # rates of infection
-		γ = 1/20, # rates of recover
-		σ = 1/5.8, # latency period 
+		β = 3.9166E-1, # rates of infection
+		γ = 1/14, # rates of recover
+		σ = 1/4, # latency period 
 		ω = 1/240, # immunity period
-		α = 9E-3, # virus mortality
-		ξ = 8.4E-3, # vaccine per day
+		α = 7.64E-3, # virus mortality
+		ϵ = 0.0, # vaccine rateo
+		ξ = 0.0, # strong immune system
 		)
 		
 		u0 = [S, E, I , R, D] # initial condition
 		tspan = tspan # ≈ 3 year
-		p = [β, γ, σ ,ω, α, ξ]
+		p = [β, γ, σ ,ω, α, ϵ, ξ]
 		return u0, tspan, p
 	end
 
@@ -32,8 +56,8 @@ module model_params
         C = 8,
         max_travel_rate = 0.01,
         population_range = range(50,5000),
-        β = 6/14, γ = 1/20, σ = 1/5.8, ω = 1/240, 
-		α = 9E-3, ξ = 8.4E-3, seed = 42,
+        β = 6/14, γ = 2/14, σ = 1/4, ω = 1/240, 
+		α = 9E-3, ϵ = 0.0, ξ = 0.0, seed = 42,
     	)
 
         Random.seed!(seed)
@@ -51,7 +75,7 @@ module model_params
 		params = @dict(
 			number_point_of_interest,
 			migration_rate,
-			β, γ, σ, ω, α, ξ,
+			β, γ, σ ,ω, α, ϵ, ξ,
 		)
 		return params
 	end

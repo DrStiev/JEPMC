@@ -2,21 +2,22 @@ module ode
 	using ModelingToolkit, DifferentialEquations, OrdinaryDiffEq
 	using Plots, LaTeXStrings
 
-	# model SEIR(V)D con perdita di immunità
+	# model SEIRD con perdita di immunità
 	function SEIRD!(du, u, p, t)
 		S, E, I, R, D = u
 		N = sum(u)
-		# β: rates of infection
-		# γ: rates of recover, 
-		# σ: latency period 
-		# ω: immunity period, 
-		# α: virus mortality, 
-		# ξ: rate of vaccination
-		β, γ, σ, ω, α, ξ = p 
-		du[1] = dS = -β*I*S/N + ω*R - ξ*S 
-		du[2] = dE = β*I*S/N - σ*E
-		du[3] = dI = σ*E - γ*I - α*I
-		du[4] = dR = γ*I - ω*R + ξ*S
+		# β: rates of infection :S → :E
+		# γ: rates of recover, :I → :R
+		# σ: latency period, :E → :I 
+		# ω: immunity period, :R → :S
+		# α: virus mortality, :I → :D
+		# ϵ: vaccine rateo, :S → :R
+		# ξ: strong immune system, :E → :S
+		β, γ, σ, ω, α, ϵ, ξ = p 
+		du[1] = dS = -β*I*S/N + ω*R - ϵ*S + ξ*E 
+		du[2] = dE = β*I*S/N - σ*E - ξ*E 
+		du[3] = dI = σ*E - γ*I - α*I 
+		du[4] = dR = γ*I - ω*R + ϵ*S
 		du[5] = dD = α*I
 	end
 

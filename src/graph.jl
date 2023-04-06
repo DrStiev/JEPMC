@@ -8,13 +8,16 @@ module graph
 	include("ode.jl")
 
 	@agent Person GraphAgent begin
+		days_exposed::Int
+		days_infected::Int
+		days_immune::Int
 		status::Symbol #:S, :E, :I, :Q, :R (:V)
 	end
 
 	function init(;
 		number_point_of_interest,
 		migration_rate,
-		β, γ, σ, ω, α, ξ,
+		β, γ, σ ,ω, α, ϵ, ξ,
 		seed = 1234,
 		)
 
@@ -31,7 +34,7 @@ module graph
 		properties = @dict(
 			number_point_of_interest,
 			migration_rate,
-			β, γ, σ, ω, α, ξ,
+			β, γ, σ ,ω, α, ϵ, ξ,
 			Is, C
 		)
 		
@@ -42,7 +45,7 @@ module graph
 
 		# aggiungo la mia popolazione al modello
 		for city in 1:C, _ in 1:number_point_of_interest[city]
-			add_agent!(city, model, :S) # Suscettibile
+			add_agent!(city, model, 0,0,0, :S) # Suscettibile
 		end
 		# aggiungo il paziente zero
 		for city in 1:C
@@ -50,6 +53,7 @@ module graph
 			for n in 1:Is[city]
 				agent = model[inds[n]]
 				agent.status = :I # Infetto
+				agent.days_infected = 1
 			end
 		end
 		return model
@@ -79,9 +83,9 @@ module graph
 
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
-			if contact.status == :S ||
-				(contact.status == :R && rand(model.rng) ≤ model.ω)
+			if contact.status == :S 
 				contact.status = :E
+				contact.days_exposed = 1
 				n -= 1
 				n ≤ 0 && return
 			end
@@ -91,26 +95,50 @@ module graph
 	function update!(agent, model)
 		# probabilità di vaccinarsi
 		if agent.status == :S
-			rand(model.rng) ≤ model.ξ && (agent.status = :R)
+			if rand(model.rng) ≤ model.ϵ 
+				agent.status = :R
+				agent.days_immune = 1/model.ω
+				return
+			end
 		end
 		# fine periodo di latenza
 		if agent.status == :E
-			rand(model.rng) ≤ model.σ && (agent.status = :I)
+			if rand(model.rng) ≤ model.ξ 
+				agent.status = :S
+				agent.days_exposed = 0
+				return
+			end
+			agent.days_exposed += 1
+			if agent.days_exposed ≥ (1/model.σ)
+				agent.days_exposed = 0
+				agent.days_infected = 1
+				agent.status = :I
+			end
+		end
+		# avanzamento malattia
+		if agent.status == :I
+			agent.days_infected += 1
+			return
 		end
 		# probabilità di perdere immunità
 		if agent.status == :R
-			rand(model.rng) ≤ model.ω && (agent.status = :S)
+			if agent.days_immune > 0
+				agent.days_immune -= 1
+			else 
+				agent.status = :S
+				agent.days_immune = 0
+			end
 		end
 	end
 
 	function recover_or_die!(agent, model)
-		if agent.status == :I 
-			if rand(model.rng) ≤ model.γ
-				if rand(model.rng) ≤ model.α 
-					remove_agent!(agent, model)
-				else
-					agent.status = :R
-				end
+		if agent.days_infected ≥ (1 / model.γ)
+			if rand(model.rng) ≤ model.α 
+				remove_agent!(agent, model)
+			else
+				agent.status = :R
+				agent.days_infected = 0
+				agent.days_immune = 1/model.ω
 			end
 		end
 	end	 
