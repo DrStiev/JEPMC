@@ -1,7 +1,5 @@
 module continuous
     using Agents, Random
-    # using InteractiveDynamics, GLMakie
-    using Plots, LaTeXStrings, StatsPlots
     using DrWatson: @dict
     using OrdinaryDiffEq
 
@@ -129,28 +127,4 @@ module continuous
             end
         end
     end
-
-    function collect(model; astep = agent_step!, mstep = model_step!, n = 1000)
-		susceptible(x) = count(i == :S for i in x)
-		exposed(x) = count(i == :E for i in x)
-        infected(x) = count(i == :I for i in x)
-        recovered(x) = count(i == :R for i in x)
-        dead(x) = model.N - nagents(model)
-
-
-        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, dead)]
-        data, _ = run!(model, astep, mstep, n; adata = to_collect)
-		return data
-	end
-	
-	function line_plot(data, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "ABM ContinuousSpace Dynamics")
-        return @df data plot([
-                data[:,2], 
-                data[:,3], 
-                data[:,4], 
-                data[:,5],
-                data[:,6]
-                ], labels = labels, title = title, 
-                lw = 2, xlabel = L"Days")
-	end
 end

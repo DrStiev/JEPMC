@@ -1,14 +1,8 @@
-# TODO: potrei riconvertire questa struttura a grafo
-# come se fosse una struttura continua ma che interfaccia 
-# un grafo, tipo rete sociale: https://juliadynamics.github.io/Agents.jl/stable/examples/schoolyard/
-# inserisco N attrattori con un potere attrattivo differente 
-# e vedo cosa succede. attrattori: case, supermercati, stazioni, aeroporti etc...
 module graph
 	# using OrdinaryDiffEq
 	using Agents, Random, StatsBase
 	using DrWatson: @dict
 	using LinearAlgebra: diagind
-	using Plots, LaTeXStrings, StatsPlots
 
 	include("ode.jl")
 
@@ -134,27 +128,4 @@ module graph
 			end
 		end
 	end	 
-
-	function collect(model; step = agent_step!, n = 1000)
-		susceptible(x) = count(i == :S for i in x)
-		exposed(x) = count(i == :E for i in x)
-        infected(x) = count(i == :I for i in x)
-        recovered(x) = count(i == :R for i in x)
-		dead(x) = sum(model.number_point_of_interest) - nagents(model)
-
-        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, dead)]
-        data, _ = run!(model, step, n; adata = to_collect)
-		return data
-	end
-	
-	function line_plot(data, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "ABM GraphSpace Dynamics")
-		return @df data plot([
-				data[:,2], 
-				data[:,3], 
-				data[:,4], 
-				data[:,5],
-				data[:,6]
-				], labels = labels, title = title, 
-				lw = 2, xlabel = L"Days")
-	end
 end

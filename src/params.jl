@@ -4,6 +4,7 @@ module model_params
     using DrWatson: @dict
     using LinearAlgebra: diagind
 
+	# TODO: generalize more
     function extract_data_from_csv_ode(input)
         df = DataFrame(CSV.File(input, delim=",", header=1, select=[1, 5, 6, 8, 10]))
 		df = df[df[!,:geoId] .== "IT", :]
