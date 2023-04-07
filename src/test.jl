@@ -14,7 +14,7 @@ module test
 
     # test parameters creation
     @time u0, tspan, p = model_params.extract_data_from_csv_ode("csv_files/data.csv")
-    @time params = model_params.dummyparams()
+    @time g_params = model_params.g_dummyparams()
     @time c_params = model_params.c_dummyparams()
 
     # FIXME: death count troppo elevato
@@ -22,13 +22,15 @@ module test
     @time prob = ode.get_ODE_problem(ode.SEIRD!, u0, tspan, p)
     @time sol = ode.get_solution(prob)
     @time ode.line_plot(sol)
+    @time ode.area_plot(sol)
 
-    #FIXME
+    #FIXME: curves seems a bit off
     # test graphspace abm
-    @time model = graph.init(; params...)
+    @time model = graph.init(; g_params...)
     @time data = graph.collect(model)
     @time graph.line_plot(data)
 
+    # FIXME: curves do not create a real cycle
     # test continuousspace abm
     @time c_model = continuous.model_init(; c_params...)
     @time c_data = continuous.collect(c_model)

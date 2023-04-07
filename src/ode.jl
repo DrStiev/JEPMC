@@ -38,4 +38,9 @@ module ode
 			lw = 2, xlabel = L"Days")
 		return p
 	end
+
+	function area_plot(sol, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "SEIRD Dynamics")
+		p = areaplot(sol.t, sol', labels = labels, title = title, xlabel = L"Days")
+		return p
+	end
 end 

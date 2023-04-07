@@ -1,75 +1,61 @@
-# link: https://juliadynamics.github.io/AgentsExampleZoo.jl/dev/examples/social_distancing/#Continuous-space-social-distancing
-# link interactive: https://juliadynamics.github.io/Agents.jl/stable/agents_visualizations/
-# link: https://www.washingtonpost.com/graphics/2020/world/corona-simulator/
-
 module continuous
     using Agents, Random
     # using InteractiveDynamics, GLMakie
     using Plots, LaTeXStrings, StatsPlots
     using DrWatson: @dict
+    using OrdinaryDiffEq
 
-    # posso simulare le interazioni sociali di individui tramite 
-    # l'uso di agenti che si comportano come delle palline che rimbalzano.
-    # L'idea alla base è quella di simulare le interazioni tra individui 
-    # tramite questo modello (che può essere raffinato). quando due palline
-    # si scontrano avviene un interazione.
+    include("ode.jl")
 
     @agent Person ContinuousAgent{2} begin
         mass::Float64
         days_infected::Int
-        immunity::Int
-        status::Symbol #:S, :E, :I, :R
-        β::Float64
+        status::Symbol #:S, :E, :I, :R (:V)
     end
 
     # valori default esempio
     function model_init(;
-        infection_period = 30,
-        detection_time = 14,
-        exposure_time = 0,
-        immunity_period = 365, 
+        N = 1E3, initial_infected = 1,
+		β = 6/14, γ = 1/14, σ = 1/4, ω = 1/240, 
+		α = 9E-3, ϵ = 0.0, ξ = 0.0,
         interaction_radius = 0.012,
-        dt = 1.0,
-        speed = 0.002,
-        death_rate = 0.044, # da WHO
-        N = 1000,
-        initial_infected = 5,
-        βmin = 0.4,
-        βmax = 0.8,
+        dt = 1.0, speed = 0.002,
         space_dimension = (1.0, 1.0),
-        spacing = 0.02,
-        steps_per_day = 24,
+        spacing = 0.02, steps_per_day = 24,
         seed = 1234,
         )
+        
+        S = N - initial_infected
+        E = 0
+        I = initial_infected
+        R = 0
+        D = 0
 
-        # parametri che potrò cambiare con l'interactive window
-        properties=(;
-            N,
-            infection_period,
-            detection_time,
-            exposure_time,
-            immunity_period , 
-            interaction_radius,
-            death_rate,
-            βmin,
-            βmax,
-            speed,
-            dt,
-            steps_per_day,
+        # TODO: trova un modo per usarlo
+        prob = ode.get_ODE_problem(
+            ode.SEIRD!,
+            [S, E, I, R, D], (0.0, Inf), 
+            [β, γ, σ ,ω, α, ϵ, ξ]
         )
-        # cast da variabile immutable a mutable. meglio se struct ad-hoc
-        properties = Dict(k=>v for (k,v) in pairs(properties))
+        integrator = ode.get_ODE_integrator(prob)
 
         space = ContinuousSpace(space_dimension; spacing=spacing)
-        model = ABM(Person, space, properties=properties, rng=Xoshiro(seed))
+        model = ABM(Person, space;
+        properties = @dict(
+            N, initial_infected,
+			β, γ, σ ,ω, α, ϵ, ξ,
+			interaction_radius,
+			dt, speed, space_dimension,
+			spacing, steps_per_day,
+            integrator,
+        ), rng=Xoshiro(seed))
 
         # inserisco gli agenti nel modello
         for ind in 1:N
             pos = Tuple(rand(model.rng, 2) .* space_dimension)
             status = ind ≤ N - initial_infected ? :S : :I
             vel = sincos(2π * rand(model.rng)) .* speed
-            β = (βmax - βmin) * rand(model.rng) + βmin
-            add_agent!(pos, model, vel, 1.0, 0, 0, status, β)
+            add_agent!(pos, model, vel, 1.0, 0, status)
         end
         return model
     end
@@ -90,10 +76,10 @@ module continuous
     # funzione per il controllo della trasmissione della malattia
     function transmit!(a1, a2, model)
         count(a.status == :I for a in (a1, a2)) ≠ 1 && return
-        infected, healthy = a1.status == :I ? (a1,a2) : (a2,a1)
-        n = infected.β * abs(randn(model.rng))
+        _, healthy = a1.status == :I ? (a1,a2) : (a2,a1)
+        n = model.β * abs(randn(model.rng))
         n ≤ 0 && return
-        if healthy.status == :S 
+        if healthy.status == :S
             healthy.status = :E
             n -= 1
             n ≤ 0 && return
@@ -102,34 +88,44 @@ module continuous
 
     # aggiornamento infetti
     function update!(agent, model) 
-        agent.status == :S && return
-
-        if agent.status == :I
-            agent.days_infected += 1
+        # probabilità di vaccinarsi
+        if agent.status == :S 
+            rand(model.rng) ≤ model.ϵ && (agent.status = :R)
         end
+        # periodo di esposizione
         if agent.status == :E
-            agent.days_infected += 1
-            if agent.days_infected ≥ model.exposure_time 
+            # sistema immunitario forte
+            if rand(model.rng) ≤ model.ξ
+                agent.status = :S
+                agent.days_infected = 0
+                return
+            end
+            # fine latenza inizio infettività
+            if agent.days_infected ≥ (1/model.σ) 
                 agent.status = :I
 				agent.days_infected = 1
+                return
             end
+            agent.days_infected += 1
         end
-        agent.immunity -= 1
-		if agent.status == :R && agent.immunity ≤ 0
-			agent.status = :S
-			agent.immunity = 0
-		end
+        # periodo infettivo
+        agent.status == :I && (agent.days_infected += 1)
+        # fine immunità
+        if agent.status == :R 
+          rand(model.rng) ≤ model.ω && (agent.status = :S)
+        end            
     end
 
     function recover_or_die!(agent, model)
-        if agent.days_infected ≥ model.infection_period 
-            if rand(model.rng) ≤ model.death_rate
+        # fine periodo infettivo
+        if agent.days_infected ≥ (1/model.γ)
+            # possibilità di morte
+            if rand(model.rng) ≤ model.α
                 kill_agent!(agent, model)
             else
-                # semplificazione della quarantena
+                # guarigione
                 agent.status = :R
                 agent.days_infected = 0
-                agent.immunity = model.immunity_period 
             end
         end
     end
@@ -139,13 +135,22 @@ module continuous
 		exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
         recovered(x) = count(i == :R for i in x)
+        dead(x) = model.N - nagents(model)
 
-        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, length)]
+
+        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, dead)]
         data, _ = run!(model, astep, mstep, n; adata = to_collect)
 		return data
 	end
 	
-	function line_plot(data, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered"], title = "ABM Dynamics")
-		return @df data plot([data.susceptible_status, data.exposed_status, data.infected_status, data.recovered_status], labels = labels, title = title, lw = 2, xlabel = L"Days")
+	function line_plot(data, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "ABM ContinuousSpace Dynamics")
+        return @df data plot([
+                data[:,2], 
+                data[:,3], 
+                data[:,4], 
+                data[:,5],
+                data[:,6]
+                ], labels = labels, title = title, 
+                lw = 2, xlabel = L"Days")
 	end
 end

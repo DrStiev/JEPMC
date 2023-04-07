@@ -1,5 +1,10 @@
+# TODO: potrei riconvertire questa struttura a grafo
+# come se fosse una struttura continua ma che interfaccia 
+# un grafo, tipo rete sociale: https://juliadynamics.github.io/Agents.jl/stable/examples/schoolyard/
+# inserisco N attrattori con un potere attrattivo differente 
+# e vedo cosa succede. attrattori: case, supermercati, stazioni, aeroporti etc...
 module graph
-	using OrdinaryDiffEq
+	# using OrdinaryDiffEq
 	using Agents, Random, StatsBase
 	using DrWatson: @dict
 	using LinearAlgebra: diagind
@@ -8,10 +13,8 @@ module graph
 	include("ode.jl")
 
 	@agent Person GraphAgent begin
-		days_exposed::Int
 		days_infected::Int
-		days_immune::Int
-		status::Symbol #:S, :E, :I, :Q, :R (:V)
+		status::Symbol #:S, :E, :I, :R (:V)
 	end
 
 	function init(;
@@ -45,7 +48,7 @@ module graph
 
 		# aggiungo la mia popolazione al modello
 		for city in 1:C, _ in 1:number_point_of_interest[city]
-			add_agent!(city, model, 0,0,0, :S) # Suscettibile
+			add_agent!(city, model, 0, :S) # Suscettibile
 		end
 		# aggiungo il paziente zero
 		for city in 1:C
@@ -85,7 +88,6 @@ module graph
 			contact = model[contactID]
 			if contact.status == :S 
 				contact.status = :E
-				contact.days_exposed = 1
 				n -= 1
 				n ≤ 0 && return
 			end
@@ -95,50 +97,40 @@ module graph
 	function update!(agent, model)
 		# probabilità di vaccinarsi
 		if agent.status == :S
-			if rand(model.rng) ≤ model.ϵ 
-				agent.status = :R
-				agent.days_immune = 1/model.ω
-				return
-			end
+			rand(model.rng) ≤ model.ϵ && (agent.status = :R)
 		end
 		# fine periodo di latenza
 		if agent.status == :E
 			if rand(model.rng) ≤ model.ξ 
 				agent.status = :S
-				agent.days_exposed = 0
+				agent.days_infected = 0
 				return
 			end
-			agent.days_exposed += 1
-			if agent.days_exposed ≥ (1/model.σ)
-				agent.days_exposed = 0
-				agent.days_infected = 1
+			if agent.days_infected ≥ (1/model.σ)
 				agent.status = :I
+				agent.days_infected = 1
+				return
 			end
+			agent.days_infected += 1
 		end
 		# avanzamento malattia
-		if agent.status == :I
-			agent.days_infected += 1
-			return
-		end
-		# probabilità di perdere immunità
-		if agent.status == :R
-			if agent.days_immune > 0
-				agent.days_immune -= 1
-			else 
-				agent.status = :S
-				agent.days_immune = 0
-			end
-		end
+		agent.status == :I && (agent.days_infected += 1)
+		# fine immunità
+        if agent.status == :R 
+          rand(model.rng) ≤ model.ω && (agent.status = :S)
+        end 
 	end
 
 	function recover_or_die!(agent, model)
+		# fine malattia
 		if agent.days_infected ≥ (1 / model.γ)
+			# probabilità di morte
 			if rand(model.rng) ≤ model.α 
 				remove_agent!(agent, model)
 			else
+				# probabilità di guarigione
 				agent.status = :R
 				agent.days_infected = 0
-				agent.days_immune = 1/model.ω
 			end
 		end
 	end	 
@@ -155,7 +147,7 @@ module graph
 		return data
 	end
 	
-	function line_plot(data, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "ABM Dynamics")
+	function line_plot(data, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "ABM GraphSpace Dynamics")
 		return @df data plot([
 				data[:,2], 
 				data[:,3], 
