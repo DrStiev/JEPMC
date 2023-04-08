@@ -1,35 +1,51 @@
 module ode
-	using ModelingToolkit, DifferentialEquations, OrdinaryDiffEq
-	using Plots, LaTeXStrings
+	using OrdinaryDiffEq, StochasticDiffEq, Parameters
+	using LaTeXStrings, LinearAlgebra, Random, SparseArrays, Statistics
+	using NaNMath
 
-	# model SEIRD con perdita di immunità
-	function SEIRD!(du, u, p, t)
-		S, E, I, R, D = u
-		N = sum(u)
-		# β: rates of infection :S → :E
-		# γ: rates of recover, :I → :R
-		# σ: latency period, :E → :I 
-		# ω: immunity period, :R → :S
-		# α: virus mortality, :I → :D
-		# ϵ: vaccine rateo, :S → :R
-		# ξ: strong immune system, :E → :S
-		β, γ, σ, ω, α, ϵ, ξ = p 
-		du[1] = dS = -β*I*S/N + ω*R - ϵ*S + ξ*E 
-		du[2] = dE = β*I*S/N - σ*E - ξ*E 
-		du[3] = dI = σ*E - γ*I - α*I 
-		du[4] = dR = γ*I - ω*R + ϵ*S
-		du[5] = dD = α*I
+	function FODE(u, p, t)
+		S, E, I, R, D, R₀ = u 
+		(;R̅₀, γ, σ, η, δ) = p
+		
+		return [-γ*R₀*S*I;			# ds/dt
+			γ*R₀*S*I - σ*E;			# de/dt
+			σ*E - γ*I;				# di/dt		
+			γ*I; 					# dr/dt
+			δ*γ*I;					# dd/dt
+			η*(R̅₀(t, p) - R₀);	 	 # dR₀/dt
+		]
 	end
 
-	function get_ODE_problem(f, u0, tspan, p)
-		return ODEProblem(f, u0, tspan, p)
+	function FSDE(u, p, t)
+		S, I, R, D, R₀, δ = u 
+		(;R̅₀, γ, ψ, η, ξ, θ, δ₀, ω) = p
+		
+		return [-γ*R₀*S*I + ω*R;	# ds/dt
+			γ*R₀*S*I - γ*I;			# di/dt
+			(1-δ)*γ*I - ω*R; 		# dr/dt
+			δ*γ*I;					# dd/dt
+			η*(R̅₀(t, p) - R₀);	 	 # dR₀/dt
+			θ*(δ₀-δ);				# dδ/dt
+		]
 	end
 
-	function get_ODE_integrator(prob, method = Tsit5(); advance_to_tstop = true)
-		return OrdinaryDiffEq.init(prob, method; advance_to_tstop = advance_to_tstop)
+	function G(u, p, t)
+		S, I, R, D, R₀, δ = u 
+		(;R̅₀, γ, ψ, η, ξ, θ, δ₀, ω) = p
+
+		return [0; 0; 0; 0; ψ*NaNMath.sqrt(R₀); ξ*NaNMath.sqrt(δ*(1-δ))]
 	end
 
-	function get_solution(prob)
-		return solve(prob)
+	get_SDE_problem(f, g, u0, tspan, p) = SDEProblem(f, g, u0, tspan, p)
+	get_ODE_problem(f, u0, tspan, p) = ODEProblem(f, u0, tspan, p)
+	function get_solution(prob::SciMLBase.SDEProblem, n = 100) 
+		ensembleprob = EnsembleProblem(prob)
+		# valutare se mettere EnsembleGPUArray()
+		sol = solve(ensembleprob, SOSRI(), EnsembleThreads(), trajectories = 100)
+		return EnsembleSummary(sol)
 	end
+	get_solution(prob::SciMLBase.ODEProblem) = solve(prob, Tsit5())
+
+	# https://julia.quantecon.org/continuous_time/seir_model.html
+	# https://julia.quantecon.org/continuous_time/covid_sde.html
 end 

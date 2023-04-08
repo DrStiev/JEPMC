@@ -8,6 +8,7 @@ module sn_graph
         status::Symbol #:S, :E, :I, :R (:V)
     end
 
+    # FIXME: fix the parameter in order to be similar to the ode
     function init(;
         N = 1000, initial_infected = 1,
         attractors = 0.15, max_force = 1.7,
@@ -15,7 +16,7 @@ module sn_graph
         γ = 1/14, σ = 1/4, ω = 1/240, 
 		α = 9E-3, ϵ = 0.0, ξ = 0.0,
         speed = (0, 0), noise = 0.1,
-        space_dimension = (500, 500),
+        space_dimension = (1000, 1000),
         spacing = 4.0, interaction_radius = spacing / 1.6,
         seed = 1234,
         )
@@ -105,6 +106,7 @@ module sn_graph
         end
         # add all forces together to assign new position
         new_pos = agent.pos .+ noise .+ ats .+ network_force
+        #FIXME: capire come mai cade fuori dallo space extent
         move_agent!(agent, new_pos, model)
         update!(agent, model)
         recover_or_die!(agent, model)
@@ -166,6 +168,3 @@ module sn_graph
         end
     end
 end
-# TODO: 
-@time model = sn_graph.init(N=1000)
-@time data = sn_graph.collect(model)

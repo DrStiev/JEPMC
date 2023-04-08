@@ -1,16 +1,19 @@
+# TODO: test me
 module pplot
     using Plots, LaTeXStrings, StatsPlots
     using InteractiveDynamics, CairoMakie
+    using DataFrames, SciMLBase, Dates
 
+    #TODO: aggiungere colori per differenziare stati epidemia
     function static_preplot!(ax, model)
-        obj = CairoMakie.scatter!([50,50]; color = :blue)
+        obj = CairoMakie.scatter!(; color = :black)
         CairoMakie.hidedecorations!(ax)
         CairoMakie.translate!(obj, 0, 0, 5)
     end
 
     function record_video(model, astep, mstep;
-        name = "social_network_graph.mp4", framerate = 15, frames = 100, 
-        title = "social network graph model", preplot = static_preplot!)
+        name = "img/sngraph_"*string(now())*".mp4", framerate = 15, frames = 100, 
+        title = "title", preplot = static_preplot!)
         abmvideo(
             name, model, astep, mstep;
             framerate=framerate, frames=frames, 
@@ -18,32 +21,29 @@ module pplot
         )
     end
 
-    function line_plot(sol{<: Vector{Vectro{Float64}}}, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "SEIRD Dynamics")
-		return Plots.plot(sol, labels = labels, title = title, lw = 2, xlabel = L"Days")
+    function line_plot(sol, title = "title")
+		p = Plots.plot(sol, labels = [L"S" L"E" L"I" L"R" L"D" L"R₀"], title = title, lw = 2, xlabel = L"Days")
+        savefig(p, "img/"*title*"_"*string(now())*".png")
 	end
 
-	function area_plot(sol{<: Vector{Vectro{Float64}}}, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "SEIRD Dynamics")
-		return areaplot(sol.t, sol', labels = labels, title = title, xlabel = L"Days")
+	function area_plot(sol, title = "title")
+		p = areaplot(sol.t, sol', labels = [L"S" L"E" L"I" L"R" L"D" L"R₀"], title = title, xlabel = L"Days")
+        savefig(p, "img/"*title*"_"*string(now())*".png")
 	end
 
-    function collect(model, astep, mstep; n = 1000)
-        susceptible(x) = count(i == :S for i in x)
-        exposed(x) = count(i == :E for i in x)
-        infected(x) = count(i == :I for i in x)
-        recovered(x) = count(i == :R for i in x)
-        dead(x) = model.N - nagents(model)
-
-        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, dead)]
-        data, _ = run!(model, astep, mstep, n; adata = to_collect)
-        return data
+    function line_plot(data::DataFrame, title = "title")
+        p = @df data Plots.plot(cols(), title = title, lw = 2, xlabel = L"Days")
+        savefig(p, "img/"*title*"_"*string(now())*".png")
     end
 
-    function line_plot(data{<: DataFrame}, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "ABM GraphSpace Dynamics")
-        @df data = [data[:,2], data[:,3], data[:,4], data[:,5], data[:,6]]
-        return Plots.plot(data, labels = labels, title = title, lw = 2, xlabel = L"Days")
+    function line_plot(data::Vector{Vector{Float64}}, title = "title")
+        p = Plots.plot(data, labels = [L"S" L"E" L"I" L"R" L"D" L"R₀"], title = title, lw = 2, xlabel = L"Days")
+        savefig(p, "img/"*title*"_"*string(now())*".png")
     end
 
-    function area_plot(data{<: DataFrame}, labels = [L"Susceptible" L"Exposed" L"Infected" L"Recovered" L"Dead"], title = "ABM GraphSpace Dynamics")
-        @df data = [data[:,2], data[:,3], data[:,4], data[:,5], data[:,6]]
-        return areaplot(data.t, data', labels = labels, title = title, lw = 2, xlabel = L"Days")
+    function area_plot(data::Vector{Vector{Float64}}, title = "title")
+        p = areaplot(data.T, data', labels = [L"S" L"E" L"I" L"R" L"D" L"R₀"], title = title, lw = 2, xlabel = L"Days")
+        savefig(p, "img/"*title*"_"*string(now())*".png")
+    end
+
 end

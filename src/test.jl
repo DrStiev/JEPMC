@@ -1,38 +1,35 @@
-using Pkg
-Pkg.activate(".")
-# Pkg.instantiate()
-# Pkg.precompile()
-# Pkg.resolve()
+@time include("pplot.jl")
+@time include("params.jl")
 
-module test
-    @time include("params.jl") # ottengo i parametri che passo al modello
-    @time include("graph.jl") # creo il modello ad agente
-    @time include("continuous.jl")
-    @time include("ode.jl") # creo un modello ode che fa da supporto al modello ad agente 
-    @time include("optimizer.jl") # trovo i parametri piu' adatti al modello cercando di minimizzare specifici parametri
-    @time include("controller.jl") # applico tecniche di ML per addestrare un modello e estrapolare policy di gestione
+@time include("ode.jl")
+@time df = model_params.get_data()
+@time p_gen = model_params.extract_params(df)
 
-    # test parameters creation
-    @time u0, tspan, p = model_params.extract_data_from_csv_ode("csv_files/data.csv")
-    @time g_params = model_params.g_dummyparams()
-    @time c_params = model_params.c_dummyparams()
+p = p_gen()
+i = df[1,3]/p.N
+r = df[1,1]/p.N
+d = df[1,2]/p.N
+s = (p.N-i-r-d)/p.N
 
-    # FIXME: death count troppo elevato
-    # test ODE solver
-    @time prob = ode.get_ODE_problem(ode.SEIRD!, u0, tspan, p)
-    @time sol = ode.get_solution(prob)
-    @time ode.line_plot(sol)
-    @time ode.area_plot(sol)
+a = [df[!,i] / p.N for i in 1:4]
+@time pplot.line_plot(a, "dpc-covid-19-italia")
 
-    #FIXME: curves seems a bit off
-    # test graphspace abm
-    @time model = graph.init(; g_params...)
-    @time data = graph.collect(model)
-    @time graph.line_plot(data)
+# test ODE model
+u0 = [s, 0.0, i, r, d, p.R₀_n]
+@time prob = ode.get_ODE_problem(ode.FODE, u0, (0, p.T), p)
+@time sol = ode.get_solution(prob)
+pplot.line_plot(sol, "SEIRD-dmodel")
 
-    # FIXME: curves do not create a real cycle
-    # test continuousspace abm
-    @time c_model = continuous.model_init(; c_params...)
-    @time c_data = continuous.collect(c_model)
-    @time continuous.line_plot(c_data)
-end
+# test SDE model
+u0 = [s, 0.0, i, r, d, p.R₀_n, p.δ₀]
+@time prob = ode.get_SDE_problem(ode.FSDE, ode.G, u0, (0, p.T), p)
+@time sol = ode.get_solution(prob) #FIXME: Error: DimensionMismatch
+pplot.line_plot(sol, "SIR-smodel")
+
+include("social_network_graph.jl")
+include("collect.jl")
+# test sn_graph
+@time model = sn_graph.init()
+@time data = collect_data.collect(model, sn_graph.agent_step!, sn_graph.model_step!)
+@time pplot.record_video(model,sn_graph.agent_step!, sn_graph.model_step!)
+pplot.line_plot(data, "social_network_graph_abm")

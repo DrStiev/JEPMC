@@ -1,34 +1,29 @@
-# https://juliadynamics.github.io/Agents.jl/stable/examples/optim/
+# https://docs.sciml.ai/Overview/stable/getting_started/fit_simulation/#fit_simulation
+# TODO: test me
 module optimizer
-# FIXME: not finished!
-	using BlackBoxOptim, Random
-	using Statistics: mean
-	using Agents
+	using DifferentialEquations, Optimization, OptimizationPolyalgorithms, SciMLSensitivity
+	using ForwardDiff, Plots
 
-	include("graph.jl")
-	include("params.jl")
-
-	function cost(x)
-		model = graph.init(; x...)
-
-		infected_fraction(model) = 
-			count(a.status ==:I for a in allagents(model))/nagents(model)
-
-		_, mdf = run!(
-			model, 
-			graph.agent_step!,
-			50;
-			mdata = [infected_fraction],
-			when_model = [50],
-			# replicates = 10, # param not exists
-		)
-		return mdf.infected_fraction
+	function loss(prob, newp)
+		newprob = remake(prob, p = newp)
+		sol = solve(newprob, saveat = 1)
+		loss = sum(abs2, sol .- data)
+		return loss, sol
 	end
 
-	Random.seed!(10)
-	x0 = model_params.dummyparams()
-	# x = [cost(x0) for _ in 1:10]
-	m = mean(cost(x0) for _ in 1:10)
-	# c = cost(x0)
+	callback = function(p, l, sol)
+		display(l)
+		plt = plot(sol, label = "Current Prediction")
+		scatter!(plt, datasol, label = "Data")
+		display(plt)
+		return false
+	end
+
+	function opt(prob, pguess)
+		adtype = Optimization.AutoForwardDiff()
+		optf = Optimization.OptimizationFunction((x, y, p) -> loss(x, y), adtype)
+		optprob = Optimization.OptimizationProblem(optf, pguess)
+		return Optimization.solve(optprob, PolyOpt(), callback = callback, maxiters = 200)
+	end
 end
 
