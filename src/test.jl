@@ -26,10 +26,19 @@ u0 = [s, 0.0, i, r, d, p.R₀_n, p.δ₀]
 @time sol = ode.get_solution(prob) #FIXME: Error: DimensionMismatch
 pplot.line_plot(sol, "SIR-smodel")
 
+# test sn_graph
 include("social_network_graph.jl")
 include("collect.jl")
-# test sn_graph
-@time model = sn_graph.init()
+title = "social_network_graph_abm"
+
+# test behaviour to be similar to the ode one in a line graph
+@time model = sn_graph.init(N=100, space_dimension=(200, 200))
 @time data = collect_data.collect(model, sn_graph.agent_step!, sn_graph.model_step!)
+adata = data[!, 2:5]
+adata[!, :dead_status] = data[!, 6]
+adata
+@time pplot.line_plot(adata, title)
+
+# test the visual behaviour through a video
+@time model = sn_graph.init(N=100, space_dimension=(200, 200))
 @time pplot.record_video(model,sn_graph.agent_step!, sn_graph.model_step!)
-pplot.line_plot(data, "social_network_graph_abm")

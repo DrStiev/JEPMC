@@ -6,7 +6,7 @@ module pplot
 
     #TODO: aggiungere colori per differenziare stati epidemia
     function static_preplot!(ax, model)
-        obj = CairoMakie.scatter!(; color = :black)
+        obj = CairoMakie.scatter!([50,50]; color = :black)
         CairoMakie.hidedecorations!(ax)
         CairoMakie.translate!(obj, 0, 0, 5)
     end

@@ -12,10 +12,11 @@ module sn_graph
     function init(;
         N = 1000, initial_infected = 1,
         attractors = 0.15, max_force = 1.7,
-        max_connections = N/10, β = 6/14, 
+        max_connections = 10, β = 6/14, 
         γ = 1/14, σ = 1/4, ω = 1/240, 
 		α = 9E-3, ϵ = 0.0, ξ = 0.0,
         speed = (0, 0), noise = 0.1,
+        # TODO: find the right space dimension for the amount of agents in the model
         space_dimension = (1000, 1000),
         spacing = 4.0, interaction_radius = spacing / 1.6,
         seed = 1234,
@@ -38,8 +39,8 @@ module sn_graph
         )
 
         for person in 1:N
-            # individui iniziano nello stesso punto di interesse
-            position = model.space.extent .* 0.5 .+ Tuple(rand(model.rng, 2))
+            # gli individui iniziano posti randomicamente
+            position = model.space.extent .* 0.5 .+ Tuple(rand(model.rng, 2)) .- 0.5
             status = person ≤ N - initial_infected ? :S : :I
             add_agent!(position, model, speed, 0, status)
 
@@ -47,14 +48,11 @@ module sn_graph
             # friend - foe alla rete sociale
             con = rand(1:max_connections)
             good_con = rand(1:con)
-            bad_con = con - good_con
-            for _ in 1:good_con
+            for c in 1:con
                 friend = rand(model.rng, filter(p -> p ≠ person, 1:N))
-                add_edge!(model.connections, person, friend, rand(model.rng))
-            end
-            for _ in 1:bad_con
-                foe = rand(model.rng, filter(p -> p ≠ person, 1:N))
-                add_edge!(model.connections, person, foe, -rand(model.rng))
+                # trovo good or bad connections
+                ext = c ≤ good_con ? rand(model.rng) : -rand(model.rng)
+                add_edge!(model.connections, person, friend, ext)
             end
         end
         return model
@@ -70,6 +68,19 @@ module sn_graph
     end
 
     function agent_step!(agent, model)
+        new_pos = get_new_pos(agent, model)
+        #FIXME: capire come mai cade fuori dallo space extent
+        try
+            move_agent!(agent, new_pos, model)
+        catch
+            println("$(agent.pos) => $new_pos")
+        end
+        
+        update!(agent, model)
+        recover_or_die!(agent, model)
+    end
+
+    function get_new_pos(agent, model)
         # TODO: capire come usare più attrattori
         # place the attractors in a random spot 
         ats = (model.space.extent .* 0.5 .- agent.pos) .* model.attractors
@@ -82,9 +93,9 @@ module sn_graph
         tidxs, tweights = findnz(network)
         network_force = (0.0, 0.0)
         for (widx, tidx) in enumerate(tidxs)
-            connections = tweights[widx]
             # FIXME: sistemare asap 
             try
+                connections = tweights[widx]
                 force = (agent.pos .- model[tidx].pos) .* connections
             if connections ≥ 0
                 # the further i am, the more i want to stay close
@@ -105,11 +116,7 @@ module sn_graph
             end
         end
         # add all forces together to assign new position
-        new_pos = agent.pos .+ noise .+ ats .+ network_force
-        #FIXME: capire come mai cade fuori dallo space extent
-        move_agent!(agent, new_pos, model)
-        update!(agent, model)
-        recover_or_die!(agent, model)
+        return agent.pos .+ noise .+ ats .+ network_force
     end
 
     function transmit!(a1, a2, model)
