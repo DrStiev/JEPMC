@@ -8,17 +8,15 @@ module sn_graph
         status::Symbol #:S, :E, :I, :R (:V)
     end
 
-    # FIXME: fix the parameter in order to be similar to the ode
     function init(;
         N = 1000, initial_infected = 1,
+        # attrattori dovrebbero essere un array di Float64 (0-1)
         attractors = 0.15, max_force = 1.7,
-        max_connections = 10, β = 6/14, 
+        max_connections = 10, R₀ = 1.6, 
         γ = 1/14, σ = 1/4, ω = 1/240, 
-		α = 9E-3, ϵ = 0.0, ξ = 0.0,
-        speed = (0, 0), noise = 0.1,
-        # TODO: find the right space dimension for the amount of agents in the model
-        # TODO: find good amount of steps per day
-        space_dimension = (1000, 1000), steps_per_day = 16,
+		δ = 9E-3, ϵ = 0.0, speed = (0, 0), noise = 0.1,
+        # TODO: capire come creare uno spazio sufficientemente grande per contentere tutti gli agenti
+        space_dimension = (1000, 1000), steps_per_day = 24,
         spacing = 4.0, interaction_radius = spacing / 1.6,
         seed = 1234,
         )
@@ -27,22 +25,24 @@ module sn_graph
             Person,
             ContinuousSpace(space_dimension, spacing = spacing; periodic = false);
             properties = Dict(
-                :attractors => attractors,
+                :attractors => attractors, 
+                :attr_pos => space_dimension .* rand(Xoshiro(seed)),
                 :noise => noise, :N => N,
                 :steps_per_day => steps_per_day,
                 :max_connections => max_connections,
                 :connections => SimpleWeightedDiGraph(N),
                 :max_force => max_force,
                 :interaction_radius => interaction_radius,
-                :β => β, :γ => γ, :σ => σ, :ω => ω, 
-                :α => α, :ϵ => ϵ, :ξ => ξ,
+                :β => R₀*γ, :γ => γ, :σ => σ, :ω => ω, 
+                :δ => δ, :ϵ => ϵ,
             ),
             rng = Xoshiro(seed)
         )
 
         for person in 1:N
             # gli individui iniziano posti randomicamente
-            position = model.space.extent .* 0.5 .+ Tuple(rand(model.rng, 2)) .- 0.5
+            # FIXME: iniziano sulla diagonale secondaria (no random)
+            position = model.space.extent .* rand(model.rng) .+ Tuple(rand(model.rng, 2)) .- rand(model.rng)
             status = person ≤ N - initial_infected ? :S : :I
             add_agent!(position, model, speed, 0, status)
 
@@ -83,10 +83,9 @@ module sn_graph
     end
 
     function get_new_pos(agent, model)
-        # TODO: capire come usare più attrattori
-        # TODO: attractors are places and cannot be contaged
-        # place the attractors in a random spot 
-        ats = (model.space.extent .* 0.5 .- agent.pos) .* model.attractors
+        # place the attractors in a random spot
+        # TODO: implementare vettore di attrattori posizionati randomicamente
+        ats = (model.attr_pos .- agent.pos) .* model.attractors
         
         # add random noise
         noise = model.noise .* (Tuple(rand(model.rng, 2)) .- 0.5)
@@ -116,6 +115,7 @@ module sn_graph
             network_force = network_force .+ force
         end
         # add all forces together to assign new position
+        # TODO: utilizzo la posizione dell'attrattore piu' vicino
         return agent.pos .+ noise .+ ats .+ network_force
     end
 
@@ -160,7 +160,7 @@ module sn_graph
         # fine periodo infettivo
         if agent.days_infected ≥ (1/model.γ*model.steps_per_day)
             # possibilità di morte
-            if rand(model.rng) ≤ model.α
+            if rand(model.rng) ≤ model.δ
                 remove_agent!(agent, model)
             else
                 # guarigione
