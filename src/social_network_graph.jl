@@ -1,5 +1,5 @@
 module sn_graph
-    using Agents, Random
+    using Agents, Random, DataFrames
     using SimpleWeightedGraphs: SimpleWeightedDiGraph
     using SparseArrays: findnz
 
@@ -179,6 +179,11 @@ module sn_graph
 
         to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, dead)]
         data, _ = run!(model, astep, mstep, n; adata = to_collect)
+        data[!, :dead_status] = data[!, 6]
+        select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead_status)
+        for i in 1:5
+            data[!, i] = data[!, i] / model.N
+        end
         return data
     end
 end
