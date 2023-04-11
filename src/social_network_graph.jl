@@ -17,7 +17,8 @@ module sn_graph
 		α = 9E-3, ϵ = 0.0, ξ = 0.0,
         speed = (0, 0), noise = 0.1,
         # TODO: find the right space dimension for the amount of agents in the model
-        space_dimension = (1000, 1000),
+        # TODO: find good amount of steps per day
+        space_dimension = (1000, 1000), steps_per_day = 16,
         spacing = 4.0, interaction_radius = spacing / 1.6,
         seed = 1234,
         )
@@ -28,6 +29,7 @@ module sn_graph
             properties = Dict(
                 :attractors => attractors,
                 :noise => noise, :N => N,
+                :steps_per_day => steps_per_day,
                 :max_connections => max_connections,
                 :connections => SimpleWeightedDiGraph(N),
                 :max_force => max_force,
@@ -68,12 +70,12 @@ module sn_graph
     end
 
     function agent_step!(agent, model)
-        new_pos = get_new_pos(agent, model)
         #FIXME: capire come mai cade fuori dallo space extent
         try
+            new_pos = get_new_pos(agent, model)
             move_agent!(agent, new_pos, model)
         catch
-            println("$(agent.pos) => $new_pos")
+            # println("$(agent.pos) => $new_pos")
         end
         
         update!(agent, model)
@@ -82,6 +84,7 @@ module sn_graph
 
     function get_new_pos(agent, model)
         # TODO: capire come usare più attrattori
+        # TODO: attractors are places and cannot be contaged
         # place the attractors in a random spot 
         ats = (model.space.extent .* 0.5 .- agent.pos) .* model.attractors
         
@@ -94,9 +97,8 @@ module sn_graph
         network_force = (0.0, 0.0)
         for (widx, tidx) in enumerate(tidxs)
             # FIXME: sistemare asap 
-            try
-                connections = tweights[widx]
-                force = (agent.pos .- model[tidx].pos) .* connections
+            connections = tweights[widx]
+            force = (agent.pos .- model[tidx].pos) .* connections
             if connections ≥ 0
                 # the further i am, the more i want to stay close
                 if distance(force) > model.max_force
@@ -112,8 +114,6 @@ module sn_graph
                 end
             end
             network_force = network_force .+ force
-            catch
-            end
         end
         # add all forces together to assign new position
         return agent.pos .+ noise .+ ats .+ network_force
@@ -122,31 +122,26 @@ module sn_graph
     function transmit!(a1, a2, model)
         count(a.status == :I for a in (a1, a2)) ≠ 1 && return
         _, healthy = a1.status == :I ? (a1,a2) : (a2,a1)
-        n = model.β * abs(randn(model.rng))
-        n ≤ 0 && return
-
+        # n = model.β * abs(randn(model.rng))
+        # n ≤ 0 && return
+        # possibilità di contagio
+        rand(model.rng) > model.β && return
         if healthy.status == :S
             healthy.status = :E
-            n -= 1
-            n ≤ 0 && return
+            # n -= 1
+            # n ≤ 0 && return
         end
     end
 
     function update!(agent, model)
-         # probabilità di vaccinarsi
-         if agent.status == :S 
+        # probabilità di vaccinarsi
+        if agent.status == :S 
             rand(model.rng) ≤ model.ϵ && (agent.status = :R)
         end
         # periodo di esposizione
         if agent.status == :E
-            # sistema immunitario forte
-            if rand(model.rng) ≤ model.ξ
-                agent.status = :S
-                agent.days_infected = 0
-                return
-            end
             # fine latenza inizio infettività
-            if agent.days_infected ≥ (1/model.σ) 
+            if agent.days_infected ≥ (1/model.σ*model.steps_per_day)
                 agent.status = :I
 				agent.days_infected = 1
                 return
@@ -163,7 +158,7 @@ module sn_graph
 
     function recover_or_die!(agent, model)
         # fine periodo infettivo
-        if agent.days_infected ≥ (1/model.γ)
+        if agent.days_infected ≥ (1/model.γ*model.steps_per_day)
             # possibilità di morte
             if rand(model.rng) ≤ model.α
                 remove_agent!(agent, model)
@@ -173,5 +168,17 @@ module sn_graph
                 agent.days_infected = 0
             end
         end
+    end
+
+    function collect(model, astep, mstep; n = 1000)
+        susceptible(x) = count(i == :S for i in x)
+        exposed(x) = count(i == :E for i in x)
+        infected(x) = count(i == :I for i in x)
+        recovered(x) = count(i == :R for i in x)
+        dead(x) = model.N - length(x)
+
+        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, dead)]
+        data, _ = run!(model, astep, mstep, n; adata = to_collect)
+        return data
     end
 end

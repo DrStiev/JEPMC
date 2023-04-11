@@ -20,12 +20,10 @@ module model_params
 	function extract_params(df)
 		s = df[1, 4]
 		β = df[length(df[!,1]),1] / s
-		γ = 1.0/18
-		δ = df[length(df[!,2]),2] / df[length(df[!,1]),1]
 		params =  @with_kw (T = length(df[!,1]), N = 60_217_965,
-			R₀_n = 1.6, R̅₀ = (t,p) -> p.R₀_n, γ = γ, σ = 1.0/5.2, 
-			η = 1.0 / 20, δ₀ = δ, ω = 1.0/240, ψ = 0.03, ξ = 0.004,
-			θ = 0.2);
+			R₀_n = 1.6, R̅₀ = (t,p) -> p.R₀_n, γ = 1.0/18, σ = 1.0/5.2, 
+			η = 1.0 / 20, δ₀ = df[length(df[!,2]),2] / df[length(df[!,1]),1],
+			ω = 1.0/240, ψ = 0.03, ξ = 0.004, θ = 0.2);
 			return params
 	end
 end

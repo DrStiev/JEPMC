@@ -1,15 +1,17 @@
-# TODO: test me
 module pplot
     using Plots, LaTeXStrings, StatsPlots
     using InteractiveDynamics, CairoMakie
     using DataFrames, SciMLBase, Dates
 
-    #TODO: aggiungere colori per differenziare stati epidemia
     function static_preplot!(ax, model)
-        obj = CairoMakie.scatter!([50,50]; color = :black)
+        # mostro posizione attrattore
+        obj = CairoMakie.scatter!([50 50]; color = "black")
         CairoMakie.hidedecorations!(ax)
         CairoMakie.translate!(obj, 0, 0, 5)
     end
+
+    # different epidemic states: S, E, I, R
+    colors(a) = a.status == :S ? "grey80" : a.status == :E ? "yellow" : a.status == :I ? "red" : "green"
 
     function record_video(model, astep, mstep;
         name = "img/sngraph_"*string(now())*".mp4", framerate = 15, frames = 100, 
@@ -17,7 +19,7 @@ module pplot
         abmvideo(
             name, model, astep, mstep;
             framerate=framerate, frames=frames, 
-            title=title, preplot,
+            title=title, preplot, ac = colors,
         )
     end
 
