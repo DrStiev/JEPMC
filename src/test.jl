@@ -24,21 +24,24 @@ pplot.line_plot(sol[!, 2:6], "SEIRD-model")
 # test sn_graph
 include("social_network_graph.jl")
 title = "social_network_graph_abm"
+attractors = rand(3)
+space_dimension = (200,200)
+subspace_attr = (100,100)
 
 # test behaviour to be similar to the ode one in a line graph
 @time model = sn_graph.init(;
-	N=100, space_dimension=(200, 200), attractors = rand(2), 
-	attr_pos = [(200,200) .* rand() for _ in 1:length(attractors)], 
+	N=100, space_dimension=space_dimension, attractors = attractors, 
+	max_force = [1 + rand() for _ in 1:length(attractors)],
+	attr_pos = [subspace_attr .* rand(2) for _ in 1:length(attractors)], 
 	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
 @time data = sn_graph.collect(model, sn_graph.agent_step!, sn_graph.model_step!)
 @time pplot.line_plot(data, "prova")
 
 # test the visual behaviour through a video
-attractors = rand(2)
-# FIXME: Sometimes BoundsError: attempt to access 50x50 Matrix{Vector{Int64}} at index [0, 0]
 @time model = sn_graph.init(;
-	N=100, space_dimension=(200, 200), attractors=attractors, 
-	attr_pos=[(200,200) .* rand() for _ in 1:length(attractors)], 
+	N=100, space_dimension=space_dimension, attractors=attractors, 
+	max_force = [1 + rand() for _ in 1:length(attractors)],
+	attr_pos=[subspace_attr .* rand(2) for _ in 1:length(attractors)], 
 	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
-# FIXME: agents are not moving and are displayed on the secondary diagonal
+# FIXME: agents are not moving
 @time pplot.record_video(model, sn_graph.agent_step!, sn_graph.model_step!; name="img/prova_", frames=1000)

@@ -29,6 +29,6 @@ module model_params
 			R₀_n = 1.6, R̅₀ = (t,p) -> p.R₀_n, γ = 1.0/18, σ = 1.0/5.2, 
 			η = 1.0 / 20, δ₀ = df[length(df[!,2]),2] / df[length(df[!,1]),1],
 			ω = 1.0/240, ψ = 0.03, ξ = 0.004, θ = 0.2, ϵ = 0.0);
-			return params
+		return params
 	end
 end

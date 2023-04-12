@@ -10,7 +10,6 @@ module sn_graph
 
     function init(;
         N = 1000, initial_infected = 1,
-        # attrattori dovrebbero essere un array di Float64 (0-1)
         attractors = 0.15, max_force = 1.7, 
         attr_pos = [space_dimension .* rand(Xoshiro(seed))],
         max_connections = 10, R₀ = 1.6, 
@@ -22,7 +21,7 @@ module sn_graph
         seed = 1234,
         )
 
-        @assert length(attractors) == length(attr_pos) "Length of attractors and attractors position must be the same "
+        @assert length(attractors) == length(attr_pos) == length(max_force) "Length of attractors and attractors position must be the same "
 
         model = ABM(
             Person,
@@ -43,9 +42,8 @@ module sn_graph
         )
 
         for person in 1:N
-            # gli individui iniziano posti randomicamente
-            # FIXME: iniziano sulla diagonale secondaria (no random)
-            position = model.space.extent .* rand(model.rng) .+ Tuple(rand(model.rng, 2)) .- rand(model.rng)
+            # position = model.space.extent .* 0.5 .+ Tuple(rand(model.rng, 2)) .- 0.5
+            position = model.space.extent .* Tuple(rand(model.rng, 2))
             status = person ≤ N - initial_infected ? :S : :I
             add_agent!(position, model, speed, 0, status)
 
@@ -73,21 +71,39 @@ module sn_graph
     end
 
     function agent_step!(agent, model)
-        #FIXME: capire come mai cade fuori dallo space extent
+        #FIXME: capire come evitare che cade fuori dallo space extent
         try
             new_pos = get_new_pos(agent, model)
             move_agent!(agent, new_pos, model)
-        catch
+        catch e
+            # println("Exception: $(e)")
         end
         update!(agent, model)
         recover_or_die!(agent, model)
     end
 
-    function get_new_pos(agent, model)
-        # place the attractors in a random spot
-        # ats = (model.attr_pos .- agent.pos) .* model.attractors
-        ats = [(model.attr_pos[i] .- agent_pos) .* model.attractors[i] for i in 1:length(model.attractors)]
+    # FIXME: works strange
+    function get_nearest_attractor(agent, model)
+        dist(pos1, pos2) = sqrt((pos2[1]-pos1[1])^2 + (pos2[2]-pos1[2])^2)
+        mindist = dist(agent.pos, model.attr_pos[1])
+        attrforce = model.attractors[1]
+        maxf = model.max_force[1]
+        for i in 1:length(model.attr_pos)
+            appodist = dist(agent.pos, model.attr_pos[i])
+            if appodist ≤ mindist
+                mindist = appodist
+                attrforce = model.attractors[i]
+                maxf = model.max_force[i]
+            end
+        end
+        return mindist, attrforce, maxf
+    end      
 
+    function get_new_pos(agent, model)
+        nearestattr, attrforce, maxf = get_nearest_attractor(agent, model)
+        # place the attractors in a random spot
+        # ats = Tuple([(model.attr_pos[i] .- agent.pos) .* model.attractors[i] for i in 1:length(model.attractors)])
+        ats = (nearestattr .- agent.pos) .* attrforce
         # add random noise
         noise = model.noise .* (Tuple(rand(model.rng, 2)) .- 0.5)
 
@@ -96,43 +112,37 @@ module sn_graph
         tidxs, tweights = findnz(network)
         network_force = (0.0, 0.0)
         for (widx, tidx) in enumerate(tidxs)
-            # FIXME: sistemare asap 
             connections = tweights[widx]
             force = (agent.pos .- model[tidx].pos) .* connections
             if connections ≥ 0
                 # the further i am, the more i want to stay close
-                if distance(force) > model.max_force
-                    force = scale(model.max_force, force)
+                if distance(force) > maxf #model.max_force
+                    force = scale(maxf, force)#model.max_force, force)
                 end
             else
                 # the further i am, the better
-                if distance(force) > model.max_force
+                if distance(force) > maxf #model.max_force
                     force = (0.0, 0.0)
                 else
-                    L = model.max_force - distance(force)
+                    L = maxf - distance(force)#model.max_force - distance(force)
                     force = scale(L, force)
                 end
             end
             network_force = network_force .+ force
         end
         # add all forces together to assign new position
-        ats_sum = reduce((x,y) -> x .+ y, ats)
-        # return agent.pos .+ noise .+ ats .+ network_force
-        return agent.pos .+ noise .+ ats_sum .+ network_force
+        # ats_sum = reduce((x,y) -> x .+ y, ats)
+        # need to return a tuple
+        # return agent.pos .+ noise .+ ats_sum .+ network_force
+        return agent.pos .+ noise .+ ats .+ network_force
     end
 
     function transmit!(a1, a2, model)
         count(a.status == :I for a in (a1, a2)) ≠ 1 && return
         _, healthy = a1.status == :I ? (a1,a2) : (a2,a1)
-        # n = model.β * abs(randn(model.rng))
-        # n ≤ 0 && return
         # possibilità di contagio
         rand(model.rng) > model.β && return
-        if healthy.status == :S
-            healthy.status = :E
-            # n -= 1
-            # n ≤ 0 && return
-        end
+        healthy.status == :S && (healthy.status = :E)
     end
 
     function update!(agent, model)
