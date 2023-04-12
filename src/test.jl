@@ -26,14 +26,19 @@ include("social_network_graph.jl")
 title = "social_network_graph_abm"
 
 # test behaviour to be similar to the ode one in a line graph
-@time model = sn_graph.init(
-	N=100, space_dimension=(200, 200), 
+@time model = sn_graph.init(;
+	N=100, space_dimension=(200, 200), attractors = rand(2), 
+	attr_pos = [(200,200) .* rand() for _ in 1:length(attractors)], 
 	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
 @time data = sn_graph.collect(model, sn_graph.agent_step!, sn_graph.model_step!)
-@time pplot.line_plot(data, title)
+@time pplot.line_plot(data, "prova")
 
 # test the visual behaviour through a video
+attractors = rand(2)
+# FIXME: Sometimes BoundsError: attempt to access 50x50 Matrix{Vector{Int64}} at index [0, 0]
 @time model = sn_graph.init(;
-	N=100, space_dimension=(200, 200),
+	N=100, space_dimension=(200, 200), attractors=attractors, 
+	attr_pos=[(200,200) .* rand() for _ in 1:length(attractors)], 
 	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
-@time pplot.record_video(model, sn_graph.agent_step!, sn_graph.model_step!; frames=1000)
+# FIXME: agents are not moving and are displayed on the secondary diagonal
+@time pplot.record_video(model, sn_graph.agent_step!, sn_graph.model_step!; name="img/prova_", frames=1000)

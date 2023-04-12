@@ -11,7 +11,8 @@ module sn_graph
     function init(;
         N = 1000, initial_infected = 1,
         # attrattori dovrebbero essere un array di Float64 (0-1)
-        attractors = 0.15, max_force = 1.7,
+        attractors = 0.15, max_force = 1.7, 
+        attr_pos = [space_dimension .* rand(Xoshiro(seed))],
         max_connections = 10, R₀ = 1.6, 
         γ = 1/14, σ = 1/4, ω = 1/240, 
 		δ = 9E-3, ϵ = 0.0, speed = (0, 0), noise = 0.1,
@@ -21,12 +22,14 @@ module sn_graph
         seed = 1234,
         )
 
+        @assert length(attractors) == length(attr_pos) "Length of attractors and attractors position must be the same "
+
         model = ABM(
             Person,
             ContinuousSpace(space_dimension, spacing = spacing; periodic = false);
             properties = Dict(
                 :attractors => attractors, 
-                :attr_pos => space_dimension .* rand(Xoshiro(seed)),
+                :attr_pos => attr_pos,
                 :noise => noise, :N => N,
                 :steps_per_day => steps_per_day,
                 :max_connections => max_connections,
@@ -75,18 +78,16 @@ module sn_graph
             new_pos = get_new_pos(agent, model)
             move_agent!(agent, new_pos, model)
         catch
-            # println("$(agent.pos) => $new_pos")
         end
-        
         update!(agent, model)
         recover_or_die!(agent, model)
     end
 
     function get_new_pos(agent, model)
         # place the attractors in a random spot
-        # TODO: implementare vettore di attrattori posizionati randomicamente
-        ats = (model.attr_pos .- agent.pos) .* model.attractors
-        
+        # ats = (model.attr_pos .- agent.pos) .* model.attractors
+        ats = [(model.attr_pos[i] .- agent_pos) .* model.attractors[i] for i in 1:length(model.attractors)]
+
         # add random noise
         noise = model.noise .* (Tuple(rand(model.rng, 2)) .- 0.5)
 
@@ -115,8 +116,9 @@ module sn_graph
             network_force = network_force .+ force
         end
         # add all forces together to assign new position
-        # TODO: utilizzo la posizione dell'attrattore piu' vicino
-        return agent.pos .+ noise .+ ats .+ network_force
+        ats_sum = reduce((x,y) -> x .+ y, ats)
+        # return agent.pos .+ noise .+ ats .+ network_force
+        return agent.pos .+ noise .+ ats_sum .+ network_force
     end
 
     function transmit!(a1, a2, model)

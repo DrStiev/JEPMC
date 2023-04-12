@@ -5,15 +5,15 @@ module ode
 
 	function F(u, p, t)
 		S, E, I, R, D, R₀, δ = u 
-		(;R̅₀, γ, σ, ψ, η, ξ, θ, δ₀, ω) = p
+		(;R̅₀, γ, σ, ψ, η, ξ, θ, δ₀, ω, ϵ) = p
 		
-		return [-γ*R₀*S*I + ω*R;	# ds/dt
-			γ*R₀*S*I - σ*E;			# de/dt
-			σ*E - γ*I;				# di/dt
-			(1-δ)*γ*I - ω*R; 		# dr/dt
-			δ*γ*I;					# dd/dt
-			η*(R̅₀(t, p) - R₀);	 	 # dR₀/dt
-			θ*(δ₀-δ);				# dδ/dt
+		return [-γ*R₀*S*I + ω*R - ϵ*S;	# ds/dt
+			γ*R₀*S*I - σ*E;				# de/dt
+			σ*E - γ*I;					# di/dt
+			(1-δ)*γ*I - ω*R + ϵ*S; 		# dr/dt
+			δ*γ*I;						# dd/dt
+			η*(R̅₀(t, p) - R₀);	 	 	 # dR₀/dt
+			θ*(δ₀-δ);					# dδ/dt
 		]
 	end
 
