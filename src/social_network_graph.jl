@@ -8,10 +8,11 @@ module sn_graph
         status::Symbol #:S, :E, :I, :R (:V)
     end
 
+    # TODO: add initial exposed?
     function init(;
         N = 1000, initial_infected = 1,
         attractors = 0.15, max_force = 1.7, 
-        attr_pos = [space_dimension .* rand(Xoshiro(seed))],
+        attr_pos = (50, 50),
         max_connections = 10, R₀ = 1.6, 
         γ = 1/14, σ = 1/4, ω = 1/240, 
 		δ = 9E-3, ϵ = 0.0, speed = (0, 0), noise = 0.1,
@@ -71,32 +72,33 @@ module sn_graph
     end
 
     function agent_step!(agent, model)
-        #FIXME: capire come evitare che cade fuori dallo space extent
         try
-            new_pos = get_new_pos(agent, model)
+            new_pos = Tuple(get_new_pos(agent, model))
+            # println("$(agent.pos) => $(new_pos)")
             move_agent!(agent, new_pos, model)
         catch e
-            # println("Exception: $(e)")
+            # println(e)
         end
         update!(agent, model)
         recover_or_die!(agent, model)
     end
 
-    # FIXME: works strange
     function get_nearest_attractor(agent, model)
         dist(pos1, pos2) = sqrt((pos2[1]-pos1[1])^2 + (pos2[2]-pos1[2])^2)
         mindist = dist(agent.pos, model.attr_pos[1])
+        pos = model.attr_pos[1]
         attrforce = model.attractors[1]
         maxf = model.max_force[1]
         for i in 1:length(model.attr_pos)
             appodist = dist(agent.pos, model.attr_pos[i])
             if appodist ≤ mindist
+                pos = model.attr_pos[i]
                 mindist = appodist
                 attrforce = model.attractors[i]
                 maxf = model.max_force[i]
             end
         end
-        return mindist, attrforce, maxf
+        return pos, attrforce, maxf
     end      
 
     function get_new_pos(agent, model)
@@ -105,7 +107,7 @@ module sn_graph
         # ats = Tuple([(model.attr_pos[i] .- agent.pos) .* model.attractors[i] for i in 1:length(model.attractors)])
         ats = (nearestattr .- agent.pos) .* attrforce
         # add random noise
-        noise = model.noise .* (Tuple(rand(model.rng, 2)) .- 0.5)
+        noise = model.noise .* (Tuple(rand(model.rng, 2)) .- rand(model.rng))
 
         # adhere to the social network
         network = model.connections.weights[agent.id, :]
@@ -132,7 +134,6 @@ module sn_graph
         end
         # add all forces together to assign new position
         # ats_sum = reduce((x,y) -> x .+ y, ats)
-        # need to return a tuple
         # return agent.pos .+ noise .+ ats_sum .+ network_force
         return agent.pos .+ noise .+ ats .+ network_force
     end

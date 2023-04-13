@@ -1,7 +1,9 @@
 @time include("pplot.jl")
 @time include("params.jl")
 
-@time df = model_params.get_data()
+@time df = model_params.get_data("https://covid19.who.int/WHO-COVID-19-global-data.csv")
+pplot.line_plot(select!(df, [:New_cases, :New_deaths]), "WHO-COVID-19-global-data-ITALY")
+
 @time p_gen = model_params.extract_params(df)
 p = p_gen()
 
@@ -24,24 +26,25 @@ pplot.line_plot(sol[!, 2:6], "SEIRD-model")
 # test sn_graph
 include("social_network_graph.jl")
 title = "social_network_graph_abm"
-attractors = rand(3)
+attractors = rand(1)
 space_dimension = (200,200)
-subspace_attr = (100,100)
+max_force = [1 + rand() for _ in 1:length(attractors)]
+attr_pos = [space_dimension .* rand(2) for _ in 1:length(attractors)]
 
 # test behaviour to be similar to the ode one in a line graph
 @time model = sn_graph.init(;
 	N=100, space_dimension=space_dimension, attractors = attractors, 
-	max_force = [1 + rand() for _ in 1:length(attractors)],
-	attr_pos = [subspace_attr .* rand(2) for _ in 1:length(attractors)], 
+	max_force = max_force, attr_pos = attr_pos,
 	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
 @time data = sn_graph.collect(model, sn_graph.agent_step!, sn_graph.model_step!)
-@time pplot.line_plot(data, "prova")
+@time pplot.line_plot(data, title)
 
 # test the visual behaviour through a video
 @time model = sn_graph.init(;
 	N=100, space_dimension=space_dimension, attractors=attractors, 
-	max_force = [1 + rand() for _ in 1:length(attractors)],
-	attr_pos=[subspace_attr .* rand(2) for _ in 1:length(attractors)], 
+	max_force = max_force, attr_pos = attr_pos,
 	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
-# FIXME: agents are not moving
-@time pplot.record_video(model, sn_graph.agent_step!, sn_graph.model_step!; name="img/prova_", frames=1000)
+@time pplot.record_video(model, sn_graph.agent_step!, sn_graph.model_step!; name="img/"*title*"_", frames=1000)
+
+# test if the parameters of the model are saved properly
+pplot.save_parameters(model, title)
