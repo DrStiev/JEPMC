@@ -35,6 +35,7 @@ module ode
 	# 	return EnsembleSummary(sol)
 	# end
 	get_solution(prob) = DataFrame(solve(prob, Tsit5()))
+	get_integrator(prob) = OrdinaryDiffEq.init(prob, Tsit5(); advance_to_tstop=true)
 
 	# https://julia.quantecon.org/continuous_time/seir_model.html
 	# https://julia.quantecon.org/continuous_time/covid_sde.html

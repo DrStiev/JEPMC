@@ -1,4 +1,4 @@
-using DataFrames
+using DataFrames, Agents
 
 @time include("pplot.jl")
 @time include("params.jl")
@@ -24,11 +24,24 @@ u0 = [s, e, i, r, d, p.R₀_n, p.δ₀]
 @time sol = ode.get_solution(prob)
 pplot.line_plot(sol[!, 2:6], "SEIRD-model")
 
+# test su graph agent
+@time include("graph.jl")
+title = "graph_space_abm"
+@time model = graph.init(;
+	number_point_of_interest=p.number_point_of_interest,
+	migration_rate=p.migration_rate,
+	R₀=p.R₀_n, R̅₀=p.R̅₀, ψ=p.ψ, η=p.η, ξ=p.ξ, θ=p.θ, γ=p.γ, σ=p.σ, ω=p.ω, δ=p.δ₀, ϵ=p.ϵ)
+# FIXME: plot is nonsense
+@time data = graph.collect(model, graph.agent_step!, Agents.dummystep; n=p.T)
+@time pplot.line_plot(data, title)
+
+# TODO: add video rec
+
 # test sn_graph
 include("social_network_graph.jl")
 title = "social_network_graph_abm"
 attractors = rand(1)
-space_dimension = (200,200)
+space_dimension = (100,100)
 max_force = [1 + rand() for _ in 1:length(attractors)]
 attr_pos = [space_dimension .* rand(2) for _ in 1:length(attractors)]
 
@@ -37,7 +50,7 @@ attr_pos = [space_dimension .* rand(2) for _ in 1:length(attractors)]
 	N=100, space_dimension=space_dimension, attractors = attractors, 
 	max_force = max_force, attr_pos = attr_pos,
 	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
-@time data = sn_graph.collect(model, sn_graph.agent_step!, sn_graph.model_step!)
+@time data = sn_graph.collect(model, sn_graph.agent_step!, sn_graph.model_step!; n=p.T)
 @time pplot.line_plot(data, title)
 
 # test the visual behaviour through a video
@@ -45,7 +58,7 @@ attr_pos = [space_dimension .* rand(2) for _ in 1:length(attractors)]
 	N=100, space_dimension=space_dimension, attractors=attractors, 
 	max_force = max_force, attr_pos = attr_pos,
 	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
-@time pplot.record_video(model, sn_graph.agent_step!, sn_graph.model_step!; name="img/"*title*"_", frames=1000)
+@time pplot.record_video(model, sn_graph.agent_step!, sn_graph.model_step!; name="img/"*title*"_", frames=p.T)
 
 # test if the parameters of the model are saved properly
 pplot.save_parameters(model, title)
