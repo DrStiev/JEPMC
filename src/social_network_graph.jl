@@ -74,7 +74,6 @@ module sn_graph
     function agent_step!(agent, model)
         try
             new_pos = Tuple(get_new_pos(agent, model))
-            # println("$(agent.pos) => $(new_pos)")
             move_agent!(agent, new_pos, model)
         catch e
             # println(e)
@@ -83,6 +82,7 @@ module sn_graph
         recover_or_die!(agent, model)
     end
 
+    # TODO: implement movement from one attractor to another
     function get_nearest_attractor(agent, model)
         dist(pos1, pos2) = sqrt((pos2[1]-pos1[1])^2 + (pos2[2]-pos1[2])^2)
         mindist = dist(agent.pos, model.attr_pos[1])
@@ -101,10 +101,10 @@ module sn_graph
         return pos, attrforce, maxf
     end      
 
+    # FIXME: multiple attractors get strange behaviour
     function get_new_pos(agent, model)
         nearestattr, attrforce, maxf = get_nearest_attractor(agent, model)
         # place the attractors in a random spot
-        # ats = Tuple([(model.attr_pos[i] .- agent.pos) .* model.attractors[i] for i in 1:length(model.attractors)])
         ats = (nearestattr .- agent.pos) .* attrforce
         # add random noise
         noise = model.noise .* (Tuple(rand(model.rng, 2)) .- rand(model.rng))
@@ -133,8 +133,6 @@ module sn_graph
             network_force = network_force .+ force
         end
         # add all forces together to assign new position
-        # ats_sum = reduce((x,y) -> x .+ y, ats)
-        # return agent.pos .+ noise .+ ats_sum .+ network_force
         return agent.pos .+ noise .+ ats .+ network_force
     end
 

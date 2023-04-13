@@ -1,13 +1,14 @@
+using DataFrames
+
 @time include("pplot.jl")
 @time include("params.jl")
 
-@time df = model_params.get_data("https://covid19.who.int/WHO-COVID-19-global-data.csv")
-pplot.line_plot(select!(df, [:New_cases, :New_deaths]), "WHO-COVID-19-global-data-ITALY")
-
+@time df = model_params.get_data("https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv")
 @time p_gen = model_params.extract_params(df)
 p = p_gen()
 
-@time pplot.line_plot(df, "dpc-covid-19-italia")
+# TODO: make a decent plot
+# @time pplot.line_plot(df, "dpc-covid-19-italia")
 
 # test ODE model
 @time include("ode.jl")

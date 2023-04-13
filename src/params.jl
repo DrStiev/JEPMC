@@ -13,7 +13,7 @@ module model_params
 	# https://covid19.who.int/WHO-COVID-19-global-data.csv
 	# https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv
 	# dati per adatti a modello SIR
-	function get_data(url="https://covid19.who.int/WHO-COVID-19-global-data.csv")
+	function get_data(url="https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv")
 		title = split(url,"/")
 		df = DataFrame(CSV.File(
 			Downloads.download(url, "data/"*title[length(title)]), 
@@ -28,10 +28,10 @@ module model_params
 
 	# TODO: make it general
 	function extract_params(df)
-		β = sum(df[!, :New_cases]) / population
+		β = sum(df[!, :totale_positivi]) / population
 		params =  @with_kw (T = length(df[!,1]), N = population,
 			R₀_n = 1.6, R̅₀ = (t,p) -> p.R₀_n, γ = 1.0/18, σ = 1.0/5.2, 
-			η = 1.0 / 20, δ₀ = sum(df[!, :New_deaths]) / sum(df[!, :New_cases]),
+			η = 1.0 / 20, δ₀ = sum(df[nrow(df), :deceduti]) / sum(df[!, :totale_positivi]),
 			ω = 1.0/240, ψ = 0.03, ξ = 0.004, θ = 0.2, ϵ = 0.0);
 		return params
 	end
