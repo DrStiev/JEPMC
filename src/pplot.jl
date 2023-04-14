@@ -26,6 +26,7 @@ module pplot
         )
     end
 
+    # TODO: add different plots
     function line_plot(data::DataFrame, title = "title")
         p = @df data Plots.plot(cols(), title = title, lw = 2, xlabel = L"Days")
         savefig(p, "img/"*title*"_"*string(today())*".png")
