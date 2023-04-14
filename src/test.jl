@@ -29,23 +29,23 @@ pplot.line_plot(sol[!, 2:6], "SEIRD-model")
 title = "graph_space_abm"
 @time model = graph.init(;
 	number_point_of_interest=p.number_point_of_interest,
-	migration_rate=p.migration_rate,
-	R₀=p.R₀_n, R̅₀=p.R̅₀, ψ=p.ψ, η=p.η, ξ=p.ξ, θ=p.θ, γ=p.γ, σ=p.σ, ω=p.ω, δ=p.δ₀, ϵ=p.ϵ)
-# FIXME: plot is nonsense
-@time data = graph.collect(model, graph.agent_step!, Agents.dummystep; n=p.T)
+	migration_rate=p.migration_rate, params=p)
+@time data = graph.collect(model, graph.agent_step!, graph.model_step!, p.T)
 @time pplot.line_plot(data, title)
+# @time data = graph.collect(model, graph.agent_step!, Agents.dummystep; n=p.T)
+# @time pplot.line_plot(data, title)
 
 # TODO: add video rec
 
 # test sn_graph
-include("social_network_graph.jl")
+include("deprecated/social_network_graph.jl")
 title = "social_network_graph_abm"
 attractors = rand(1)
 space_dimension = (100,100)
 max_force = [1 + rand() for _ in 1:length(attractors)]
 attr_pos = [space_dimension .* rand(2) for _ in 1:length(attractors)]
 
-# test behaviour to be similar to the ode one in a line graph
+# test behaviour to be similar to the ode one 
 @time model = sn_graph.init(;
 	N=100, space_dimension=space_dimension, attractors = attractors, 
 	max_force = max_force, attr_pos = attr_pos,
