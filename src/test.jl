@@ -1,64 +1,88 @@
-using DataFrames, Agents
+using DataFrames
 
 @time include("pplot.jl")
 @time include("params.jl")
 
+# test parameters creation
 @time df = model_params.get_data("https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv")
 @time p_gen = model_params.extract_params(df)
 p = p_gen()
 
-# TODO: make a decent plot
-# @time pplot.line_plot(df, "dpc-covid-19-italia")
+# test plot function
+@time pplot.line_plot(select(df, [:variazione_totale_positivi]), "rapporto-positivi-guariti")
+@time pplot.line_plot(select(df, [:totale_positivi, :dimessi_guariti, :deceduti]), "dpc-covid19-ita-andamento-nazionale")
 
 # test ODE model
 @time include("ode.jl")
+@time p_gen = model_params.extract_params(df)
 
-e = 0.0
-i = df[1,3]
-r = df[1,1]
-d = df[1,2]
+# test R₀ fisso
+p = p_gen()
+
+e = 0.0/p.N
+i = df[1,:totale_positivi]/p.N
+r = df[1,:dimessi_guariti]/p.N
+d = df[1,:deceduti]/p.N
 s = (1.0-e-i-r-d)
 
 u0 = [s, e, i, r, d, p.R₀_n, p.δ₀]
+
 @time prob = ode.get_ODE_problem(ode.F, u0, (0, p.T), p)
 @time sol = ode.get_solution(prob)
-pplot.line_plot(sol[!, 2:6], "SEIRD-model")
+pplot.line_plot(sol[!, 2:6], "SEIRD-model_with_fixed_R₀_at_1.6")
+
+# test R₀ variabile
+# poco infettivo molto mortale -> medio - medio -> tanto - poco ->
+R̅₀(t,p) = t < 200 ? 1.6 : t < 600 ? 2.0 : 3.0
+p = p_gen(R̅₀=R̅₀, R₀_n=1.0)
+u0 = [s, e, i, r, d, p.R₀_n, p.δ₀]
+
+@time prob = ode.get_ODE_problem(ode.F, u0, (0, p.T), p)
+@time sol = ode.get_solution(prob)
+pplot.line_plot(sol[!, 2:6], "SEIRD-model_with_variable_R₀")
+
+# add randomness
+R̅₀(t,p) = t < 200 ? 1.6 : t < 600 ? 2.0 : 3.0
+p = p_gen(R̅₀=R̅₀, R₀_n=1.0, η=1.0/20)
+
+@time sprob = ode.get_SDE_problem(ode.F, ode.G, u0, (0, p.T), p)
+@time ssol = ode.get_solution(sprob, 100)
+pplot.line_plot(ssol, "SEIRD-model_with_randomness_and_variable_R₀")
 
 # test su graph agent
 @time include("graph.jl")
 title = "graph_space_abm"
+@time p_gen = model_params.extract_params(df; C=8, min_max_population=(50,5000), max_travel_rate=0.01)
+
+# test model with ode suppport
+p = p_gen()
 @time model = graph.init(;
 	number_point_of_interest=p.number_point_of_interest,
 	migration_rate=p.migration_rate, params=p)
-@time data = graph.collect(model, graph.agent_step!, graph.model_step!, p.T)
-@time pplot.line_plot(data, title)
-# @time data = graph.collect(model, graph.agent_step!, Agents.dummystep; n=p.T)
-# @time pplot.line_plot(data, title)
+@time data = graph.collect(model, graph.migrate!, graph.model_step!, p.T)
+@time pplot.line_plot(data, title*"_with_ode")
 
-# TODO: add video rec
+# test model with ode support and variable R₀
+R̅₀(t,p) = t < 200 ? 1.6 : t < 600 ? 2.0 : 3.0
+p = p_gen(R̅₀=R̅₀, R₀_n=1.0, η=1.0)
+@time model = graph.init(;
+	number_point_of_interest=p.number_point_of_interest,
+	migration_rate=p.migration_rate, params=p)
+@time data = graph.collect(model, graph.migrate!, graph.model_step!, p.T)
+@time pplot.line_plot(data, title*"_with_ode_and_variable_R₀")
 
-# test sn_graph
-include("deprecated/social_network_graph.jl")
-title = "social_network_graph_abm"
-attractors = rand(1)
-space_dimension = (100,100)
-max_force = [1 + rand() for _ in 1:length(attractors)]
-attr_pos = [space_dimension .* rand(2) for _ in 1:length(attractors)]
+# test model and record short video
+p = p_gen()
+@time model = graph.init(;
+	number_point_of_interest=p.number_point_of_interest,
+	migration_rate=p.migration_rate, params=p)
+@time abmobs = graph.get_observable(model)
+@time pplot.record_video(abmobs, model, title, 100)
 
-# test behaviour to be similar to the ode one 
-@time model = sn_graph.init(;
-	N=100, space_dimension=space_dimension, attractors = attractors, 
-	max_force = max_force, attr_pos = attr_pos,
-	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
-@time data = sn_graph.collect(model, sn_graph.agent_step!, sn_graph.model_step!; n=p.T)
-@time pplot.line_plot(data, title)
-
-# test the visual behaviour through a video
-@time model = sn_graph.init(;
-	N=100, space_dimension=space_dimension, attractors=attractors, 
-	max_force = max_force, attr_pos = attr_pos,
-	γ = p.γ, σ = p.σ, δ = p.δ₀, ω = p.ω, ϵ = p.ϵ, R₀ = p.R₀_n)
-@time pplot.record_video(model, sn_graph.agent_step!, sn_graph.model_step!; name="img/"*title*"_", frames=p.T)
-
-# test if the parameters of the model are saved properly
-pplot.save_parameters(model, title)
+# test model and plot result
+p = p_gen()
+@time model = graph.init(;
+	number_point_of_interest=p.number_point_of_interest,
+	migration_rate=p.migration_rate, params=p)
+@time data = graph.collect(model, graph.agent_step!; n=p.T)
+@time pplot.line_plot(data, model, title)

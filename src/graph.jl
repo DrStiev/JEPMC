@@ -2,13 +2,10 @@ module graph
 	using Agents, Random, DataFrames
 	using DrWatson: @dict
 	using StatsBase: sample, Weights
+	using InteractiveDynamics
 
 	include("ode.jl")
 
-	# TODO: add quarantine status, where people cannot migrate
-	# TODO: add mitigation with η (← \eta) (e.g social distancing, masks, etc...)
-	# η describes the control rate, or the speed at which restrictions are imposed
-	# TODO: add lockdown where none can migrate 
 	@agent Person GraphAgent begin
 		days_infected::Int
 		status::Symbol #:S, :E, :I, :R (:V)
@@ -38,8 +35,8 @@ module graph
 		properties = @dict(
 			number_point_of_interest,
 			migration_rate,
-			R₀ = R₀_n, γ, σ ,ω, δ = δ₀, ϵ, β = R₀_n*γ,
-			Is, C, integrator, sol = integrator.u[1:5]
+			R₀ = R₀_n, γ, σ, ω, δ = δ₀, ϵ, β = R₀_n*γ, η,
+			Is, C, integrator, situation = integrator.u[1:5]
 		)
 		
 		# creo il modello
@@ -65,19 +62,20 @@ module graph
 		# effect 1 step
 		ode.make_step!(model.integrator, 1.0, true)
 		# save the partial solution
-		model.sol = model.integrator.u[1:5]
+		model.situation = model.integrator.u[1:5]
 		# notify the integrator that conditions may be altered
 		ode.notify_change_u!(model.integrator, true)
 	end
 
 	function agent_step!(agent, model)
 		migrate!(agent, model)
-		# transmit!(agent, model)
-		# update!(agent, model)
-		# recover_or_die!(agent, model)
+		transmit!(agent, model)
+		update!(agent, model)
+		recover_or_die!(agent, model)
 	end
 
 	function migrate!(agent, model)
+		# TODO: controllo migrazioni tramite un qualche valore + lockdown
 		pid = agent.pos
 		m = sample(model.rng, 1:(model.C), Weights(model.migration_rate[pid, :]))
 		if m ≠ pid
@@ -88,13 +86,14 @@ module graph
 	function transmit!(agent, model)
 		agent.status != :I && return
 		# number of possible infection from a single agent
-		n = model.β * abs(randn(model.rng))
-		# n ≤ 0 && return
+		n = model.β * model.η * abs(randn(model.rng))
+		n ≤ 0 && return
 
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
-			if contact.status == :S 
-				contact.status = :E
+			if contact.status == :S ||
+				(contact.status == :R && rand(model.rng) ≤ model.ω)
+				contact.status = :E 
 				n -= 1
 				n ≤ 0 && return
 			end
@@ -117,10 +116,6 @@ module graph
 		end
 		# avanzamento malattia
 		agent.status == :I && (agent.days_infected += 1)
-		# fine immunità
-        if agent.status == :R 
-          rand(model.rng) ≤ model.ω && (agent.status = :S)
-        end 
 	end
 
 	function recover_or_die!(agent, model)
@@ -135,25 +130,27 @@ module graph
 	end	
 	
 	function collect(model, astep, mstep, t)
-		_, sol = run!(model, astep, mstep, t; mdata = [:sol])
+		_, sol = run!(model, astep, mstep, t; mdata = [:situation])
 		df = DataFrame([getindex.(sol[!,2], i) for i in 1:5], [:susceptible, :exposed, :infected, :recovered, :dead])
 		return df
 	end
 
-	# function collect(model, astep, mstep; n = 100)
-    #     susceptible(x) = count(i == :S for i in x)
-    #     exposed(x) = count(i == :E for i in x)
-    #     infected(x) = count(i == :I for i in x)
-    #     recovered(x) = count(i == :R for i in x)
-    #     dead(x) = sum(model.number_point_of_interest) - length(x)
+	function collect(model, astep; n = 100)
+        susceptible(x) = count(i == :S for i in x)
+        exposed(x) = count(i == :E for i in x)
+        infected(x) = count(i == :I for i in x)
+        recovered(x) = count(i == :R for i in x)
+        # dead(x) = sum(model.number_point_of_interest) - length(x)
 
-    #     to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, dead)]
-    #     data, _ = run!(model, astep, mstep, n; adata = to_collect)
-    #     data[!, :dead_status] = data[!, 6]
-    #     select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead_status)
-    #     for i in 1:5
-    #         data[!, i] = data[!, i] / sum(model.number_point_of_interest)
-    #     end
-    #     return data
-    # end
+        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, length)]
+        data, _ = run!(model, astep, n; adata = to_collect)
+		# data[!, :dead_status] = data[!, 6]
+    	# select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead_status)
+        # for i in 1:5
+        #     data[!, i] = data[!, i] / sum(model.number_point_of_interest)
+        # end
+        return data
+    end
+
+	get_observable(model) = ABMObservable(model; agent_step!, model_step!)
 end

@@ -34,12 +34,19 @@ module model_params
 		migration_rate = (migration_rate .* max_travel_rate) ./ maxM
 		migration_rate[diagind(migration_rate)] .= 1.0
 
-		β = sum(df[!, :totale_positivi]) / population
 		params =  @with_kw (T = length(df[!,1]), N = population,
 			R₀_n = 1.6, R̅₀ = (t,p) -> p.R₀_n, γ = 1.0/18, σ = 1.0/5.2, 
-			η = 1.0 / 20, δ₀ = sum(df[nrow(df), :deceduti]) / sum(df[!, :totale_positivi]),
+			η = 1.0, δ₀ = sum(df[nrow(df), :deceduti]) / sum(df[!, :totale_positivi]),
 			ω = 1.0/240, ψ = 0.03, ξ = 0.004, θ = 0.2, ϵ = 0.0,
 			number_point_of_interest = number_point_of_interest, migration_rate = migration_rate);
+		return params
+	end
+
+	function extract_params(df)
+		params =  @with_kw (T = length(df[!,1]), N = population,
+			R₀_n = 1.6, R̅₀ = (t,p) -> p.R₀_n, γ = 1.0/18, σ = 1.0/5.2, 
+			η = 1.0, δ₀ = sum(df[nrow(df), :deceduti]) / sum(df[!, :totale_positivi]),
+			ω = 1.0/240, ψ = 0.03, ξ = 0.004, θ = 0.2, ϵ = 0.0);
 		return params
 	end
 end
