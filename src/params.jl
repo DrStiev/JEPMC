@@ -7,6 +7,9 @@ module model_params
 	using DrWatson: @dict
 
 	# TODO: METTIMI A POSTO
+	# le colonne che mi interessano sono:
+	# (:terapia_intensiva + :ricoverati_con_sintomi) = :totale_ospedalizzati
+	# :dimessi_guariti, :deceduti, :totale_casi, :nuovi_positivi
 	const population = 60_217_965
 
 	# https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv
@@ -21,7 +24,7 @@ module model_params
 	end
 
 	# TODO: make it general
-	function extract_params(df; C=8, min_max_population=(50,5000), max_travel_rate=0.01, seed=1234)
+	function extract_params(df, C, min_max_population, max_travel_rate, seed=1234)
 		Random.seed!(seed)
 		number_point_of_interest = rand(min_max_population[1]:min_max_population[2], C)
 		migration_rate = zeros(C, C)
@@ -34,19 +37,42 @@ module model_params
 		migration_rate = (migration_rate .* max_travel_rate) ./ maxM
 		migration_rate[diagind(migration_rate)] .= 1.0
 
-		params =  @with_kw (T = length(df[!,1]), N = population,
-			R₀_n = 1.6, R̅₀ = (t,p) -> p.R₀_n, γ = 1.0/18, σ = 1.0/5.2, 
-			η = 1.0, δ₀ = sum(df[nrow(df), :deceduti]) / sum(df[!, :totale_positivi]),
-			ω = 1.0/240, ψ = 0.03, ξ = 0.004, θ = 0.2, ϵ = 0.0,
-			number_point_of_interest = number_point_of_interest, migration_rate = migration_rate);
-		return params
+		T = length(df[!,1])
+
+		R₀ = 1.6
+		γ = 1.0/18 
+		σ = 1.0/5.2 
+		ω = 1.0/240
+		ξ = 0.0
+		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi])
+		η = 1.0
+
+		return @dict(
+			number_point_of_interest,
+			migration_rate, T,
+			R₀, γ, σ, ω, ξ, δ, η 
+		)
 	end
 
 	function extract_params(df)
-		params =  @with_kw (T = length(df[!,1]), N = population,
-			R₀_n = 1.6, R̅₀ = (t,p) -> p.R₀_n, γ = 1.0/18, σ = 1.0/5.2, 
-			η = 1.0, δ₀ = sum(df[nrow(df), :deceduti]) / sum(df[!, :totale_positivi]),
-			ω = 1.0/240, ψ = 0.03, ξ = 0.004, θ = 0.2, ϵ = 0.0);
-		return params
+		e = 0.0/length(df[!, 1])
+		i = df[1,:nuovi_positivi]/population
+		r = df[1,:dimessi_guariti]/population
+		d = df[1,:deceduti]/population
+		s = (1.0-e-i-r-d)
+
+		R₀ = 1.6
+		γ = 1.0/18 
+		σ = 1.0/5.2 
+		ω = 1.0/240 
+		ξ = 0.0 
+		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) 
+		η = 1.0
+
+		u = [s, e, i, r, d] # scaled between [0-1]
+		p = [R₀, γ, σ, ω, ξ, δ, η]
+		return u, p, (0.0, length(df[!, 1]))
 	end
+
+	save_parameters(params, title = title) = CSV.write("data/"*title*"_"*string(today()), DataFrame(params))
 end

@@ -1,43 +1,155 @@
 module ode
-	using OrdinaryDiffEq, StochasticDiffEq, Parameters, DiffEqGPU
-	using LaTeXStrings, LinearAlgebra, Random, SparseArrays, Statistics
-	using DataFrames, NaNMath
+	using OrdinaryDiffEq
+	using ModelingToolkit
+	using DataDrivenDiffEq
+	using LinearAlgebra, DiffEqSensitivity, Optim
+	using DiffEqFlux, Flux
 
-	# https://julia.quantecon.org/continuous_time/seir_model.html
-	# https://julia.quantecon.org/continuous_time/covid_sde.html
-	function F(u, p, t)
-		S, E, I, R, D, R₀, δ = u 
-		(;R̅₀, γ, σ, ψ, η, ξ, θ, δ₀, ω, ϵ) = p
-		return [-γ*R₀*S*I + ω*R - ϵ*S;	# ds/dt
-			γ*R₀*S*I - σ*E;				# de/dt
-			σ*E - γ*I;					# di/dt
-			(1-δ)*γ*I - ω*R + ϵ*S; 		# dr/dt
-			δ*γ*I;						# dd/dt
-			η*(R̅₀(t, p) - R₀);	 	 	 # dR₀/dt
-			θ*(δ₀-δ);					# dδ/dt
-		]
+	# https://github.com/ChrisRackauckas/universal_differential_equations/blob/master/SEIR_exposure/seir_exposure.jl
+	# https://www.youtube.com/watch?v=5zaB1B4hOnQ
+
+	# TODO: implement time-dependant parameters? 
+	# https://stackoverflow.com/questions/52311652/time-dependent-events-in-ode
+	# https://discourse.julialang.org/t/time-dependent-events-in-ode/14951/3
+	# https://discourse.julialang.org/t/differentialequations-jl-solving-ode-with-time-dependent-parameter-allocation-friendly/78284
+
+	function pandemic!(du,u,p,t)
+		S, E, I, R, N, D, C = u
+		F, β0, α, κ, μ, σ, γ, d, λ = p
+
+		dS = -β0*S*F/N - β(t,β0,D,N,κ,α)*S*I/N -μ*S 	# susceptible
+		dE = β0*S*F/N + β(t,β0,D,N,κ,α)*S*I/N -(σ+μ)*E 	# exposed
+		dI = σ*E - (γ+μ)*I 								# infected
+		dR = γ*I - μ*R 									# removed (recovered + dead)
+		dN = -μ*N 										# total population
+		dD = d*γ*I - λ*D 								# severe, critical cases, and deaths
+		dC = σ*E 										# +cumulative cases
+	
+		du[1] = dS; du[2] = dE; du[3] = dI; du[4] = dR
+		du[5] = dN; du[6] = dD; du[7] = dC
 	end
-
-	# without NaNMath -> domain error, due to probably the solver process
-	# with NaNMath -> instability detected so aborting
-	function G(u, p, t)
-		S, E, I, R, D, R₀, δ = u 
-		(;R̅₀, γ, σ, ψ, η, ξ, θ, δ₀, ω, ϵ) = p
-		return [0; 0; 0; 0; 0; ψ*NaNMath.sqrt(R₀); ξ*NaNMath.sqrt(δ*(1-δ))]
+	# compute exposure
+	β(t,β0,D,N,κ,α) = β0*(1-α)*(1-D/N)^κ
+	
+	getODEProblem(F, u0, tspan, p) = ODEProblem(pandemic!, u0, tspan, p_)
+	getSolution(prob) = solve(prob, Vern7(), abstol=1e-12, reltol=1e-12, saveat = 1)
+	getConcreteSolver(prob, saveat) = concrete_solve(prob, Tsit5(), u0, p, saveat = saveat)
+	
+	### Universal ODE Part 1
+	ann = FastChain(FastDense(3, 64, tanh),FastDense(64, 64, tanh), FastDense(64, 1))
+	p = Float64.(initial_params(ann))
+	
+	function dudt_(u,p,t)
+		S,E,I,R,N,D,C = u
+		F, β0,α,κ,μ,σ,γ,d,λ = p_
+		z = ann([S/N,I,D/N],p) # Exposure does not depend on exposed, removed, or cumulative!
+		dS = -β0*S*F/N - z[1] -μ*S # susceptible
+		dE = β0*S*F/N + z[1] -(σ+μ)*E # exposed
+		dI = σ*E - (γ+μ)*I # infected
+		dR = γ*I - μ*R # removed (recovered + dead)
+		dN = -μ*N # total population
+		dD = d*γ*I - λ*D # severe, critical cases, and deaths
+		dC = σ*E # +cumulative cases
+	
+		[dS,dE,dI,dR,dN,dD,dC]
 	end
-
-	get_SDE_problem(f, g, u0, tspan, p) = SDEProblem(f, g, u0, tspan, p)
-	get_ODE_problem(f, u0, tspan, p) = ODEProblem(
-		ODEFunction(f, syms = [:susceptible, :exposed, :infected, :recovered, :dead, :R₀, :mortality_rate]),
-		u0, tspan, p)
-
-	get_solution(prob::SciMLBase.SDEProblem, n = 100) = EnsembleSummary(
-		solve(EnsembleProblem(prob), SOSRI(), EnsembleThreads(), trajectories = n))
-	get_solution(prob) = DataFrame(solve(prob, Tsit5()))
-
-	get_integrator(prob::SciMLBase.ODEProblem) = init(prob, Tsit5(); advance_to_tstop=true)
-	get_integrator(prob::SciMLBase.SDEProblem) = init(prob, SOSRI(); advance_to_tstop=true)
-
-	make_step!(integrator, step, stop_at_tdt) = step!(integrator, step, stop_at_tdt)
-	notify_change_u!(integrator, is_change) = u_modified!(integrator, is_change)
+	prob_nn = ODEProblem(dudt_, u0, tspan, p)
+	s = concrete_solve(prob_nn, Tsit5(), u0, p, saveat = 1)
+	
+	function predict(θ)
+		Array(concrete_solve(prob_nn, Vern7(), u0, θ, saveat = solution.t,
+							 abstol=1e-6, reltol=1e-6,
+							 sensealg = InterpolatingAdjoint(autojacvec=ReverseDiffVJP())))
+	end
+	
+	# No regularisation right now
+	function loss(θ)
+		pred = predict(θ)
+		sum(abs2, noisy_data[2:4,:] .- pred[2:4,:]), pred # + 1e-5*sum(sum.(abs, params(ann)))
+	end
+	
+	loss(p) # ← ?
+	
+	const losses = []
+	callback(θ, l, pred) = begin
+		push!(losses, l)
+		if length(losses) % 50 == 0
+			println(losses[end])
+		end
+		false
+	end
+	
+	res1_uode = DiffEqFlux.sciml_train(loss, p, ADAM(0.01), cb=callback, maxiters = 500)
+	res2_uode = DiffEqFlux.sciml_train(loss, res1_uode.minimizer, BFGS(initial_stepnorm=0.01), cb=callback, maxiters = 10000)
+	
+	### Universal ODE Part 2: SInDy to Equations
+	
+	# Create a Basis
+	@variables u[1:3]
+	# Lots of polynomials
+	polys = Operation[]
+	for i ∈ 0:2, j ∈ 0:2, k ∈ 0:2
+		push!(polys, u[1]^i * u[2]^j * u[3]^k)
+	end
+	
+	# And some other stuff
+	h = [cos.(u)...; sin.(u)...; unique(polys)...]  # ← ?
+	basis = Basis(h, u)
+	
+	X = noisy_data # Array(solution) + Float32(1e-5)*randn(eltype(Array(solution)), size(Array(solution)))
+	# Ideal derivatives
+	DX = Array(solution(solution.t, Val{1})) # exact solution from getSolution
+	S, E, I, R, N, D, C = eachrow(X)
+	F, β0, α, κ, μ, _, γ, d, λ = p_
+	L = β.(0:tspan[end], β0, D, N, κ, α).*S.*I./N # tspan = (0.0, 21.0)
+	L̂ = vec(ann([S./N I D./N]', res2_uode.minimizer))
+	X̂ = [S./N I D./N]'
+	
+	scatter(L,title="Estimated vs Expected Exposure Term",label="True Exposure")
+	plot!(L̂,label="Estimated Exposure")
+	savefig("estimated_exposure.png")
+	savefig("estimated_exposure.pdf")
+	
+	# Create an optimizer for the SINDY problem
+	opt = SR3()
+	# Create the thresholds which should be used in the search process
+	thresholds = exp10.(-6:0.1:1)
+	
+	# Test on original data and without further knowledge
+	Ψ_direct = SInDy(X[2:4, :], DX[2:4, :], basis, thresholds, opt = opt, maxiter = 50000) # Fail
+	println(Ψ_direct.basis)
+	# Test on ideal derivative data ( not available )
+	Ψ_ideal = SInDy(X[2:4, 5:end], L[5:end], basis, thresholds, opt = opt, maxiter = 50000) # Succeed
+	println(Ψ_ideal.basis)
+	# Test on uode derivative data
+	Ψ = SInDy(X̂[:, 2:end], L̂[2:end], basis, thresholds,  opt = opt, maxiter = 10000, normalize = true, denoise = true) # Succeed
+	println(Ψ.basis)
+	
+	# Build a ODE for the estimated system
+	function approx(u,p,t)
+		S, E, I, R, N, D, C = u
+		F, β0, α, κ, μ, σ, γ, d, λ = p_
+		z = Ψ([S/N, I, D/N]) 			# Exposure does not depend on exposed, removed, or cumulative!
+		
+		dS = -β0*S*F/N - z[1] -μ*S 		# susceptible
+		dE = β0*S*F/N + z[1] -(σ+μ)*E 	# exposed
+		dI = σ*E - (γ+μ)*I 				# infected
+		dR = γ*I - μ*R 					# removed (recovered + dead)
+		dN = -μ*N 						# total population
+		dD = d*γ*I - λ*D 				# severe, critical cases, and deaths
+		dC = σ*E 						# +cumulative cases
+	
+		[dS, dE, dI, dR, dN, dD, dC]
+	end
+	
+	# Create the approximated problem and solution
+	a_prob = ODEProblem{false}(approx, u0, tspan2, p_)
+	a_solution = solve(a_prob, Tsit5())
+	
+	p_uodesindy = scatter(solution_extrapolate, vars=[2,3,4], legend = :topleft, label=["True Exposed" "True Infected" "True Recovered"])
+	plot!(p_uodesindy,a_solution, lw = 5, vars=[2,3,4], label=["Estimated Exposed" "Estimated Infected" "Estimated Recovered"])
+	plot!(p_uodesindy,[20.99,21.01],[0.0,maximum(hcat(Array(solution_extrapolate[2:4,:]),Array(_sol_uode[2:4,:])))],lw=5,color=:black,label="Training Data End")
+	
+	savefig("universalodesindy_extrapolation.png")
+	savefig("universalodesindy_extrapolation.pdf")
 end 

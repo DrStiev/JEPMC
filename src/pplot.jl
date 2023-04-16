@@ -50,39 +50,18 @@ module pplot
         end
     end
 
-    # TODO: add different plots
-    function line_plot(data::DataFrame, title = "title")
-        p = @df data Plots.plot(cols(), title = title, lw = 2, xlabel = L"Days")
-        savefig(p, "img/"*title*"_"*string(today())*".png")
+    function line_plot(data, timeperiod, path="", title = "title", format="png")
+        dates = range(timeperiod[1], timeperiod[end], step=Day(1))
+	    tm_ticks = round.(dates, Month(1)) |> unique;
+        p = Plots.plot(timeperiod, Matrix(data), labels=permutedims(names(data)), 
+            title=title, xticks=(tm_ticks, Dates.format.(tm_ticks, "uu/yyyy")), 
+            xrot=45, xminorticks=true, xlim=extrema(dates))
+        savefig(p, path*title*"_"*string(today())*"."*format)
     end
 
-    function line_plot(data::SciMLBase.EnsembleSummary, title = "title")
-        p = Plots.plot(data, idxs = (2,), labels = [L"susceptible" L"exposed" L"infected" L"recovered" L"dead" L"R0" L"mortality"], title = title, lw = 2, xlabel = L"Days", legend = :topright)
-        savefig(p, "img/"*title*"_"*string(today())*".png")
-    end
-
-    function line_plot(data, model, title="title")
-        susceptible(x) = count(i == :S for i in x)
-        exposed(x) = count(i == :E for i in x)
-        infected(x) = count(i == :I for i in x)
-        recovered(x) = count(i == :R for i in x)
-
-        N = sum(model.number_point_of_interest)
-        x = data.step
-        fig = Figure()
-        ax = fig[1, 1] = Axis(fig, xlabel = "steps", ylabel = "log10(count)")
-        ls = lines!(ax, x, log10.(data[:, aggname(:status, susceptible)]))
-        le = lines!(ax, x, log10.(data[:, aggname(:status, exposed)]))
-        li = lines!(ax, x, log10.(data[:, aggname(:status, infected)]))
-        lr = lines!(ax, x, log10.(data[:, aggname(:status, recovered)]))
-        dead = log10.(N .- data[:, aggname(:status, length)])
-        ld = lines!(ax, x, dead)
-        Legend(fig[1, 2], [ls, le, li, lr, ld], ["susceptible", "exposed", "infected", "recovered", "dead"])
-        Makie.save("img/"*title*"_"*string(today())*".png", fig)
-    end
-
-    function save_parameters(model, title = title)
-        df = DataFrame(model.properties)
-        CSV.write("data/"*title*"_"*string(today()), df)
+    function line_plot(data::SciMLBase.ODESolution, timeperiod, path="", title = "title", format="png")
+        # TODO: capire perche' hanno due dimensioni diverse
+        data = select!(DataFrame(data), Not(:timestamp))
+        line_plot(data[1:nrow(data)-1,:], timeperiod, path, title, format)
     end
 end

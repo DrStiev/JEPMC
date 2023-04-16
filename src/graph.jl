@@ -11,13 +11,10 @@ module graph
 		status::Symbol #:S, :E, :I, :R (:V)
 	end
 
-	# TODO: add ODE
 	function init(;
-		number_point_of_interest,
-		migration_rate, params, 
-		seed = 1234,
+		number_point_of_interest, migration_rate,
+		R₀, γ, σ, ω, ξ, δ, η, T, seed = 1234,
 		)
-		(;R₀_n, R̅₀, γ, σ, ψ, η, ξ, θ, δ₀, ω, ϵ) = params
 		rng = Xoshiro(seed)
 		C = length(number_point_of_interest)
 		sumNPOI = sum(number_point_of_interest)
@@ -29,13 +26,14 @@ module graph
 		# scelgo il punto di interesse che avrà il paziente zero
 		Is = [zeros(Int, length(number_point_of_interest) - 1)..., 1]
 
-		prob = ode.get_ODE_problem(ode.F, [(sumNPOI-1)/sumNPOI, 0.0, 1.0/sumNPOI, 0.0, 0.0, R₀_n, δ₀], (0.0, Inf), params)
+		prob = ode.get_ODE_problem(ode.SEIR, 
+			[(sumNPOI-1)/sumNPOI, 0.0, 1.0/sumNPOI, 0.0, 0.0], (0.0, Inf), 
+			[R₀, γ, σ, ω, ξ, δ, η])
 		integrator = ode.get_integrator(prob)
 
 		properties = @dict(
-			number_point_of_interest,
-			migration_rate,
-			R₀ = R₀_n, γ, σ, ω, δ = δ₀, ϵ, β = R₀_n*γ, η,
+			number_point_of_interest, migration_rate,
+			R₀, γ, σ, ω, δ, ξ, β = R₀*γ, η, T,
 			Is, C, integrator, situation = integrator.u[1:5]
 		)
 		
@@ -103,7 +101,7 @@ module graph
 	function update!(agent, model)
 		# probabilità di vaccinarsi
 		if agent.status == :S
-			rand(model.rng) ≤ model.ϵ && (agent.status = :R)
+			rand(model.rng) ≤ model.ξ && (agent.status = :R)
 		end
 		# fine periodo di latenza
 		if agent.status == :E
@@ -140,15 +138,15 @@ module graph
         exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
         recovered(x) = count(i == :R for i in x)
-        # dead(x) = sum(model.number_point_of_interest) - length(x)
+        dead(x) = sum(model.number_point_of_interest) - length(x)
 
-        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, length)]
+        to_collect = [(:status, f) for f in (susceptible, exposed, infected, recovered, dead)]
         data, _ = run!(model, astep, n; adata = to_collect)
-		# data[!, :dead_status] = data[!, 6]
-    	# select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead_status)
-        # for i in 1:5
-        #     data[!, i] = data[!, i] / sum(model.number_point_of_interest)
-        # end
+		data[!, :dead_status] = data[!, 6]
+    	select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead_status)
+        for i in 1:5
+            data[!, i] = data[!, i] / sum(model.number_point_of_interest)
+        end
         return data
     end
 
