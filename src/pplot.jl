@@ -60,10 +60,7 @@ module pplot
     end
 
     function line_plot(data::SciMLBase.ODESolution, title = "title")
-        p = Plots.plot(data,
-            labels = [L"susceptible" L"exposed" L"infected" L"recovered" L"dead"], 
-            title = title, lw = 2, xlabel = L"Days")
-        savefig(p, "img/"*title*"_"*string(today())*".png")
+        line_plot(select!(DataFrame(data), Not([:timestamp, :R₀, :mortality_rate])), title)
     end
 
     function line_plot(data::SciMLBase.ODESolution, timeperiod, path="", title = "title", format="png")
