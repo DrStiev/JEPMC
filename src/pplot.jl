@@ -2,55 +2,47 @@ module pplot
     using Plots, LaTeXStrings, StatsPlots
     using InteractiveDynamics, CairoMakie
     using DataFrames, SciMLBase, Dates, CSV
-    using Agents
+    using Agents, GraphMakie
 
-    function static_preplot!(ax, model)
-        CairoMakie.hidedecorations!(ax)
-        for l in 1:length(model.attr_pos)
-            # mostro posizione attrattore
-            obj = CairoMakie.scatter!([model.attr_pos[l][1] model.attr_pos[l][2]]; color = :blue)
-            CairoMakie.translate!(obj, 0, 0, 5)
-        end
+    city_size(agents) = 0.005 * length(agents)
+    function city_color(agents)
+        agent = length(agents)
+        exposed = count(a.status == :E for a in agents)
+        infected = count(a.status == :I for a in agents)
+        quarantined = count(a.status == :Q for a in agents)
+        recovered = count(a.status == :R for a in agents)
+        return RGBf((infected + exposed)/agent, recovered/agent, quarantined/agent)
     end
 
-    # different epidemic states: S, E, I, R
-    colors(a) = a.status == :S ? "grey80" : a.status == :E ? "yellow" : a.status == :I ? "red" : "green"
-
-    function record_video(model, astep, mstep;
-        name = "img/sngraph_", 
-        framerate = 15, frames = 100, title = "title")
-        name = name*string(today())*".mp4"
-        abmvideo(
-            name, model, astep, mstep;
-            framerate=framerate, frames=frames, 
-            title=title, static_preplot!, ac = colors,
-        )
+    edge_color(model) = fill((:grey, 0.25), GraphMakie.Graphs.ne(model.space.graph))
+    function edge_width(model)
+        w = zeros(GraphMakie.Graphs.ne(model.space.graph))
+        for e in GraphMakie.Graphs.edges(model.space.graph)
+            push!(w, 0.004 * length(model.space.stored_ids[e.src]))
+            push!(w, 0.004 * length(model.space.stored_ids[e.dst]))
+        end
+        return w
     end
 
-    function record_video(abmobs, model, name="title", n=100)
-        infected_fraction(m, x) = count(m[id].status == :I for id in x) / length(x)
-        infected_fractions(m) = [infected_fraction(m, ids_in_position(p, m)) for p in positions(m)]
-        fracs = lift(infected_fractions, abmobs.model)
-        color = lift(fs -> [cgrad(:inferno)[f] for f in fs], fracs)
-        title = lift(
-            (s, m) -> "step = $(s), infected = $(round(Int, 100infected_fraction(m, allids(m))))%",
-            abmobs.s, abmobs.model
-        ) 
+    graphplotkwargs = (
+        layout = GraphMakie.Shell(),
+        arrow_show = false,
+        edge_color = edge_color,
+        edge_width = edge_width,
+        edge_plottype = :linesegments
+    )
 
-        fig = Figure(resolution = (600, 400))
-        ax = Axis(fig[1, 1]; title, xlabel = "City", ylabel = "Population")
-        barplot!(ax, model.number_point_of_interest; strokecolor = :black, strokewidth = 1, color)
-
-        record(fig, "img/"*name*".mp4"; framerate = 5) do io
-            for j in 1:n
-                recordframe!(io)
-                Agents.step!(abmobs, 1)
-            end
-            recordframe!(io)
-        end
+    function video(model, astep, mstep; 
+        title="title", path="img/", framerate = 15, frames = 100)
+        isdir(path) == false && mkpath(path)
+        name = "img/"*title*"_"*string(today())*".mp4"
+        abmvideo(name, model, astep, mstep;
+            framerate=framerate, frames=frames,
+            title=title, as=city_size, ac=city_color, graphplotkwargs)
     end
 
     function line_plot(data, timeperiod, path="", title = "title", format="png")
+        isdir(path) == false && mkpath(path)
         dates = range(timeperiod[1], timeperiod[end], step=Day(1))
 	    tm_ticks = round.(dates, Month(1)) |> unique;
         p = Plots.plot(timeperiod, Matrix(data), labels=permutedims(names(data)), 
@@ -59,13 +51,8 @@ module pplot
         savefig(p, path*title*"_"*string(today())*"."*format)
     end
 
-    function line_plot(data::SciMLBase.ODESolution, title = "title")
-        line_plot(select!(DataFrame(data), Not([:timestamp, :R₀, :mortality_rate])), title)
-    end
-
     function line_plot(data::SciMLBase.ODESolution, timeperiod, path="", title = "title", format="png")
-        # TODO: capire perche' hanno due dimensioni diverse
         data = select!(DataFrame(data), Not(:timestamp))
-        line_plot(data[1:nrow(data)-1,:], timeperiod, path, title, format)
+        line_plot(data[1:length(timeperiod),:], timeperiod, path, title, format)
     end
 end

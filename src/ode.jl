@@ -29,19 +29,19 @@ module ode
 		du[5] = dN; du[6] = dD; du[7] = dC
 	end
 	# compute exposure
-	β(t,β0,D,N,κ,α) = β0*(1-α)*(1-D/N)^κ
+	β(t, β0, D, N, κ, α) = β0*(1-α)*(1-D/N)^κ
 	
 	getODEProblem(F, u0, tspan, p) = ODEProblem(pandemic!, u0, tspan, p_)
 	getSolution(prob) = solve(prob, Vern7(), abstol=1e-12, reltol=1e-12, saveat = 1)
 	getConcreteSolver(prob, saveat) = concrete_solve(prob, Tsit5(), u0, p, saveat = saveat)
 	
 	### Universal ODE Part 1
-	ann = FastChain(FastDense(3, 64, tanh),FastDense(64, 64, tanh), FastDense(64, 1))
+	ann = FastChain(FastDense(3, 64, tanh), FastDense(64, 64, tanh), FastDense(64, 1))
 	p = Float64.(initial_params(ann))
 	
 	function dudt_(u,p,t)
-		S,E,I,R,N,D,C = u
-		F, β0,α,κ,μ,σ,γ,d,λ = p_
+		S, E, I, R, N, D, C = u
+		F, β0, α, κ, μ, σ, γ, d, λ = p_
 		z = ann([S/N,I,D/N],p) # Exposure does not depend on exposed, removed, or cumulative!
 		dS = -β0*S*F/N - z[1] -μ*S # susceptible
 		dE = β0*S*F/N + z[1] -(σ+μ)*E # exposed
@@ -51,24 +51,22 @@ module ode
 		dD = d*γ*I - λ*D # severe, critical cases, and deaths
 		dC = σ*E # +cumulative cases
 	
-		[dS,dE,dI,dR,dN,dD,dC]
+		[dS, dE, dI, dR, dN, dD, dC]
 	end
-	prob_nn = ODEProblem(dudt_, u0, tspan, p)
-	s = concrete_solve(prob_nn, Tsit5(), u0, p, saveat = 1)
 	
-	function predict(θ)
-		Array(concrete_solve(prob_nn, Vern7(), u0, θ, saveat = solution.t,
+	function predict(θ, prob)
+		Array(concrete_solve(prob, Vern7(), u0, θ, saveat = solution.t,
 							 abstol=1e-6, reltol=1e-6,
 							 sensealg = InterpolatingAdjoint(autojacvec=ReverseDiffVJP())))
 	end
 	
 	# No regularisation right now
-	function loss(θ)
-		pred = predict(θ)
-		sum(abs2, noisy_data[2:4,:] .- pred[2:4,:]), pred # + 1e-5*sum(sum.(abs, params(ann)))
+	function loss(θ, prob, data)
+		pred = predict(θ, prob)
+		sum(abs2, data[2:4,:] .- pred[2:4,:]), pred # + 1e-5*sum(sum.(abs, params(ann)))
 	end
 	
-	loss(p) # ← ?
+	loss(p, prob, data) # ← ?
 	
 	const losses = []
 	callback(θ, l, pred) = begin
@@ -105,22 +103,17 @@ module ode
 	L̂ = vec(ann([S./N I D./N]', res2_uode.minimizer))
 	X̂ = [S./N I D./N]'
 	
-	scatter(L,title="Estimated vs Expected Exposure Term",label="True Exposure")
-	plot!(L̂,label="Estimated Exposure")
-	savefig("estimated_exposure.png")
-	savefig("estimated_exposure.pdf")
-	
 	# Create an optimizer for the SINDY problem
 	opt = SR3()
 	# Create the thresholds which should be used in the search process
 	thresholds = exp10.(-6:0.1:1)
 	
 	# Test on original data and without further knowledge
-	Ψ_direct = SInDy(X[2:4, :], DX[2:4, :], basis, thresholds, opt = opt, maxiter = 50000) # Fail
-	println(Ψ_direct.basis)
+	# Ψ_direct = SInDy(X[2:4, :], DX[2:4, :], basis, thresholds, opt = opt, maxiter = 50000) # Fail
+	# println(Ψ_direct.basis)
 	# Test on ideal derivative data ( not available )
-	Ψ_ideal = SInDy(X[2:4, 5:end], L[5:end], basis, thresholds, opt = opt, maxiter = 50000) # Succeed
-	println(Ψ_ideal.basis)
+	# Ψ_ideal = SInDy(X[2:4, 5:end], L[5:end], basis, thresholds, opt = opt, maxiter = 50000) # Succeed
+	# println(Ψ_ideal.basis)
 	# Test on uode derivative data
 	Ψ = SInDy(X̂[:, 2:end], L̂[2:end], basis, thresholds,  opt = opt, maxiter = 10000, normalize = true, denoise = true) # Succeed
 	println(Ψ.basis)
@@ -128,7 +121,7 @@ module ode
 	# Build a ODE for the estimated system
 	function approx(u,p,t)
 		S, E, I, R, N, D, C = u
-		F, β0, α, κ, μ, σ, γ, d, λ = p_
+		F, β0, α, κ, μ, σ, γ, d, λ = p
 		z = Ψ([S/N, I, D/N]) 			# Exposure does not depend on exposed, removed, or cumulative!
 		
 		dS = -β0*S*F/N - z[1] -μ*S 		# susceptible
@@ -143,13 +136,13 @@ module ode
 	end
 	
 	# Create the approximated problem and solution
-	a_prob = ODEProblem{false}(approx, u0, tspan2, p_)
-	a_solution = solve(a_prob, Tsit5())
+	# a_prob = ODEProblem{false}(approx, u0, tspan2, p_)
+	# a_solution = solve(a_prob, Tsit5())
 	
-	p_uodesindy = scatter(solution_extrapolate, vars=[2,3,4], legend = :topleft, label=["True Exposed" "True Infected" "True Recovered"])
-	plot!(p_uodesindy,a_solution, lw = 5, vars=[2,3,4], label=["Estimated Exposed" "Estimated Infected" "Estimated Recovered"])
-	plot!(p_uodesindy,[20.99,21.01],[0.0,maximum(hcat(Array(solution_extrapolate[2:4,:]),Array(_sol_uode[2:4,:])))],lw=5,color=:black,label="Training Data End")
+	# p_uodesindy = scatter(solution_extrapolate, vars=[2,3,4], legend = :topleft, label=["True Exposed" "True Infected" "True Recovered"])
+	# plot!(p_uodesindy,a_solution, lw = 5, vars=[2,3,4], label=["Estimated Exposed" "Estimated Infected" "Estimated Recovered"])
+	# plot!(p_uodesindy,[20.99,21.01],[0.0,maximum(hcat(Array(solution_extrapolate[2:4,:]),Array(_sol_uode[2:4,:])))],lw=5,color=:black,label="Training Data End")
 	
-	savefig("universalodesindy_extrapolation.png")
-	savefig("universalodesindy_extrapolation.pdf")
+	# savefig("universalodesindy_extrapolation.png")
+	# savefig("universalodesindy_extrapolation.pdf")
 end 
