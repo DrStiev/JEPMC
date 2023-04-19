@@ -95,6 +95,7 @@ module graph
 
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
+			# la curva sembra troppo ripida
 			if contact.status == :S && rand(model.rng) ≤ (model.β * model.η) # || 
 				# (contact.status == :R && rand(model.rng) ≤ model.ω)
 				contact.status = :E 
@@ -125,7 +126,7 @@ module graph
 			agent.days_infected += 1
 			# TODO: validare giorni di latenza quarantena
 			if agent.days_infected > rand(Uniform(1, 5))
-				rand(model.rng) < 0.3 && (agent.status = :Q)
+				rand(model.rng) < 0.1 && (agent.status = :Q)
 			end
 		end
 		# quarantena paziente

@@ -51,7 +51,7 @@ module test_abm
 	abm_parameters = model_params.extract_params(df, 8, (50, 5000), 0.01)
 	@show abm_parameters
 	model = graph.init(; abm_parameters...)
-	@time pplot.video(model, graph.agent_step!, Agents.dummystep; title="graph_agent_default", path="img/video/")
+	@time pplot.custom_video(model, graph.agent_step!, Agents.dummystep; title="graph_agent_custom", path="img/video/", format=".mp4")
 
 	abmobs = graph.get_observable(model)
 

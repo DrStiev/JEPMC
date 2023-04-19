@@ -3,6 +3,7 @@ module pplot
     using InteractiveDynamics, CairoMakie
     using DataFrames, SciMLBase, Dates, CSV
     using Agents, GraphMakie
+    using Statistics: mean
 
     city_size(agents) = 0.005 * length(agents)
     function city_color(agents)
@@ -33,13 +34,13 @@ module pplot
         edge_plottype = :linesegments
     )
 
-    function get_adata(model)
+    function get_adata()
         susceptible(x) = count(i == :S for i in x)
         exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
 		quarantined(x) = count(i == :Q for i in x)
         recovered(x) = count(i == :R for i in x)
-        happiness(x) = sum(x)
+        happiness(x) = mean(x)
 
         return [(:status, susceptible), (:status, exposed), (:status, infected), (:status, quarantined), (:status, recovered), (:happiness, happiness)]
     end
@@ -49,7 +50,7 @@ module pplot
         return [dead]
     end
 
-    function custom_layout(fig, abmobs, step, name, framerate)
+    function custom_layout(fig, abmobs, step, name)
         plot_layout = fig[:, end+1] = GridLayout()
         count_layout = plot_layout[1, 1] = GridLayout()
         s = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).susceptible_status))
@@ -57,7 +58,7 @@ module pplot
         i = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_status))
         q = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).quarantined_status))
         r = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_status))
-        d = @lift(Point2f.($(abmobs.mdf).dead))
+        d = @lift(Point2f.($(abmobs.mdf).step, $(abmobs.mdf).dead))
 
         happiness = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).happiness_happiness))
 
@@ -65,14 +66,18 @@ module pplot
         scatterlines!(ax_seir, s; label="susceptible")
         scatterlines!(ax_seir, e; label="exposed")
         scatterlines!(ax_seir, i; label="infected")
+        scatterlines!(ax_seir, q; label="quarantined")
         scatterlines!(ax_seir, r; label="recovered")
         scatterlines!(ax_seir, d; label="dead")
 
         Legend(count_layout[1, 2], ax_seir;)
         
+        # TODO: cambiare tipologia di plot?
         ax_happiness = Axis(count_layout[2, 1]; ylabel="Cumulative happiness")
         scatterlines!(ax_happiness, happiness; label="happiness")
-        scatterlines!(ax_happiness, d; label="dead")
+        # non si noterebbe una linea che rimane tra [-1,1] altrimenti
+        # scatterlines!(ax_happiness, q; label="quarantined")
+        # scatterlines!(ax_happiness, d; label="dead")
 
         Legend(count_layout[2, 2], ax_happiness;)
 
@@ -81,39 +86,35 @@ module pplot
             autolimits!(ax_seir)
         end
 
-        record(fig, name; framerate=framerate) do io
+        record(fig, name) do io
             for _ in 1:step
                 recordframe!(io)
                 Agents.step!(abmobs, 1)
             end
             recordframe!(io)
         end
-        fig, abmobs
     end
 
     # FIXME: not plot covid evolution, but why?
     function custom_video(model, astep, mstep; 
-        title="title", path="img/", framerate = 15, frames = 100)
+        title="title", path="img/", format=".mkv", 
+        framerate = 15, frames = 100)
         isdir(path) == false && mkpath(path)
-        name = path*title*"_"*string(today())*".mp4"
+        name = path*title*"_"*string(today())*format
 
         # experiment custom plot
         fig, ax, abmobs = abmplot(model;
-        agent_step=astep, model_step=mstep, 
+        agent_step! = astep, model_step! = mstep, 
         as=city_size, ac=city_color, graphplotkwargs...,
-        adata=get_adata(model), mdata=get_mdata(model), figure=(; resolution=(1600,800)))
-
-        fig, abmobs = custom_layout(fig, abmobs, step, name, framerate)
-
-        # abmvideo(name, model, astep, mstep;
-        #     framerate=framerate, frames=frames,
-        #     title=title, as=city_size, ac=city_color, graphplotkwargs...)
+        adata=get_adata(), mdata=get_mdata(model), figure=(; resolution=(1600,800)))
+        custom_layout(fig, abmobs, frames, name)
     end
 
     function video(model, astep, mstep; 
-        title="title", path="img/", framerate = 15, frames = 100)
+        title="title", path="img/", format=".mkv", 
+        framerate = 15, frames = 100)
         isdir(path) == false && mkpath(path)
-        name = path*title*"_"*string(today())*".mp4"
+        name = path*title*"_"*string(today())*format
 
         abmvideo(name, model, astep, mstep;
             framerate=framerate, frames=frames,
