@@ -64,13 +64,13 @@ module model_params
 		i = df[1,:nuovi_positivi]/population
 		r = df[1,:dimessi_guariti]/population
 
-		R₀ = mean(estimate_R₀(df, 0.1, 0.05, (1.0-i-r), i, r, (0, length(df[!, 1])))[1])
-		γ = 1.0/18 
-		σ = 1.0/5.2 
+		γ = 1.0/14 
+		σ = 1.0/5.6 
 		ω = 1.0/240
 		ξ = 0.0
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi])
 		η = 1.0
+		R₀ = mean(estimate_R₀(df, 0.1, γ, (1.0-i-r), i, r, (0, length(df[!, 1])))[1])
 
 		return @dict(
 			number_point_of_interest,
@@ -86,13 +86,13 @@ module model_params
 		d = df[1,:deceduti]/population
 		s = (1.0-e-i-r-d)
 
-		R₀ = mean(estimate_R₀(df, 0.1, 0.05, (1.0-i-r), i, r, (0, length(df[!, 1])))[1])
-		γ = 1.0/18 
-		σ = 1.0/5.2 
+		γ = 1.0/14 
+		σ = 1.0/5.6 
 		ω = 1.0/240 
 		ξ = 0.0 
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) 
 		η = 1.0
+		R₀ = mean(estimate_R₀(df, 0.1, γ, (1.0-i-r), i, r, (0, length(df[!, 1])))[1])
 
 		u = [s, e, i, r, d] # scaled between [0-1]
 		p = [R₀, γ, σ, ω, ξ, δ, η]

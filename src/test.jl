@@ -26,13 +26,13 @@ module test_plot
 end
 
 # TODO: to be tested
-module test_ode
-	include("ode.jl")
+module test_uode
+	include("uode.jl")
 	include("params.jl")
 	include("pplot.jl")
 
 	df = model_params.get_data("data/italy/")
-	u0,p,tspan = model_params.extract_params(df)
+	u0, p, tspan = model_params.extract_params(df)
 
 	prob = ode.get_ODE_problem(ode.SEIR, u0, tspan, p)
 	@time sol = ode.get_solution(prob)
@@ -51,9 +51,9 @@ module test_abm
 	abm_parameters = model_params.extract_params(df, 8, (50, 5000), 0.01)
 	@show abm_parameters
 	model = graph.init(; abm_parameters...)
-	# @show model
-	# ERROR: AssertionError: length(linewidths) == length(colors)
-	@time pplot.video(model, graph.agent_step!, Agents.dummystep; title="graph_agent", path="img/video/")
+	@time pplot.video(model, graph.agent_step!, Agents.dummystep; title="graph_agent_default", path="img/video/")
+
+	abmobs = graph.get_observable(model)
 
 	model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!; n=100)
