@@ -72,12 +72,8 @@ module pplot
 
         Legend(count_layout[1, 2], ax_seir;)
         
-        # TODO: cambiare tipologia di plot?
         ax_happiness = Axis(count_layout[2, 1]; ylabel="Cumulative happiness")
         scatterlines!(ax_happiness, happiness; label="happiness")
-        # non si noterebbe una linea che rimane tra [-1,1] altrimenti
-        # scatterlines!(ax_happiness, q; label="quarantined")
-        # scatterlines!(ax_happiness, d; label="dead")
 
         Legend(count_layout[2, 2], ax_happiness;)
 
@@ -123,16 +119,21 @@ module pplot
 
     function line_plot(data, timeperiod, path="", title = "title", format="png")
         isdir(path) == false && mkpath(path)
-        dates = range(timeperiod[1], timeperiod[end], step=Day(1))
+        l = min(length(timeperiod), length(data[!, 1]))
+        dates = range(timeperiod[1], timeperiod[l], step=Day(1))
 	    tm_ticks = round.(dates, Month(1)) |> unique;
-        p = Plots.plot(timeperiod, Matrix(data), labels=permutedims(names(data)), 
+        p = Plots.plot(timeperiod, Matrix(data[1:l,:]), labels=permutedims(names(data)), 
             title=title, xticks=(tm_ticks, Dates.format.(tm_ticks, "uu/yyyy")), 
             xrot=45, xminorticks=true, xlim=extrema(dates))
         savefig(p, path*title*"_"*string(today())*"."*format)
     end
 
-    function line_plot(data::SciMLBase.ODESolution, timeperiod, path="", title = "title", format="png")
-        data = select!(DataFrame(data), Not(:timestamp))
-        line_plot(data[1:length(timeperiod),:], timeperiod, path, title, format)
+    line_plot(data::SciMLBase.ODESolution, timeperiod, path="", title = "title", format="png") = 
+        line_plot(select(DataFrame(data), Not(:timestamp)), timeperiod, path, title, format)
+
+    function loss_plot(losses, path="", title = "title", format="png")
+        isdir(path) == false && mkpath(path)
+        p = Plots.plot(losses, yaxis=:log, xaxis=:log, xlabel="Iterations", ylabel="loss")
+        savefig(p, path*title*"_"*string(today())*"."*format)
     end
 end
