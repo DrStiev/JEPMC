@@ -12,9 +12,10 @@ module graph
 		happiness::Float64 # [-1, 1]
 	end
 
+	# TODO: parametro che gestisce il lockdown / quarantena
 	function init(;
 		number_point_of_interest, migration_rate,
-		R₀, γ, σ, ω, ξ, δ, η, T, seed = 1234,
+		R₀, γ, σ, ω, ξ, δ, η, ϵ, T, seed = 1234,
 		)
 		rng = Xoshiro(seed)
 		C = length(number_point_of_interest)
@@ -28,7 +29,7 @@ module graph
 
 		properties = @dict(
 			number_point_of_interest, migration_rate,
-			R₀, γ, σ, ω, δ, ξ, β = R₀*γ, η, T, Is, C
+			R₀, γ, σ, ω, δ, ξ, β = R₀*γ, η, ϵ, T, Is, C
 		)
 		
 		# creo il modello
@@ -52,9 +53,6 @@ module graph
 
 	# la struttura con :Q non mi convince troppo in vista di un futuro controller, but still
 	function agent_step!(agent, model)
-		# if agent.status != :Q
-		# 	migrate!(agent, model)
-		# end
 		agent.status != :Q && migrate!(agent, model)
 		transmit!(agent, model)
 		update!(agent, model)
@@ -66,18 +64,18 @@ module graph
 		m = sample(model.rng, 1:(model.C), Weights(model.migration_rate[pid, :]))
 		if m ≠ pid
 			move_agent!(agent, m, model)
-			# cotrol measures could reduce the happiness value
-			agent.happiness += rand(Uniform(-0.05, min(model.η, 0.2)))
+			# control measures could reduce the happiness value
+			agent.happiness += rand(Uniform(0.0, min(model.η, 0.2)))
 		end
 	end
 
 	function transmit!(agent, model)
 		agent.status != :I && return
-
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
+			# @show contact
 			# la curva sembra troppo ripida
-			if contact.status == :S && rand(model.rng) ≤ (model.β * model.η)
+			if contact.status == :S && (rand(model.rng) ≤ (model.β * model.η))
 				contact.status = :E 
 			end
 		end
@@ -90,7 +88,7 @@ module graph
 		end
 		# fine periodo di latenza
 		if agent.status == :E
-			rand(model.rng) ≤ model.σ && (agent.status = :I)
+			rand(model.rng) ≤ model.ϵ && (agent.status = :S)
 			if agent.days_infected ≥ (1/model.σ)
 				agent.status = :I
 				agent.days_infected = 1
@@ -106,10 +104,11 @@ module graph
 				rand(model.rng) < 0.1 && (agent.status = :Q)
 			end
 		end
-		# quarantena paziente
+		# quarantena paziente dipendente da fattori esterni
+		# TODO: inserire durata quarantena come parametro es. θ
 		if agent.status == :Q
 			agent.days_infected += 1
-			agent.happiness += rand(Uniform(-0.15, 0.1))
+			agent.happiness += rand(Uniform(-0.1, 0.1))
 			return
 		end
 		# perdita progressiva di immunità e aumento rischio exposure
@@ -131,16 +130,14 @@ module graph
 			rand(model.rng) ≤ 1E-6 && (remove_agent!(agent, model))
 		end
 		# fine malattia
-		if agent.days_infected ≥ (1 / model.γ)
-			if rand(model.rng) ≤ model.γ
-				# probabilità di morte
-				rand(model.rng) ≤ model.δ && (remove_agent!(agent, model))
-				# probabilità di guarigione
-				agent.status = :R
-				agent.happiness += rand(Uniform(-0.1, 0.1))
-				agent.days_immunity = 1/model.ω
-				agent.days_infected = 0
-			end
+		if agent.days_infected > 1/model.γ
+			# probabilità di morte
+			rand(model.rng) ≤ model.δ && (remove_agent!(agent, model))
+			# probabilità di guarigione
+			agent.status = :R
+			agent.happiness += rand(Uniform(0.0, 0.05))
+			agent.days_immunity = 1/model.ω
+			agent.days_infected = 0
 		end
 	end	
 
@@ -162,6 +159,4 @@ module graph
         end
         return data
     end
-
-	get_observable(model) = ABMObservable(model; agent_step!, model_step!)
 end

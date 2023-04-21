@@ -15,10 +15,10 @@ module test_plot
 	include("pplot.jl")
 
 	df = model_params.get_data("data/italy/")
-	@time pplot.line_plot(select(df, [:variazione_totale_positivi]), 
-		df[!, :data], "img/data_plot/", "rapporto-positivi-guariti", "png")
-	@time pplot.line_plot(select(df, [:variazione_totale_positivi]), 
-		df[!, :data], "img/data_plot/", "rapporto-positivi-guariti", "pdf")
+	@time pplot.line_plot(select(df, [:nuovi_positivi]), 
+		df[!, :data], "img/data_plot/", "nuovi_positivi", "png")
+	@time pplot.line_plot(select(df, [:nuovi_positivi]), 
+		df[!, :data], "img/data_plot/", "nuovi_positivi", "pdf")
 	@time pplot.line_plot(select(df, [:totale_positivi, :totale_ospedalizzati, :dimessi_guariti, :deceduti]), 
 		df[!, :data], "img/data_plot/", "dpc-covid19-ita-andamento-nazionale", "png")
 	@time pplot.line_plot(select(df, [:totale_positivi, :totale_ospedalizzati, :dimessi_guariti, :deceduti]), 
@@ -53,9 +53,8 @@ module test_abm
 	model = graph.init(; abm_parameters...)
 	# TODO: understand why the general happiness tend to be always negative
 	@time pplot.custom_video(model, graph.agent_step!, Agents.dummystep; title="graph_agent_custom", path="img/video/", format=".mp4", frames=365)
+	model = graph.init(; abm_parameters...)
 	@time pplot.custom_video(model, graph.agent_step!, Agents.dummystep; title="graph_agent_custom", path="img/video/", format=".mkv", frames=365)
-
-	abmobs = graph.get_observable(model)
 
 	model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!; n=365)

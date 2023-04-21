@@ -20,30 +20,14 @@ module model_params
 		return df
 	end
 
-	# https://nextjournal.com/berwa/sir-model-for-covid-19-estimating-R_o
-	function estimate_R₀(df, β, γ, S₀, I₀, R₀, tspan)
-		function sir_ode!(du, u, p, t)
-			S, I, R = u
-			β, γ = p
-
-			dS = -β*S*I
-			dI = +β*S*I - γ*I
-			dR = + γ*I
-
-			du .= (dS, dI, dR)
-			du
+	function estimate_R₀(data)
+		res = 0
+		for i in 1:length(data)-1
+			np1 = data[i]
+			np2 = data[i+1]
+			res += np2/np1
 		end
-		prob = ODEProblem(sir_ode!, [S₀, I₀, R₀], tspan, [β, γ])
-		sol = solve(prob, saveat=0.1);
-		model(R, param) = population .-R -population .* exp.((-param[1]/population).*R)
-		params = []
-		active_infections_vec = df[!, :totale_casi] - df[!, :dimessi_guariti]
-		for i in 1:10
-			p₀ = [randn()]
-			global fit = curve_fit(model, df[!, :dimessi_guariti], active_infections_vec, p₀)
-			push!(params, fit.param[1])
-		end
-		return confidence_interval(fit, 0.05)
+		return res/length(data)
 	end
 
 	function extract_params(df, C, min_max_population, max_travel_rate, seed=1234)
@@ -70,12 +54,13 @@ module model_params
 		ξ = 0.0
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi])
 		η = 1.0
-		R₀ = mean(estimate_R₀(df, 0.1, γ, (1.0-i-r), i, r, (0, length(df[!, 1])))[1])
+		ϵ = 1E-1
+		R₀ = estimate_R₀(df[!, :nuovi_positivi])
 
 		return @dict(
 			number_point_of_interest,
 			migration_rate, T,
-			R₀, γ, σ, ω, ξ, δ, η 
+			R₀, γ, σ, ω, ξ, δ, η, ϵ 
 		)
 	end
 
@@ -92,7 +77,7 @@ module model_params
 		ξ = 0.0 
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) 
 		η = 1.0
-		R₀ = mean(estimate_R₀(df, 0.1, γ, (1.0-i-r), i, r, (0, length(df[!, 1])))[1])
+		R₀ = estimate_R₀(df[!, :nuovi_positivi])
 
 		u = [s, e, i, r, d] # scaled between [0-1]
 		p = [R₀, γ, σ, ω, ξ, δ, η]
