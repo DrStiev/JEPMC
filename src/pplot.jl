@@ -91,7 +91,6 @@ module pplot
         end
     end
 
-    # FIXME: not plot covid evolution, but why?
     function custom_video(model, astep, mstep; 
         title="title", path="img/", format=".mkv", 
         framerate = 15, frames = 100)

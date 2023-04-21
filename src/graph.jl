@@ -73,9 +73,8 @@ module graph
 		agent.status != :I && return
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
-			# @show contact
-			# la curva sembra troppo ripida
-			if contact.status == :S && (rand(model.rng) ≤ (model.β * model.η))
+			# FIXME: la curva sembra troppo ripida
+			if contact.status == :S && rand(model.rng) ≤ (model.β * model.η)
 				contact.status = :E 
 			end
 		end

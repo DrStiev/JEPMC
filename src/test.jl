@@ -15,12 +15,12 @@ module test_plot
 	include("pplot.jl")
 
 	df = model_params.get_data("data/italy/")
-	@time pplot.line_plot(select(df, [:nuovi_positivi]), 
-		df[!, :data], "img/data_plot/", "nuovi_positivi", "png")
+	# @time pplot.line_plot(select(df, [:nuovi_positivi]), 
+	# 	df[!, :data], "img/data_plot/", "nuovi_positivi", "png")
 	@time pplot.line_plot(select(df, [:nuovi_positivi]), 
 		df[!, :data], "img/data_plot/", "nuovi_positivi", "pdf")
-	@time pplot.line_plot(select(df, [:totale_positivi, :totale_ospedalizzati, :dimessi_guariti, :deceduti]), 
-		df[!, :data], "img/data_plot/", "dpc-covid19-ita-andamento-nazionale", "png")
+	# @time pplot.line_plot(select(df, [:totale_positivi, :totale_ospedalizzati, :dimessi_guariti, :deceduti]), 
+	# 	df[!, :data], "img/data_plot/", "dpc-covid19-ita-andamento-nazionale", "png")
 	@time pplot.line_plot(select(df, [:totale_positivi, :totale_ospedalizzati, :dimessi_guariti, :deceduti]), 
 		df[!, :data], "img/data_plot/", "dpc-covid19-ita-andamento-nazionale", "pdf")
 end
@@ -58,9 +58,9 @@ module test_abm
 
 	model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!; n=365)
-	pplot.line_plot(select(data, Not(:happiness_happiness)), df[1:length(data[!,1]),:data], "img/abm/", "graph_agent", "png")
+	# pplot.line_plot(select(data, Not(:happiness_happiness)), df[1:length(data[!,1]),:data], "img/abm/", "graph_agent", "png")
 	pplot.line_plot(select(data, Not(:happiness_happiness)), df[1:length(data[!,1]),:data], "img/abm/", "graph_agent", "pdf")
-	pplot.line_plot(select(data, [:happiness_happiness]), df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "png")
+	# pplot.line_plot(select(data, [:happiness_happiness]), df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "png")
 	pplot.line_plot(select(data, [:happiness_happiness]), df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "pdf")
 end
 

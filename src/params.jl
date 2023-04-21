@@ -21,13 +21,7 @@ module model_params
 	end
 
 	function estimate_R₀(data)
-		res = 0
-		for i in 1:length(data)-1
-			np1 = data[i]
-			np2 = data[i+1]
-			res += np2/np1
-		end
-		return res/length(data)
+		return [data[i+1]/data[i] for i in 1:length(data)-1]
 	end
 
 	function extract_params(df, C, min_max_population, max_travel_rate, seed=1234)
@@ -55,7 +49,7 @@ module model_params
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi])
 		η = 1.0
 		ϵ = 1E-1
-		R₀ = estimate_R₀(df[!, :nuovi_positivi])
+		R₀ = mean(estimate_R₀(df[!, :nuovi_positivi]))
 
 		return @dict(
 			number_point_of_interest,
@@ -77,7 +71,7 @@ module model_params
 		ξ = 0.0 
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) 
 		η = 1.0
-		R₀ = estimate_R₀(df[!, :nuovi_positivi])
+		R₀ = mean(estimate_R₀(df[!, :nuovi_positivi]))
 
 		u = [s, e, i, r, d] # scaled between [0-1]
 		p = [R₀, γ, σ, ω, ξ, δ, η]
