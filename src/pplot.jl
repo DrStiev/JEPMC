@@ -42,7 +42,7 @@ module pplot
         recovered(x) = count(i == :R for i in x)
         happiness(x) = mean(x)
 
-        return [(:status, susceptible), (:status, exposed), (:status, infected), (:status, quarantined), (:status, recovered), (:happiness, happiness)]
+        return [(:status, susceptible), (:status, exposed), (:status, infected), (:status, recovered), (:detected, quarantined), (:detected, infected), (:happiness, happiness)]
     end
 
     function get_mdata(model)
@@ -56,29 +56,33 @@ module pplot
         s = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).susceptible_status))
         e = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).exposed_status))
         i = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_status))
-        q = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).quarantined_status))
         r = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_status))
         d = @lift(Point2f.($(abmobs.mdf).step, $(abmobs.mdf).dead))
 
+        id = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_detected))
+        q = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).quarantined_detected))
         happiness = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).happiness_happiness))
 
         ax_seir = Axis(count_layout[1, 1]; ylabel="SEIR Dynamic")
         scatterlines!(ax_seir, s; label="susceptible")
         scatterlines!(ax_seir, e; label="exposed")
         scatterlines!(ax_seir, i; label="infected")
-        scatterlines!(ax_seir, q; label="quarantined")
         scatterlines!(ax_seir, r; label="recovered")
         scatterlines!(ax_seir, d; label="dead")
-
         Legend(count_layout[1, 2], ax_seir;)
         
-        ax_happiness = Axis(count_layout[2, 1]; ylabel="Cumulative happiness")
-        scatterlines!(ax_happiness, happiness; label="happiness")
+        ax_detected = Axis(count_layout[2, 1]; ylabel="Detected infected and Countermeasures")
+        scatterlines!(ax_detected, id; label="infected_detected")
+        scatterlines!(ax_detected, q; label="quarantined")
+        Legend(count_layout[2, 2], ax_detected;)
 
-        Legend(count_layout[2, 2], ax_happiness;)
+        ax_happiness = Axis(count_layout[3, 1]; ylabel = "Average happiness")
+        scatterlines!(ax_happiness, happiness; label="happiness")
+        Legend(count_layout[3, 2], ax_happiness;)
 
         on(abmobs.model) do m
             autolimits!(ax_happiness)
+            autolimits!(ax_detected)
             autolimits!(ax_seir)
         end
 

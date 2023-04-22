@@ -20,6 +20,10 @@ module model_params
 		return df
 	end
 
+	function read_data()
+		return DataFrame(CSV.File("data/italy/dpc-covid19-ita-andamento-nazionale.csv", delim=",", header=1))
+	end
+
 	function estimate_R₀(data)
 		return [data[i+1]/data[i] for i in 1:length(data)-1]
 	end
@@ -42,19 +46,28 @@ module model_params
 		i = df[1,:nuovi_positivi]/population
 		r = df[1,:dimessi_guariti]/population
 
-		γ = 1.0/14 
-		σ = 1.0/5.6 
-		ω = 1.0/240
-		ξ = 0.0
-		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi])
-		η = 1.0
-		ϵ = 1E-1
-		R₀ = mean(estimate_R₀(df[!, :nuovi_positivi]))
+		γ = 1.0/14 # infective period
+		σ = 1.0/5.6 # exposed period
+		ω = 1.0/240 # immunity period
+		ξ = 0.0 # vaccine ratio
+		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) # mortality
+		η = 1.0/20 # Countermeasures (social distancing, masks, etc...) (lower is better)
+		ϵ = 1E-1 # strong immune system
+		θ = 0.0 # llockdown (percentage)
+		q = γ # quarantine period
+		R₀ = mean(estimate_R₀(df[!, :nuovi_positivi])) 
+		ncontrols = df[1, :tamponi]/population # ratio of controls per day
+		control_growth = mean([df[i+1, :tamponi] / df[i, :tamponi] for i in 1:length(df[!, :tamponi]) - 1])
+		# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
+		# people with confirmed covid case (:I) -> (73 with symptoms + 55 no symptoms)/2 = 64% accuracy
+		# people with confirmed covid case (:E) -> 82% accuracy
+		# people with no covid (:S, :R) -> 99.7% accuracy 
+		control_accuracy = [0.64, 0.82, 0.997]
 
 		return @dict(
-			number_point_of_interest,
-			migration_rate, T,
-			R₀, γ, σ, ω, ξ, δ, η, ϵ 
+			number_point_of_interest, migration_rate,  
+			ncontrols, control_growth, T, control_accuracy,
+			R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, 
 		)
 	end
 
@@ -70,7 +83,7 @@ module model_params
 		ω = 1.0/240 
 		ξ = 0.0 
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) 
-		η = 1.0
+		η = 1.0/20
 		R₀ = mean(estimate_R₀(df[!, :nuovi_positivi]))
 
 		u = [s, e, i, r, d] # scaled between [0-1]
