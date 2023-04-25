@@ -20,8 +20,8 @@ module model_params
 		return df
 	end
 
-	function read_data()
-		return DataFrame(CSV.File("data/italy/dpc-covid19-ita-andamento-nazionale.csv", delim=",", header=1))
+	function read_data(path="data/italy/dpc-covid19-ita-andamento-nazionale.csv")
+		return DataFrame(CSV.File(path, delim=",", header=1))
 	end
 
 	function estimate_R₀(data)

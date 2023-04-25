@@ -15,11 +15,20 @@ module graph
 		happiness::Float64 # [-1, 1]
 	end
 
-	# TODO: parametro che gestisce il lockdown / quarantena
 	function init(;
 		number_point_of_interest, migration_rate, 
 		ncontrols, control_growth, control_accuracy,
-		R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, T, seed = 1234,
+		R₀, # R₀ 
+		γ, # 1/ periodo infettivita'
+		σ, # 1/ periodo esposizione
+		ω, # 1/ periodo immunita
+		ξ, # 1 / vaccinazione per milion per day
+		δ, # mortality rate
+		η, # 1 / countermeasures
+		ϵ, # probability of strong immune system (only E to S)
+		q, # 1 / periodo quarantena
+		θ, # 1 / percentage of people under full lockdown
+		seed = 1234,
 		)
 		rng = Xoshiro(seed)
 		C = length(number_point_of_interest)
@@ -69,9 +78,16 @@ module graph
 	end
 
 	function agent_step!(agent, model)
+		# mantengo sotto controllo la happiness tra [-1, 1]
+		agent.happiness = agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
 		# θ: variabile lockdown (percentuale)
-		if rand(model.rng) > model.θ
+		if rand(model.rng) ≤ model.θ
+			agent.happiness += rand(Uniform(-0.2, 0.05))
+		else
 			if agent.detected ≠ :Q
+				# possibilità di non muoversi per via delle restrizioni
+				# assumendo che 1 ≤ η ≤ 100 un po' too strong come assunzione 
+				rand(model.rng) > model.η  && (agent.happiness += rand(Uniform(-0.2, 0.05)))
 				migrate!(agent, model)
 			end
 		end
@@ -96,14 +112,12 @@ module graph
 	end
 
 	function migrate!(agent, model)
-		# possibilità di non muoversi per via delle restrizioni
-		rand(model.rng) > model.η * 10 && (agent.happiness += rand(Uniform(-0.1, 0.1)))
 		pid = agent.pos
 		m = sample(model.rng, 1:(model.C), Weights(model.migration_rate[pid, :]))
 		if m ≠ pid
 			move_agent!(agent, m, model)
 			# control measures could reduce the happiness value
-			agent.happiness += rand(Uniform(-0.05, min(model.η, 0.25)))
+			agent.happiness += rand(Uniform(-0.05, min(model.η, 0.2)))
 		end
 	end
 
@@ -111,7 +125,8 @@ module graph
 		agent.status != :I && return
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
-			if contact.status == :S && rand(model.rng) ≤ (model.β * model.η)
+			# assunzione stravagante sul lockdown
+			if contact.status == :S && rand(model.rng) ≤ (model.β * model.η * (1.0-model.θ))
 				contact.status = :E 
 			end
 		end

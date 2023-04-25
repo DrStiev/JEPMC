@@ -25,18 +25,24 @@ end
 
 # TODO: to be implemented
 module test_uode
-	using Plots
 	include("uode.jl")
 	include("params.jl")
 	include("pplot.jl")
 
 	# df = model_params.get_data("data/italy/")
-	# u0, p, tspan = model_params.extract_params(df)
+	df = model_params.read_data()
 
+	S0 = 14e6
+	u0 = [0.9*S0, 0.0, 0.0, 0.0, S0, 0.0, 0.0]
+	p_ = [10.0, 0.5944, 0.4239, 1117.3, 0.02, 1/3, 1/5,0.2, 1/11.2]
+	tspan = (0.0, 21.0)
+	tspan2 = (0.0,60.0)
+	# TODO: test!
+	pred = uode.get_prediction(u0, p_, tspan, tspan2)
+	# u0, p, tspan = model_params.extract_params(df)
 	# prob = ode.get_ODE_problem(ode.SEIR, u0, tspan, p)
 	# @time sol = ode.get_solution(prob)
-
-	# pplot.line_plot(sol, df[!,:data], "img/ode/", "seir_model", "png")
+	
 	# pplot.line_plot(sol, df[!,:data], "img/ode/", "seir_model", "pdf")
 end
 
