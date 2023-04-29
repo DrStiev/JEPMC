@@ -63,7 +63,7 @@ module test_abm
 	abm_parameters = model_params.extract_params(df, 8, (50, 5000), 0.01)
 	model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!, graph.model_step!; n=365)
-	@show data
+	# @show data
 	pplot.line_plot(select(data, Not([:happiness_happiness, :infected_detected, :quarantined_detected])), 
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent", "pdf")
 	pplot.line_plot(select(data, [:infected_detected, :quarantined_detected]), 

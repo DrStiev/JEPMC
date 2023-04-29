@@ -28,6 +28,7 @@ module graph
 		ϵ, # probability of strong immune system (only E to S)
 		q, # 1 / periodo quarantena
 		θ, # 1 / percentage of people under full lockdown
+		T,
 		seed = 1234,
 		)
 		rng = Xoshiro(seed)
@@ -47,7 +48,7 @@ module graph
 			R₀, γ, σ, ω, δ, ξ, β = R₀*γ, η, ϵ, q, T, Is, C, 
 		)
 		
-		# creo il modello # Agents.Graphs.clique_graph(C, C ÷ 2)
+		# creo il modello 
 		model = ABM(Person, GraphSpace(Agents.Graphs.complete_graph(C)); properties, rng)
 
 		# aggiungo la mia popolazione al modello
@@ -87,7 +88,7 @@ module graph
 			if agent.detected ≠ :Q
 				# possibilità di non muoversi per via delle restrizioni
 				# assumendo che 1 ≤ η ≤ 100 un po' too strong come assunzione 
-				rand(model.rng) > model.η  && (agent.happiness += rand(Uniform(-0.2, 0.05)))
+				rand(model.rng) > model.η  && (agent.happiness += rand(Uniform(-0.05, 0.05)))
 				migrate!(agent, model)
 			end
 		end
