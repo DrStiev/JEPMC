@@ -79,7 +79,7 @@ module graph
 	end
 
 	function agent_step!(agent, model)
-		# mantengo sotto controllo la happiness tra [-1, 1]
+		# mantengo la happiness tra [-1, 1]
 		agent.happiness = agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
 		# θ: variabile lockdown (percentuale)
 		if rand(model.rng) ≤ model.θ
@@ -87,9 +87,12 @@ module graph
 		else
 			if agent.detected ≠ :Q
 				# possibilità di non muoversi per via delle restrizioni
-				# assumendo che 1 ≤ η ≤ 100 un po' too strong come assunzione 
-				rand(model.rng) > model.η  && (agent.happiness += rand(Uniform(-0.05, 0.05)))
-				migrate!(agent, model)
+				# assumendo che 0.01 ≤ η ≤ 1 un po' too strong come assunzione 
+				if rand(model.rng) > model.η
+				  agent.happiness += rand(Uniform(-0.05, 0.05))
+				else
+					migrate!(agent, model)
+				end
 			end
 		end
 		transmit!(agent, model)
@@ -117,8 +120,7 @@ module graph
 		m = sample(model.rng, 1:(model.C), Weights(model.migration_rate[pid, :]))
 		if m ≠ pid
 			move_agent!(agent, m, model)
-			# control measures could reduce the happiness value
-			agent.happiness += rand(Uniform(-0.05, min(model.η, 0.2)))
+			agent.happiness += rand(Uniform(-0.05,  0.2))
 		end
 	end
 
@@ -126,8 +128,10 @@ module graph
 		agent.status != :I && return
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]
+			# se in quarantena puo' infettare di meno 
+			β = agent.detected == :Q ? model.β / 10 : model.β 
 			# assunzione stravagante sul lockdown
-			if contact.status == :S && rand(model.rng) ≤ (model.β * model.η * (1.0-model.θ))
+			if contact.status == :S && rand(model.rng) ≤ (β * model.η * (1.0-model.θ))
 				contact.status = :E 
 			end
 		end
@@ -144,7 +148,10 @@ module graph
 		end
 		# fine periodo di latenza
 		if agent.status == :E
-			rand(model.rng) ≤ model.ϵ && (agent.status = :S)
+			if rand(model.rng) ≤ model.ϵ
+				agent.status = :S
+				return
+			end
 			if agent.days_infected ≥ (1/model.σ)
 				agent.status = :I
 				agent.days_infected = 1
@@ -153,11 +160,17 @@ module graph
 			agent.days_infected += 1
 		end
 		# avanzamento malattia + possibilità di andare in quarantena
-		agent.status == :I && (agent.days_infected += 1)
+		if agent.status == :I
+			agent.days_infected += 1
+			return
+		end
 		# perdita progressiva di immunità e aumento rischio exposure
 		if agent.status == :R
 			agent.days_immunity -= 1
-			rand(model.rng) ≤ 1/agent.days_immunity && (agent.status = :S)
+			if rand(model.rng) ≤ 1/agent.days_immunity 
+				agent.status = :S
+				return
+			end
 		end
 		# metto in quarantena i pazienti che scopro essere positivi
 		if agent.detected == :I
@@ -169,41 +182,33 @@ module graph
 		if agent.detected == :Q 
 			agent.days_quarantined += 1
 			agent.happiness += rand(Uniform(-0.2, 0.05))
-		end
-		# se si è molto felici si tende a voler fare di più. questo può portare ad 
-		# infrangere la quarantena uscendo anche quando non si dovrebbe
-		if agent.happiness ≥ 0.9
-			agent.happiness ≥ 1.0 && (migrate!(agent, model))
-			rand(model.rng) > agent.happiness && (migrate!(agent, model))
+			# troppa o troppo poca felicita' possono portare problemi
+			rand(model.rng) > 1-abs(agent.happiness) && (migrate!(agent, model))
 		end
 	end
 
 	function recover_or_die!(agent, model)
-		# depressione + suicidio
-		if agent.happiness ≤ -1.0
-			rand(model.rng) ≤ 1E-6*(1.0/agent.happiness) && (remove_agent!(agent, model))
-		end
 		# fine malattia
 		if agent.days_infected > 1/model.γ
 			# probabilità di morte
-			rand(model.rng) ≤ model.δ && (remove_agent!(agent, model))
+			if rand(model.rng) ≤ model.δ
+				remove_agent!(agent, model)
+			 	return
+			end
 			# probabilità di guarigione
 			agent.status = :R
 			agent.days_immunity = 1/model.ω
 			agent.days_infected = 0
-			return
 		end
 		if agent.detected == :Q && agent.days_quarantined ≥ 1/model.q
 			new_status = result!(agent, model)
 			if new_status == :R || new_status == :S
-				# agent.happiness += rand(Uniform(0.0, 0.05))
 				agent.days_quarantined = 0
 			else 
-				# lascio il paziente in quarantena per ancora 1/2 del periodo totale
+				# prolungo la quarantena
 				agent.detected = :Q
 				agent.days_quarantined ÷= 2
 			end
-			return
 		end
 	end	
 

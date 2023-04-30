@@ -10,9 +10,8 @@ module pplot
         agent = length(agents)
         exposed = count(a.status == :E for a in agents)
         infected = count(a.status == :I for a in agents)
-        quarantined = count(a.status == :Q for a in agents)
         recovered = count(a.status == :R for a in agents)
-        return RGBf((infected + exposed)/agent, recovered/agent, quarantined/agent)
+        return RGBf((infected + exposed)/agent, recovered/agent, 0)
     end
 
     edge_color(model) = fill((:grey, 0.25), GraphMakie.Graphs.ne(model.space.graph))
@@ -25,7 +24,7 @@ module pplot
         return w
     end
 
-    # create problems for reasons
+    # FIXME
     graphplotkwargs = (
         layout = GraphMakie.Shell(),
         arrow_show = false,
