@@ -34,6 +34,7 @@ module pplot
     )
 
     function get_adata()
+        # information about the model
         susceptible(x) = count(i == :S for i in x)
         exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
@@ -41,7 +42,8 @@ module pplot
         recovered(x) = count(i == :R for i in x)
         happiness(x) = mean(x)
 
-        return [(:status, susceptible), (:status, exposed), (:status, infected), (:status, recovered), (:detected, quarantined), (:detected, infected), (:happiness, happiness)]
+        return [(:status, susceptible), (:status, exposed), (:status, infected), (:status, recovered), 
+            (:detected, quarantined), (:detected, infected), (:detected, recovered), (:happiness, happiness)]
     end
 
     function get_mdata(model)
@@ -52,14 +54,19 @@ module pplot
     function custom_layout(fig, abmobs, step, name)
         plot_layout = fig[:, end+1] = GridLayout()
         count_layout = plot_layout[1, 1] = GridLayout()
+        # get information about the general epidemic
         s = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).susceptible_status))
         e = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).exposed_status))
         i = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_status))
         r = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_status))
         d = @lift(Point2f.($(abmobs.mdf).step, $(abmobs.mdf).dead))
 
+        # get information about the data known from the society
         id = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_detected))
         q = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).quarantined_detected))
+        rd = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_detected))
+        
+        # get information about the general mood of the society
         happiness = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).happiness_happiness))
 
         ax_seir = Axis(count_layout[1, 1]; ylabel="SEIR Dynamic")
@@ -70,9 +77,10 @@ module pplot
         scatterlines!(ax_seir, d; label="dead")
         Legend(count_layout[1, 2], ax_seir;)
         
-        ax_detected = Axis(count_layout[2, 1]; ylabel="Detected infected and Countermeasures")
-        scatterlines!(ax_detected, id; label="infected_detected")
+        ax_detected = Axis(count_layout[2, 1]; ylabel="Individuals detected")
+        scatterlines!(ax_detected, id; label="infected")
         scatterlines!(ax_detected, q; label="quarantined")
+        scatterlines!(ax_detected, rd; label="recovered")
         Legend(count_layout[2, 2], ax_detected;)
 
         ax_happiness = Axis(count_layout[3, 1]; ylabel = "Average happiness")

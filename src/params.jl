@@ -27,48 +27,48 @@ module model_params
 		return mean([data[i+1]/data[i] for i in 1:length(data)-1])
 	end
 
-	function extract_params(df, C, min_max_population, max_travel_rate, seed=1234)
-		Random.seed!(seed)
-		number_point_of_interest = rand(min_max_population[1]:min_max_population[2], C)
-		migration_rate = zeros(C, C)
-		for c in 1:C
-			for c2 in 1:C
-				migration_rate[c,c2] = (number_point_of_interest[c] + number_point_of_interest[c2]) / number_point_of_interest[c]
-			end
-		end
-		maxM = maximum(migration_rate)
-		migration_rate = (migration_rate .* max_travel_rate) ./ maxM
-		migration_rate[diagind(migration_rate)] .= 1.0
+	# function extract_params(df, C, min_max_population, max_travel_rate, seed=1234)
+	# 	Random.seed!(seed)
+	# 	number_point_of_interest = rand(min_max_population[1]:min_max_population[2], C)
+	# 	migration_rate = zeros(C, C)
+	# 	for c in 1:C
+	# 		for c2 in 1:C
+	# 			migration_rate[c,c2] = (number_point_of_interest[c] + number_point_of_interest[c2]) / number_point_of_interest[c]
+	# 		end
+	# 	end
+	# 	maxM = maximum(migration_rate)
+	# 	migration_rate = (migration_rate .* max_travel_rate) ./ maxM
+	# 	migration_rate[diagind(migration_rate)] .= 1.0
 
-		T = length(df[!,1])
+	# 	T = length(df[!,1])
 
-		i = df[1,:nuovi_positivi]/population
-		r = df[1,:dimessi_guariti]/population
+	# 	i = df[1,:nuovi_positivi]/population
+	# 	r = df[1,:dimessi_guariti]/population
 
-		γ = 1.0/14 # infective period
-		σ = 1.0/5.6 # exposed period
-		ω = 1.0/240 # immunity period
-		ξ = 0.0 # vaccine ratio
-		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) # mortality
-		η = 1.0 # Countermeasures (social distancing, masks, etc...) (lower is better (0 < η ≤ 1))
-		ϵ = 1.0/20 # strong immune system
-		θ = 0.0 # lockdown (percentage)
-		q = γ # quarantine period
-		R₀ = mean(estimate_R₀(df[!, :nuovi_positivi])) 
-		ncontrols = df[1, :tamponi]/population # ratio of controls per day
-		control_growth = mean([df[i+1, :tamponi] / df[i, :tamponi] for i in 1:length(df[!, :tamponi]) - 1])
-		# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
-		# people with confirmed covid case (:I) -> (73 with symptoms + 55 no symptoms)/2 = 64% accuracy
-		# people with confirmed covid case (:E) -> 82% accuracy
-		# people with no covid (:S, :R) -> 99.7% accuracy 
-		control_accuracy = [0.64, 0.82, 0.997]
+	# 	γ = 1.0/14 # infective period
+	# 	σ = 1.0/5.6 # exposed period
+	# 	ω = 1.0/240 # immunity period
+	# 	ξ = 0.0 # vaccine ratio
+	# 	δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) # mortality
+	# 	η = 1.0 # Countermeasures (social distancing, masks, etc...) (lower is better (0 < η ≤ 1))
+	# 	ϵ = 1.0/20 # strong immune system
+	# 	θ = 0.0 # lockdown (percentage)
+	# 	q = γ # quarantine period
+	# 	R₀ = mean(estimate_R₀(df[!, :nuovi_positivi])) 
+	# 	ncontrols = df[1, :tamponi]/population # ratio of controls per day
+	# 	control_growth = mean([df[i+1, :tamponi] / df[i, :tamponi] for i in 1:length(df[!, :tamponi]) - 1])
+	# 	# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
+	# 	# people with confirmed covid case (:I) -> (73 with symptoms + 55 no symptoms)/2 = 64% accuracy
+	# 	# people with confirmed covid case (:E) -> 82% accuracy
+	# 	# people with no covid (:S, :R) -> 99.7% accuracy 
+	# 	control_accuracy = [0.64, 0.82, 0.997]
 
-		return @dict(
-			number_point_of_interest, migration_rate,  
-			ncontrols, control_growth, T, control_accuracy,
-			R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, 
-		)
-	end
+	# 	return @dict(
+	# 		number_point_of_interest, migration_rate,  
+	# 		ncontrols, control_growth, T, control_accuracy,
+	# 		R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, 
+	# 	)
+	# end
 
 	function extract_params(df, C, avg_population::Float64, max_travel_rate, seed=1234; outliers = [])
 		rng = Xoshiro(seed)
@@ -91,15 +91,17 @@ module model_params
 		i = df[1,:nuovi_positivi] / population
 		r = df[1,:dimessi_guariti] / population
 
-		γ = 1.0/14 # infective period
-		σ = 1.0/5.6 # exposed period
-		ω = 1.0/240 # immunity period
+		γ = 14 # infective period
+		σ = 5 # exposed period
+		ω = 240 # immunity period
 		ξ = 0.0 # vaccine ratio
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) # mortality
 		η = 1.0/20 # Countermeasures (social distancing, masks, etc...) (lower is better)
-		ϵ = 1E-1 # strong immune system
-		θ = 0.0 # lockdown (percentage)
-		q = γ # quarantine period
+		ϵ = 1.0/10 # strong immune system
+		θ = 0.0 # lockdown percentage
+		θₜ = 90 # lockdown period
+		q = 10 # quarantine period
+		threshold_before_growth = 1.0/10
 		R₀ = estimate_R₀(df[!, :nuovi_positivi])
 		ncontrols = df[1, :tamponi] / population # ratio of controls per day
 		control_growth = mean([df[i+1, :tamponi] / df[i, :tamponi] for i in 1:length(df[!, :tamponi]) - 1])
@@ -110,9 +112,10 @@ module model_params
 		control_accuracy = [0.64, 0.82, 0.997]
 
 		return @dict(
-			number_point_of_interest, migration_rate,  
+			number_point_of_interest, migration_rate, 
+			threshold_before_growth, 
 			ncontrols, control_growth, T, control_accuracy,
-			R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, 
+			R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, θₜ,
 		)
 	end
 
@@ -123,16 +126,19 @@ module model_params
 		d = df[1,:deceduti]/population
 		s = (1.0-e-i-r-d)
 
-		γ = 1.0/14 
-		σ = 1.0/5.6 
-		ω = 1.0/240 
-		ξ = 0.0 
-		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) 
-		η = 1.0/20
-		R₀ = mean(estimate_R₀(df[!, :nuovi_positivi]))
+		γ = 1.0/14 # infective period
+		σ = 1.0/5.6 # exposed period
+		ω = 1.0/240 # immunity period
+		ξ = 0.0 # vaccine ratio
+		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) # mortality
+		η = 1.0/20 # Countermeasures (social distancing, masks, etc...) (lower is better)
+		ϵ = 1.0/10 # strong immune system
+		θ = 0.0 # lockdown (percentage)
+		q = γ # quarantine period
+		R₀ = estimate_R₀(df[!, :nuovi_positivi])
 
 		u = [s, e, i, r, d] # scaled between [0-1]
-		p = [R₀, γ, σ, ω, ξ, δ, η]
+		p = [R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ]
 		return u, p, (0.0, length(df[!, 1]))
 	end
 

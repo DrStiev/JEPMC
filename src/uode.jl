@@ -6,11 +6,11 @@ module uode
 	using DiffEqFlux, Flux, Lux, Optimization, OptimizationOptimisers, OptimizationOptimJL
 	using Plots, Random
 	gr() # ← ?
-
 	# https://github.com/ChrisRackauckas/universal_differential_equations/blob/master/SEIR_exposure/seir_exposure.jl
 	# https://www.youtube.com/watch?v=5zaB1B4hOnQ
 
-	rng = Random.default_rng()
+	# rng = Random.default_rng()
+	rng = Xoshiro(1234)
 	# seir equations to compute a general pandemic model
 	function pandemic!(du, u, p, t)
 		S, E, I, R, N, D, C = u

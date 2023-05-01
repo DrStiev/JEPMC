@@ -17,17 +17,19 @@ module graph
 
 	function init(;
 		number_point_of_interest, migration_rate, 
+		threshold_before_growth,
 		ncontrols, control_growth, control_accuracy,
 		R₀, # R₀ 
-		γ, # 1/ periodo infettivita'
-		σ, # 1/ periodo esposizione
-		ω, # 1/ periodo immunita
-		ξ, # 1 / vaccinazione per milion per day
-		δ, # mortality rate
-		η, # 1 / countermeasures
-		ϵ, # probability of strong immune system (only E to S)
-		q, # 1 / periodo quarantena
-		θ, # 1 / percentage of people under full lockdown
+		γ,  # 1/ periodo infettivita'
+		σ,  # 1/ periodo esposizione
+		ω,  # 1/ periodo immunita
+		ξ,  # 1 / vaccinazione per milion per day
+		δ,  # mortality rate
+		η,  # 1 / countermeasures
+		ϵ,  # probability of strong immune system (only E to S)
+		q,  # 1 / periodo quarantena
+		θ,  # 1 / percentage of people under full lockdown
+		θₜ, # duration of lockdown ≥ 0
 		T,
 		seed = 1234,
 		)
@@ -43,9 +45,10 @@ module graph
 		ncontrols *= sum(number_point_of_interest)
 
 		properties = @dict(
-			number_point_of_interest, migration_rate, 
+			number_point_of_interest, migration_rate, θₜ,
 			control_accuracy, ncontrols, control_growth, θ,
-			R₀, γ, σ, ω, δ, ξ, β = R₀*γ, η, ϵ, q, T, Is, C, 
+			R₀, γ, σ, ω, δ, ξ, β = R₀*γ, η, ϵ, q, T, Is, C,
+			threshold_before_growth, 
 		)
 		
 		# creo il modello 
@@ -71,46 +74,49 @@ module graph
 		# campiono solamente gli agenti non in quarantena, in quanto di loro conosco lo stato
 		population_vector = [agent for agent in allagents(model)]
 		population_sample = sample(filter(x -> x.detected ≠ :Q, population_vector), trunc(Int, model.ncontrols))
-		for p in population_sample
-			result!(p, model)
+		res = [result!(p, model) for p in population_sample]
+		c = count(r == :I for r in res)
+		# aumento il numero di controlli sse ho una 
+		# alta percentuale di infetti
+		if model.ncontrols ≤ sum(model.number_point_of_interest) * 0.005 # totale controlli al giorno
+			if c ≥ length(res) * model.threshold_before_growth # percentuale infetti
+				model.ncontrols *= model.control_growth
+			end
 		end
-		# aumento il numero di controlli ad ogni step del modello
-		model.ncontrols *= model.control_growth
+		model.θₜ > 0 && (model.θₜ -= 1)
 	end
 
 	function agent_step!(agent, model)
 		# mantengo la happiness tra [-1, 1]
 		agent.happiness = agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
 		# θ: variabile lockdown (percentuale)
-		if rand(model.rng) ≤ model.θ
+		if rand(model.rng) ≤ model.θ && model.θₜ > 0
 			agent.happiness += rand(Uniform(-0.2, 0.05))
 		else
 			if agent.detected ≠ :Q
-				# possibilità di non muoversi per via delle restrizioni
-				# assumendo che 0.01 ≤ η ≤ 1 un po' too strong come assunzione 
+				# possibilità di ottenere happiness negativa per via 
+				# delle contromisure troppo stringenti
 				if rand(model.rng) > model.η
-				  agent.happiness += rand(Uniform(-0.05, 0.05))
-				else
-					migrate!(agent, model)
+				  agent.happiness += rand(Uniform(-0.01, 0.0))
 				end
+				# possibilità di migrare e infettare sse non in quarantena
+				migrate!(agent, model)
+				transmit!(agent, model)
 			end
 		end
-		transmit!(agent, model)
-		update!(agent, model)
+		update_status!(agent, model)
+		update_detection!(agent, model)
 		recover_or_die!(agent, model)
+		exit_quarantine!(agent, model)
 	end	
 
 	function result!(agent, model)
 		if agent.status == :I
 			agent.detected = rand(model.rng) ≤ model.control_accuracy[1] ? :I : :S
-		end
-		if agent.status == :E
+		elseif agent.status == :E
 			agent.detected = rand(model.rng) ≤ model.control_accuracy[2] ? :I : :S
-		end
-		# in questo caso non ci importa troppo dello stato dell'agente
-		# ma ci interessa sapere che non è :I
-		if agent.status == :S || agent.status == :R
-			agent.detected = rand(model.rng) ≤ model.control_accuracy[3] ? agent.status : :I
+		else 
+			agent.detected = rand(model.rng) ≤ model.control_accuracy[3] ? :S : :I
 		end
 		return agent.detected
 	end
@@ -127,90 +133,91 @@ module graph
 	function transmit!(agent, model)
 		agent.status != :I && return
 		for contactID in ids_in_position(agent, model)
-			contact = model[contactID]
-			# se in quarantena puo' infettare di meno 
-			β = agent.detected == :Q ? model.β / 10 : model.β 
+			contact = model[contactID]  
 			# assunzione stravagante sul lockdown
-			if contact.status == :S && rand(model.rng) ≤ (β * model.η * (1.0-model.θ))
+			lock = model.θₜ > 0 ? (1.0-model.θ) : 1
+			if contact.status == :S && rand(model.rng) ≤ (model.β * model.η * lock)
 				contact.status = :E 
 			end
 		end
 	end
 
-	function update!(agent, model)
+	function update_status!(agent, model)
+		# fine periodo di latenza
+		if agent.status == :E
+			agent.days_infected += 1
+			if rand(model.rng) ≤ model.ϵ
+				agent.status = :S
+				agent.days_infected = 0
+			elseif agent.days_infected ≥ model.σ
+				agent.status = :I
+				agent.days_infected = 1
+			end
+		# avanzamento malattia + possibilità di andare in quarantena
+		elseif agent.status == :I
+			agent.days_infected += 1
+		# perdita progressiva di immunità e aumento rischio exposure
+		elseif agent.status == :R
+			agent.days_immunity -= 1
+			if rand(model.rng) ≤ 1/agent.days_immunity 
+				agent.status = :S
+				agent.days_infected = 0
+				agent.days_immunity = 0
+			end
+		end
+	end
+
+	function update_detection!(agent, model)
 		# probabilità di vaccinarsi
 		if agent.detected == :S
 			if rand(model.rng) ≤ model.ξ 
 				agent.status = :R
 				agent.detected = :R
-				return
+				agent.days_immunity = model.ω
 			end
-		end
-		# fine periodo di latenza
-		if agent.status == :E
-			if rand(model.rng) ≤ model.ϵ
-				agent.status = :S
-				return
-			end
-			if agent.days_infected ≥ (1/model.σ)
-				agent.status = :I
-				agent.days_infected = 1
-				return
-			end
-			agent.days_infected += 1
-		end
-		# avanzamento malattia + possibilità di andare in quarantena
-		if agent.status == :I
-			agent.days_infected += 1
-			return
-		end
-		# perdita progressiva di immunità e aumento rischio exposure
-		if agent.status == :R
-			agent.days_immunity -= 1
-			if rand(model.rng) ≤ 1/agent.days_immunity 
-				agent.status = :S
-				return
-			end
-		end
 		# metto in quarantena i pazienti che scopro essere positivi
-		if agent.detected == :I
+		elseif agent.detected == :I
 			agent.detected = :Q
 			agent.days_quarantined = 1
-			return
-		end
 		# avanzamento quarantena
-		if agent.detected == :Q 
+		elseif agent.detected == :Q 
 			agent.days_quarantined += 1
-			agent.happiness += rand(Uniform(-0.2, 0.05))
+			agent.happiness += rand(Uniform(-0.05, 0.05))
 			# troppa o troppo poca felicita' possono portare problemi
-			rand(model.rng) > 1-abs(agent.happiness) && (migrate!(agent, model))
+			if rand(model.rng) > 1-abs(agent.happiness) 
+				migrate!(agent, model)
+				transmit!(agent, model)
+			end
 		end
 	end
 
 	function recover_or_die!(agent, model)
 		# fine malattia
-		if agent.days_infected > 1/model.γ
+		if agent.days_infected > model.γ
 			# probabilità di morte
 			if rand(model.rng) ≤ model.δ
 				remove_agent!(agent, model)
-			 	return
-			end
-			# probabilità di guarigione
-			agent.status = :R
-			agent.days_immunity = 1/model.ω
-			agent.days_infected = 0
-		end
-		if agent.detected == :Q && agent.days_quarantined ≥ 1/model.q
-			new_status = result!(agent, model)
-			if new_status == :R || new_status == :S
-				agent.days_quarantined = 0
-			else 
-				# prolungo la quarantena
-				agent.detected = :Q
-				agent.days_quarantined ÷= 2
+				return
+			else
+				# probabilità di guarigione
+				agent.status = :R
+				agent.days_immunity = model.ω
+				agent.days_infected = 0
 			end
 		end
 	end	
+
+	function exit_quarantine!(agent, model)
+		if agent.detected == :Q && agent.days_quarantined ≥ model.q 
+			if result!(agent, model) == :S
+				agent.days_quarantined = 0
+				agent.detected = :R
+			else 
+				# prolungo la quarantena
+				agent.days_quarantined ÷= 2
+			end
+		end
+	end
 
 	function collect(model, astep, mstep; n = 100)
         susceptible(x) = count(i == :S for i in x)
@@ -222,10 +229,13 @@ module graph
 		quarantined(x) = count(i == :Q for i in x)
 		happiness(x) = mean(x)
 
-        to_collect = [(:status, susceptible), (:status, exposed), (:status, infected), (:status, recovered), (:happiness, happiness), (:detected, infected), (:detected, quarantined), (:status, dead)]
+        to_collect = [(:status, susceptible), (:status, exposed), (:status, infected), 
+			(:status, recovered), (:happiness, happiness), (:detected, infected), 
+			(:detected, quarantined), (:detected, recovered), (:status, dead)]
         data, _ = run!(model, astep, mstep, n; adata = to_collect)
 		data[!, :dead_status] = data[!, end]
-    	select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, :infected_detected, :quarantined_detected, :dead_status, :happiness_happiness)
+    	select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, 
+			:infected_detected, :quarantined_detected, :recovered_detected, :dead_status, :happiness_happiness)
         for i in 1:ncol(data)
             data[!, i] = data[!, i] / sum(model.number_point_of_interest)
         end

@@ -37,7 +37,8 @@ module test_uode
 
 	S0 = 14e6
 	u0 = [0.9*S0, 0.0, 0.0, 0.0, S0, 0.0, 0.0]
-	p_ = [10.0, 0.5944, 0.4239, 1117.3, 0.02, 1/3, 1/5,0.2, 1/11.2]
+	# 		F,    β0,      α,     κ,      μ,   σ,   γ,   d,    λ
+	p_ = [10.0, 0.5944, 0.4239, 1117.3, 0.02, 1/3, 1/5, 0.2, 1/11.2]
 	tspan = (0.0, 21.0)
 	tspan2 = (0.0,60.0)
 	# TODO: test!
@@ -59,17 +60,14 @@ module test_abm
 	population = 2500.0 
 	df = model_params.read_data()
 	abm_parameters = model_params.extract_params(df, 20, population, 0.01)
+	
 	@time model = graph.init(; abm_parameters...)
 	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; title="graph_agent_custom", path="img/video/", format=".mp4", frames=abm_parameters[:T])
-	model = graph.init(; abm_parameters...)
-	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; title="graph_agent_custom", path="img/video/", format=".mkv", frames=abm_parameters[:T])
-
-	abm_parameters = model_params.extract_params(df, 20, population, 0.01)
 	@time model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!, graph.model_step!; n=abm_parameters[:T]-1)
-	pplot.line_plot(select(data, Not([:happiness_happiness, :infected_detected, :quarantined_detected])), 
+	pplot.line_plot(select(data, Not([:happiness_happiness, :infected_detected, :quarantined_detected, :recovered_detected])), 
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent", "pdf")
-	pplot.line_plot(select(data, [:infected_detected, :quarantined_detected]), 
+	pplot.line_plot(select(data, [:infected_detected, :quarantined_detected, :recovered_detected]), 
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_countermeasures", "pdf")
 	pplot.line_plot(select(data, [:happiness_happiness]), 
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "pdf")
