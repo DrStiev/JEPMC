@@ -42,7 +42,7 @@ module test_uode
 	tspan = (0.0, 21.0)
 	tspan2 = (0.0,60.0)
 	# TODO: test!
-	pred = uode.get_prediction(u0, p_, tspan, tspan2)
+	@time pred = uode.get_prediction(u0, p_, tspan, tspan2)
 	# u0, p, tspan = model_params.extract_params(df)
 	# prob = ode.get_ODE_problem(ode.SEIR, u0, tspan, p)
 	# @time sol = ode.get_solution(prob)

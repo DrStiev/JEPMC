@@ -47,8 +47,8 @@ module graph
 		properties = @dict(
 			number_point_of_interest, migration_rate, θₜ,
 			control_accuracy, ncontrols, control_growth, θ,
-			R₀, γ, σ, ω, δ, ξ, β = R₀*γ, η, ϵ, q, T, Is, C,
-			threshold_before_growth, 
+			R₀, γ, σ, ω, δ, ξ, β = R₀/γ, η, ϵ, q, T, Is, C,
+			threshold_before_growth, infected_detected_ratio, 
 		)
 		
 		# creo il modello 
@@ -71,17 +71,16 @@ module graph
 	end
 
 	function model_step!(model)
-		# campiono solamente gli agenti non in quarantena, in quanto di loro conosco lo stato
+		# campiono solamente gli agenti non in quarantena, 
+		# in quanto di quelli in :Q conosco già lo stato
 		population_vector = [agent for agent in allagents(model)]
-		population_sample = sample(filter(x -> x.detected ≠ :Q, population_vector), trunc(Int, model.ncontrols))
+		population_sample = sample(filter(x -> x.detected ≠ :Q, population_vector), round(Int, model.ncontrols))
 		res = [result!(p, model) for p in population_sample]
-		c = count(r == :I for r in res)
-		# aumento il numero di controlli sse ho una 
-		# alta percentuale di infetti
-		if model.ncontrols ≤ sum(model.number_point_of_interest) * 0.005 # totale controlli al giorno
-			if c ≥ length(res) * model.threshold_before_growth # percentuale infetti
-				model.ncontrols *= model.control_growth
-			end
+		model.infected_detected_ratio = count(r == :I for r in res) / length(res)
+		# TODO: DA SOSTITUIRE E METTERE ALL'INTERNO DEL CONTROLLER
+		# aumento il numero di controlli sse ho una alta percentuale di infetti
+		if model.infected_detected_ratio ≥ model.threshold_before_growth # percentuale infetti
+			model.ncontrols *= model.control_growth
 		end
 		model.θₜ > 0 && (model.θₜ -= 1)
 	end
@@ -96,9 +95,7 @@ module graph
 			if agent.detected ≠ :Q
 				# possibilità di ottenere happiness negativa per via 
 				# delle contromisure troppo stringenti
-				if rand(model.rng) > model.η
-				  agent.happiness += rand(Uniform(-0.01, 0.0))
-				end
+				rand(model.rng) > model.η && (agent.happiness += rand(Uniform(-0.01, 0.0)))
 				# possibilità di migrare e infettare sse non in quarantena
 				migrate!(agent, model)
 				transmit!(agent, model)
@@ -132,14 +129,17 @@ module graph
 
 	function transmit!(agent, model)
 		agent.status != :I && return
+		#println(ids_in_position(agent, model))
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]  
 			# assunzione stravagante sul lockdown
 			lock = model.θₜ > 0 ? (1.0-model.θ) : 1
 			if contact.status == :S && rand(model.rng) ≤ (model.β * model.η * lock)
 				contact.status = :E 
+				#println("[$agent - $contact]")
 			end
 		end
+		#println()
 	end
 
 	function update_status!(agent, model)

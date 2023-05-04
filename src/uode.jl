@@ -1,11 +1,12 @@
 module uode
 	using OrdinaryDiffEq
-	using ModelingToolkit
-	using DataDrivenDiffEq
+	using ModelingToolkit, ComponentArrays
+	using DataDrivenDiffEq, ForwardDiff
 	using LinearAlgebra, DiffEqSensitivity, Optim
-	using DiffEqFlux, Flux, Lux, Optimization, OptimizationOptimisers, OptimizationOptimJL
+	using DiffEqFlux, Lux, Optimization, OptimizationOptimisers, OptimizationOptimJL
 	using Plots, Random
 	gr() # ← ?
+
 	# https://github.com/ChrisRackauckas/universal_differential_equations/blob/master/SEIR_exposure/seir_exposure.jl
 	# https://www.youtube.com/watch?v=5zaB1B4hOnQ
 
@@ -69,21 +70,18 @@ module uode
 	# Lux.jl uses functions with explicit parameters f(u,p) like FastChain, 
 	# but is fully featured and documented machine learning library.
 	# ann = FastChain(FastDense(3, 64, tanh), FastDense(64, 64, tanh), FastDense(64, 1))
-	# p = Float64.(initial_params(ann))
+	# p₀ = Float64.(initial_params(ann))
 	ann = Lux.Chain(Lux.Dense(3 => 64, tanh), Lux.Dense(64 => 64, tanh), Lux.Dense(64 => 1))
-	p₀, st = Lux.setup(rng, ann)
+	p₀, st = Lux.setup(rng, ann) #.|> Lux.gpu altrimenti ComponentArray si arrabbia
+	p₀ = p₀ |> ComponentArray
 	const losses = []
 
-	function get_uode(prob_nn, data)
+	function get_uode(prob_nn, data, u, solution)
 		### use universal ode to compute first results
-		# ERROR: Need an adjoint for constructor 
-		# SciMLSensitivity.InterpolatingAdjoint{0, true, Val{:central}, 
-		# SciMLSensitivity.ReverseDiffVJP{false}}. 
-		# Gradient is of type ChainRulesCore.ZeroTangent
 		function predict(θ) 
 			Array(concrete_solve(prob_nn, Vern7(), u, θ, saveat=solution.t,
 				abstol=1e-6, reltol=1e-6,
-				sensealg=DiffEqFlux.InterpolatingAdjoint(autojacvec=DiffEqFlux.ReverseDiffVJP())))
+				sensealg=SciMLSensitivity.InterpolatingAdjoint(autojacvec=SciMLSensitivity.ReverseDiffVJP())))
 		end
 			
 		# No regularisation right now
@@ -107,9 +105,8 @@ module uode
 		# res2_uode = DiffEqFlux.sciml_train(loss, res1_uode.minimizer, BFGS(initial_stepnorm=0.01), cb=callback, maxiters = 10000)
 		adtype = Optimization.AutoZygote()
 		optf = Optimization.OptimizationFunction((x, p₀) -> loss(x), adtype)
-		# optprob = Optimization.OptimizationProblem(optf, Lux.ComponentArray(p₀))
 		optprob = Optimization.OptimizationProblem(optf, p₀)
-		res_uode = Optimization.solve(optprob, OptimizationOptimisers.ADAM(0.01), callback=callback, maxiters=500)
+		res_uode = Optimization.solve(optprob, ADAM(0.01), callback=callback, maxiters=500)
 		optprob2 = remake(optprob, u0=res_uode.u)
 		res2_uode = Optimization.solve(optprob2, BFGS(initial_stepnorm=0.01), callback=callback, maxiters=10000, allow_f_increases=false)
 		return res2_uode
@@ -161,7 +158,7 @@ module uode
 		plot(abs.(tsdata - data))
 
 		prob_nn = ODEProblem(dudt_, u, tspan1, p) # was p₀
-		res2_uode = get_uode(prob_nn, data)
+		res2_uode = get_uode(prob_nn, data, u, solution)
 		loss(res2_uode.minimizer)
 		plot(losses, yaxis=:log, xaxis=:log, xlabel="Iterations", ylabel="Loss")
 
