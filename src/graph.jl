@@ -43,6 +43,7 @@ module graph
 		# scelgo il punto di interesse che avrà il paziente zero
 		Is = [zeros(Int, length(number_point_of_interest) - 1)..., 1]
 		ncontrols *= sum(number_point_of_interest)
+		infected_detected_ratio = 0
 
 		properties = @dict(
 			number_point_of_interest, migration_rate, θₜ,
@@ -79,9 +80,9 @@ module graph
 		model.infected_detected_ratio = count(r == :I for r in res) / length(res)
 		# TODO: DA SOSTITUIRE E METTERE ALL'INTERNO DEL CONTROLLER
 		# aumento il numero di controlli sse ho una alta percentuale di infetti
-		if model.infected_detected_ratio ≥ model.threshold_before_growth # percentuale infetti
-			model.ncontrols *= model.control_growth
-		end
+		# if model.infected_detected_ratio ≥ model.threshold_before_growth # percentuale infetti
+		# 	model.ncontrols *= model.control_growth
+		# end
 		model.θₜ > 0 && (model.θₜ -= 1)
 	end
 
@@ -236,9 +237,9 @@ module graph
 		data[!, :dead_status] = data[!, end]
     	select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, 
 			:infected_detected, :quarantined_detected, :recovered_detected, :dead_status, :happiness_happiness)
-        for i in 1:ncol(data)
-            data[!, i] = data[!, i] / sum(model.number_point_of_interest)
-        end
+        # for i in 1:ncol(data)
+        #     data[!, i] = data[!, i] / sum(model.number_point_of_interest)
+        # end
         return data
     end
 end

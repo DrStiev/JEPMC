@@ -1,17 +1,9 @@
 module controller
-	#include("uode.jl")
-	
+	using DataFrames, DataDrivenDiffEq, DataDrivenSparse, LinearAlgebra, OrdinaryDiffEq, ModelingToolkit
 
-    # https://github.com/ChrisRackauckas/universal_differential_equations/blob/master/SEIR_exposure/seir_exposure.jl
-	# https://www.youtube.com/watch?v=5zaB1B4hOnQ
-
-	# mando in run il modello per un tot numero di step, esempio 21.
-	# prendo le informazioni del model.collect e le trasformo in matrice 
-	# con Array(df) oppure Matrix(df). 
-	# provo a predire la curva di infetti e di happiness senza alcun intervento
-	# cerco di minimizzare la curva infetti e massimizzare la curca happiness.
-	# in questo modo dovrei avere un array di parametri che mi definisce 
-	# quali sono i migliori parametri da utilizzare. li applico e vedo che succedde.
+	include("graph.jl")
+	include("params.jl")
+	include("uode.jl")
 
 	# parametri su cui il controllore può agire:
 	# ξ → percentage of population vaccined per model step [0.0 - 0.03]
@@ -22,8 +14,6 @@ module controller
 	# control_growth → rateo of growth [0.0 - 1.0] 0.0 means no growth, 1.0 means double
 	# threshold_before_growth → threshold before increment controls. given by ncontrols / infected detected
 
-	include("graph.jl")
-	include("params.jl")
 	population = 2500.0
 	df = model_params.read_data()
 	abm_parameters = model_params.extract_params(df, 8, population, 0.01)
@@ -37,11 +27,29 @@ module controller
 			model.properties[:threshold_before_growth] # percentuale infetti
 			model.properties[:ncontrols] *= model.properties[:control_growth]
 		end
-		display(data)
+		show(data)
 	end
-	model.ncontrols
-	function get_data(field_to_maximize, field_to_minimize;time_interval=21)
 
+	function policy!(data::DataFrame, minimize, maximize; saveat=1, time_delay=90)
+		# piglio i dati generati dall'ABM e li uso come base. 
+		# so cosa voglio massimizzare e cosa minimizzare
+		# uso un sistema di ODE come hybrid-model per le predizioni future
+		# aggiorno i dati dell'ABM e vedo come procede.
+		# nuovo screenshoot della situazione dopo time_delay passi (giorni)
+		# se migliorato bene, se peggiorato sono cazzi 
+
+		# https://docs.sciml.ai/SciMLSensitivity/dev/getting_started/
+		# https://docs.sciml.ai/SciMLSensitivity/dev/tutorials/parameter_estimation_ode/#odeparamestim
+		# https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/
+		# https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
 	end
+
+	population = 2500.0
+	df = model_params.read_data()
+	abm_parameters = model_params.extract_params(df, 8, population, 0.01)
+	model = graph.init(; abm_parameters...)
+	data = graph.collect(model, graph.agent_step!, graph.model_step!; n=30)
+	time_passed = length(data[!,1])
+	# estrapolo andamento curve
 
 end

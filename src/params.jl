@@ -32,7 +32,7 @@ module model_params
 		pop = randexp(rng, C) * avg_population
 		pop = length(outliers) > 0 ? append!(pop, outliers) : pop
 		C = length(outliers) > 0 ? C + length(outliers) : C
-		number_point_of_interest = map((x) -> trunc(Int, x), pop)
+		number_point_of_interest = map((x) -> round(Int, x), pop)
 		migration_rate = zeros(C, C)
 		for c in 1:C
 			for c2 in 1:C
@@ -44,9 +44,6 @@ module model_params
 		migration_rate[diagind(migration_rate)] .= 1.0
 
 		T = length(df[!,1])
-
-		i = df[1,:nuovi_positivi] / population
-		r = df[1,:dimessi_guariti] / population
 
 		γ = 14 # infective period
 		σ = 5 # exposed period
