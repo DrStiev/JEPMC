@@ -74,25 +74,26 @@ module model_params
 	end
 
 	function extract_params(df)
-		e = 0.0/length(df[!, 1])
+		e = 0.0/population
 		i = df[1,:nuovi_positivi]/population
 		r = df[1,:dimessi_guariti]/population
 		d = df[1,:deceduti]/population
 		s = (1.0-e-i-r-d)
 
-		γ = 1.0/14 # infective period
-		σ = 1.0/5.6 # exposed period
-		ω = 1.0/240 # immunity period
+		γ = 1/14 # infective period
+		σ = 1/5 # exposed period
+		ω = 1/240 # immunity period
 		ξ = 0.0 # vaccine ratio
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) # mortality
 		η = 1.0/20 # Countermeasures (social distancing, masks, etc...) (lower is better)
 		ϵ = 1.0/10 # strong immune system
-		θ = 0.0 # lockdown (percentage)
-		q = γ # quarantine period
+		θ = 0.0 # lockdown percentage
+		θₜ = 1/90 # lockdown period
+		q = 1/10 # quarantine period
 		R₀ = estimate_R₀(df[!, :nuovi_positivi])
 
 		u = [s, e, i, r, d] # scaled between [0-1]
-		p = [R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ]
+		p = [R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, θₜ]
 		return u, p, (0.0, length(df[!, 1]))
 	end
 

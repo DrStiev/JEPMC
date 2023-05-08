@@ -1,7 +1,7 @@
 module controller
 	using DataFrames, DataDrivenDiffEq, DataDrivenSparse
 	using LinearAlgebra, OrdinaryDiffEq, ModelingToolkit
-	using Plots
+	using Plots, Random
 	include("graph.jl")
 	include("params.jl")
 	include("uode.jl")
@@ -44,7 +44,7 @@ module controller
 	df = model_params.read_data()
 	abm_parameters = model_params.extract_params(df, 8, population, 0.01)
 	model = graph.init(; abm_parameters...)
-	data = graph.collect(model, graph.agent_step!, graph.model_step!; n=45)
+	data = graph.collect(model, graph.agent_step!, graph.model_step!; n=60)
 	time_passed = [i for i in 1:length(data[!,1])]
 	
 	# To estimate the system, we first create a DataDrivenProblem, which requires measurement data. 
@@ -56,7 +56,7 @@ module controller
 
 	# Now we infer the system structure. First we define a Basis which collects all possible candidate terms. 
 	@variables u[1:9] c[1:1]
-	@parameters w[1:11]
+	@parameters w[1:9]
 	u = collect(u)
 	c = collect(c)
 	w = collect(w)
@@ -65,6 +65,8 @@ module controller
 
 	basis = Basis(h, u, parameters=w, controls=c)
 
+	using Random
+	rng = Xoshiro(1234)
 	sampler = DataProcessing(split = 0.8, shuffle = true, batchsize = 30, rng = rng)
 	λs = exp10.(-10:0.1:0)
 	opt = STLSQ(λs)
@@ -74,4 +76,12 @@ module controller
 	system = get_basis(res)
 	params = get_parameter_map(system)
 
+	plot(
+		plot(prob), plot(res), layout = (1,2)
+	)
+
+	u,p,t = model_params.extract_params(df)
+	prob = ODEProblem(uode.seir!, u, t, p)
+	sol = solve(prob, Tsit5())
+	plot(sol)
 end

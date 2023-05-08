@@ -26,7 +26,7 @@ module graph
 		ξ,  # 1 / vaccinazione per milion per day
 		δ,  # mortality rate
 		η,  # 1 / countermeasures
-		ϵ,  # probability of strong immune system (only E to S)
+		ϵ,  # probability of strong immune system (E to S)
 		q,  # 1 / periodo quarantena
 		θ,  # 1 / percentage of people under full lockdown
 		θₜ, # duration of lockdown ≥ 0
@@ -93,9 +93,6 @@ module graph
 			agent.happiness += rand(Uniform(-0.2, 0.05))
 		else
 			if agent.detected ≠ :Q
-				# possibilità di ottenere happiness negativa per via 
-				# delle contromisure troppo stringenti
-				rand(model.rng) > model.η && (agent.happiness += rand(Uniform(-0.01, 0.0)))
 				# possibilità di migrare e infettare sse non in quarantena
 				migrate!(agent, model)
 				transmit!(agent, model)
@@ -153,7 +150,7 @@ module graph
 				agent.status = :I
 				agent.days_infected = 1
 			end
-		# avanzamento malattia + possibilità di andare in quarantena
+		# avanzamento malattia
 		elseif agent.status == :I
 			agent.days_infected += 1
 		# perdita progressiva di immunità e aumento rischio exposure
@@ -184,10 +181,10 @@ module graph
 			agent.days_quarantined += 1
 			agent.happiness += rand(Uniform(-0.05, 0.05))
 			# troppa o troppo poca felicita' possono portare problemi
-			if rand(model.rng) > 1-abs(agent.happiness) 
-				migrate!(agent, model)
-				transmit!(agent, model)
-			end
+			# if rand(model.rng) > 1-abs(agent.happiness) 
+			# 	migrate!(agent, model)
+			# 	transmit!(agent, model)
+			# end
 		end
 	end
 
@@ -235,7 +232,8 @@ module graph
         data, _ = run!(model, astep, mstep, n; adata = to_collect)
 		data[!, :dead_status] = data[!, end]
     	select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, 
-			:infected_detected, :quarantined_detected, :recovered_detected, :dead_status, :happiness_happiness)
+			:infected_detected, :quarantined_detected, :recovered_detected, 
+			:dead_status, :happiness_happiness)
         return data
     end
 end

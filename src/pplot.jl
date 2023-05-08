@@ -80,7 +80,7 @@ module pplot
         ax_detected = Axis(count_layout[2, 1]; ylabel="Individuals detected")
         scatterlines!(ax_detected, id; label="infected")
         scatterlines!(ax_detected, q; label="quarantined")
-        scatterlines!(ax_detected, rd; label="recovered")
+        #scatterlines!(ax_detected, rd; label="recovered")
         Legend(count_layout[2, 2], ax_detected;)
 
         ax_happiness = Axis(count_layout[3, 1]; ylabel = "Average happiness")
