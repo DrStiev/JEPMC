@@ -27,7 +27,7 @@ module model_params
 		return mean([data[i+1]/data[i] for i in 1:length(data)-1])
 	end
 
-	function extract_params(df, C, avg_population::Float64, max_travel_rate, seed=1234; outliers = [])
+	function extract_params(df, C, avg_population, max_travel_rate, seed=1234; outliers = [])
 		rng = Xoshiro(seed)
 		pop = randexp(rng, C) * avg_population
 		pop = length(outliers) > 0 ? append!(pop, outliers) : pop

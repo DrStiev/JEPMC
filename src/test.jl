@@ -5,7 +5,7 @@ module test_parameters
 	
 	@time ode_parameters = model_params.extract_params(df)
 	@show ode_parameters
-	@time abm_parameters = model_params.extract_params(df, 8, (50,5000), 0.01)
+	@time abm_parameters = model_params.extract_params(df, 8, 2000, 0.01)
 	@show abm_parameters
 end
 
