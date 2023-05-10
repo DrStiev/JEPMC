@@ -3,10 +3,8 @@ module test_parameters
 
 	@time df = model_params.get_data("data/italy/")
 	
+	@time abm_parameters = model_params.extract_params(df, 20, 0.01)
 	@time ode_parameters = model_params.extract_params(df)
-	@show ode_parameters
-	@time abm_parameters = model_params.extract_params(df, 8, 2000, 0.01)
-	@show abm_parameters
 end
 
 module test_plot
@@ -40,9 +38,8 @@ module test_abm
 	include("pplot.jl")
 	include("graph.jl")
 
-	population = 2500.0 
 	df = model_params.read_data()
-	abm_parameters = model_params.extract_params(df, 20, population, 0.01)
+	abm_parameters = model_params.extract_params(df, 20, 0.01)
 	
 	@time model = graph.init(; abm_parameters...)
 	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; title="graph_agent_custom", path="img/video/", format=".mp4", frames=abm_parameters[:T])

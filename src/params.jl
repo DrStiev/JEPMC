@@ -1,11 +1,8 @@
 module model_params
     using CSV, Random, Distributions, DataFrames
-	using Statistics: mean
-    using LinearAlgebra: diagind
-	using Downloads
-	using DrWatson: @dict
-
-	const population = 58_850_717 # dati istat
+	using DataFrames, DataDrivenDiffEq, DataDrivenSparse
+	using LinearAlgebra, OrdinaryDiffEq, ModelingToolkit
+	using Statistics, Downloads, DrWatson
 
 	# https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv
 	# https://covid19.who.int/WHO-COVID-19-global-data.csv
@@ -23,13 +20,48 @@ module model_params
 		return DataFrame(CSV.File(path, delim=",", header=1))
 	end
 
+	# to be tested!
+	function system_identification(data, seed=1234)
+		eng = Xoshiro(seed)
+		prob = ContinuousDataDrivenProblem(Array(data)', 1:length(data[!,1]), GaussianKernel())
+		plot(prob) 
+
+		# relevant states: S, I, R, D?
+		@variables u[1:4]
+		polys = Operation[]
+		for i ∈ 0:3, j ∈ 0:3, k ∈ 0:3, l ∈ 0:3
+			push!(polys, u[1]^i * u[2]^j * u[3]^k * u[4]^l)
+		end
+		h = [cos.(u)...; sin.(u)...; unique(polys)...]
+		basis = Basis(h, u)
+
+		sampler = DataProcessing(split=0.8, shuffle=true, batchsize=30, rng=rng)
+		# sparsity threshold
+		λs = exp10.(-10:0.1:0)
+		opt = STLSQ(λs) # iterate over different sparsity thresholds
+		res = solve(prob, basis, opt, options=DataDrivenCommonOptions(data_processing=sampler, digits=1))
+
+		plot(plot(prob), plot(res), layout=(1,2))
+
+		system = get_basis(res)
+		params = get_parameter_map(system)
+
+		return system, params
+	end
+
+	# find better estimator maybe from paper
 	function estimate_R₀(data)
 		return mean([data[i+1]/data[i] for i in 1:length(data)-1])
 	end
 
-	function extract_params(df, C, avg_population, max_travel_rate, seed=1234; outliers = [])
+	# find better estimation
+	function estimate_control_growth(data)
+		return (data[end,:tamponi]/data[1,:tamponi])^(1/length(data[!,1]))-1
+	end
+
+	function extract_params(df, C, max_travel_rate, population=58_850_717, seed=1234; outliers = [])
 		rng = Xoshiro(seed)
-		pop = randexp(rng, C) * avg_population
+		pop = randexp(rng, C) * round(Int, (population / df[1,:nuovi_positivi])/C)
 		pop = length(outliers) > 0 ? append!(pop, outliers) : pop
 		C = length(outliers) > 0 ? C + length(outliers) : C
 		number_point_of_interest = map((x) -> round(Int, x), pop)
@@ -58,7 +90,7 @@ module model_params
 		threshold_before_growth = 0.05
 		R₀ = estimate_R₀(df[!, :nuovi_positivi])
 		ncontrols = df[1, :tamponi] / population # ratio of controls per day
-		control_growth = mean([df[i+1, :tamponi] / df[i, :tamponi] for i in 1:length(df[!, :tamponi]) - 1])
+		control_growth = estimate_control_growth(df)
 		# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
 		# people with confirmed covid case (:I) -> (73 with symptoms + 55 no symptoms)/2 = 64% accuracy
 		# people with confirmed covid case (:E) -> 82% accuracy
@@ -67,13 +99,13 @@ module model_params
 
 		return @dict(
 			number_point_of_interest, migration_rate, 
-			threshold_before_growth, 
+			threshold_before_growth,
 			ncontrols, control_growth, T, control_accuracy,
 			R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, θₜ,
 		)
 	end
 
-	function extract_params(df)
+	function extract_params(df, population = 58_850_717)
 		e = 0.0/population
 		i = df[1,:nuovi_positivi]/population
 		r = df[1,:dimessi_guariti]/population
