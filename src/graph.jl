@@ -13,24 +13,27 @@ module graph
 		status::Symbol # :S, :E, :I, :R (:V)
 		detected::Symbol # :S, :I, :Q, :R (:V)
 		happiness::Float64 # [-1, 1]
+		β::Float64 # agent infectiveness
+		γ::Int # agent recovery time
+		σ::Int # agent exposure time
+		ω::Int # immunity period
+		δ::Float64 # mortality rate
 	end
 
 	function init(;
 		number_point_of_interest, migration_rate, 
-		threshold_before_growth,
 		ncontrols, control_growth, control_accuracy,
 		R₀, # R₀ 
-		γ,  # 1/ periodo infettivita'
-		σ,  # 1/ periodo esposizione
-		ω,  # 1/ periodo immunita
+		γ,  # periodo infettivita'
+		σ,  # periodo esposizione
+		ω,  # periodo immunita
 		ξ,  # 1 / vaccinazione per milion per day
 		δ,  # mortality rate
 		η,  # 1 / countermeasures
 		ϵ,  # probability of strong immune system (E to S)
-		q,  # 1 / periodo quarantena
-		θ,  # 1 / percentage of people under full lockdown
+		q,  # periodo quarantena
+		θ,  # percentage of people under full lockdown
 		θₜ, # duration of lockdown ≥ 0
-		T,
 		seed = 1234,
 		)
 		rng = Xoshiro(seed)
@@ -43,13 +46,11 @@ module graph
 		# scelgo il punto di interesse che avrà il paziente zero
 		Is = [zeros(Int, length(number_point_of_interest) - 1)..., 1]
 		ncontrols *= sum(number_point_of_interest)
-		infected_detected_ratio = 0
-
+	
 		properties = @dict(
 			number_point_of_interest, migration_rate, θₜ,
 			control_accuracy, ncontrols, control_growth, θ,
-			R₀, γ, σ, ω, δ, ξ, β = R₀/γ, η, ϵ, q, T, Is, C,
-			threshold_before_growth, infected_detected_ratio, 
+			R₀, ξ, η, ϵ, q, Is, C, 
 		)
 		
 		# creo il modello 
@@ -57,7 +58,12 @@ module graph
 
 		# aggiungo la mia popolazione al modello
 		for city in 1:C, _ in 1:number_point_of_interest[city]
-			add_agent!(city, model, 0, 0, 0, :S, :S, 0.0) # Suscettibile
+			# assumo μ = valore medio dati, σ = μ/10
+			γₐ = round(Int, abs(rand(Normal(γ, γ/10))))
+			σₐ = round(Int, abs(rand(Normal(σ, σ/10))))
+			δₐ = abs(rand(Normal(δ, δ/10)))
+			ωₐ = round(Int, abs(rand(Normal(ω, ω/10))))
+			add_agent!(city, model, 0, 0, 0, :S, :S, 0.0, 0.0, γₐ, σₐ, ωₐ, δₐ) # Suscettibile
 		end
 		# aggiungo il paziente zero
 		for city in 1:C
@@ -66,6 +72,7 @@ module graph
 				agent = model[inds[n]]
 				agent.status = :I # Infetto
 				agent.days_infected = 1
+				agent.β = abs(rand(Normal(R₀, R₀/10)))/agent.γ
 			end
 		end
 		return model
@@ -80,6 +87,9 @@ module graph
 		for p in population_sample
 			result!(p, model)
 		end
+		# ad ogni passo incremento il numero di controlli effettuati
+		# questo incremento potrebbe seguire una curva invece che 
+		# essere fissato
 		model.ncontrols += model.ncontrols*model.control_growth
 		model.θₜ > 0 && (model.θₜ -= 1)
 	end
@@ -89,7 +99,7 @@ module graph
 		agent.happiness = agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
 		# θ: variabile lockdown (percentuale)
 		if rand(model.rng) ≤ model.θ && model.θₜ > 0
-			agent.happiness += rand(Uniform(-0.2, 0.05))
+			agent.happiness += rand(Normal(-0.1, 0.05))
 		else
 			if agent.detected ≠ :Q
 				# possibilità di migrare e infettare sse non in quarantena
@@ -119,7 +129,7 @@ module graph
 		m = sample(model.rng, 1:(model.C), Weights(model.migration_rate[pid, :]))
 		if m ≠ pid
 			move_agent!(agent, m, model)
-			agent.happiness += rand(Uniform(-0.05,  0.2))
+			agent.happiness += rand(Normal(0.1, 0.05))
 		end
 	end
 
@@ -129,8 +139,9 @@ module graph
 			contact = model[contactID]  
 			# assunzione stravagante sul lockdown
 			lock = model.θₜ > 0 ? (1.0-model.θ) : 1
-			if contact.status == :S && rand(model.rng) ≤ (model.β * model.η * lock)
+			if contact.status == :S && rand(model.rng) ≤ (agent.β * model.η * lock)
 				contact.status = :E 
+				contact.β = abs(rand(Normal(model.R₀, model.R₀/10)))/contact.γ
 			end
 		end
 	end
@@ -142,7 +153,8 @@ module graph
 			if rand(model.rng) ≤ model.ϵ
 				agent.status = :S
 				agent.days_infected = 0
-			elseif agent.days_infected ≥ model.σ
+				agent.β = 0.0
+			elseif agent.days_infected ≥ agent.σ
 				agent.status = :I
 				agent.days_infected = 1
 			end
@@ -166,16 +178,17 @@ module graph
 			if rand(model.rng) ≤ model.ξ 
 				agent.status = :R
 				agent.detected = :R
-				agent.days_immunity = model.ω
+				agent.days_immunity = agent.ω
 			end
 		# metto in quarantena i pazienti che scopro essere positivi
 		elseif agent.detected == :I
 			agent.detected = :Q
+			agent.β /= 10 # riduzione infettività
 			agent.days_quarantined = 1
 		# avanzamento quarantena
 		elseif agent.detected == :Q 
 			agent.days_quarantined += 1
-			agent.happiness += rand(Uniform(-0.05, 0.05))
+			agent.happiness += rand(Normal(0, 0.05))
 			# troppa o troppo poca felicita' possono portare problemi
 			if rand(model.rng) > 1-abs(agent.happiness) 
 				migrate!(agent, model)
@@ -186,22 +199,23 @@ module graph
 
 	function recover_or_die!(agent, model)
 		# fine malattia
-		if agent.days_infected > model.γ
+		if agent.days_infected > agent.γ
 			# probabilità di morte
-			if rand(model.rng) ≤ model.δ
+			if rand(model.rng) ≤ agent.δ
 				remove_agent!(agent, model)
 				return
 			else
 				# probabilità di guarigione
 				agent.status = :R
-				agent.days_immunity = model.ω
+				agent.days_immunity = agent.ω
 				agent.days_infected = 0
+				agent.β = 0.0
 			end
 		end
 	end	
 
 	function exit_quarantine!(agent, model)
-		if agent.detected == :Q && agent.days_quarantined ≥ model.q 
+		if agent.detected == :Q && agent.days_quarantined > model.q 
 			if result!(agent, model) == :S
 				agent.days_quarantined = 0
 				agent.detected = :R

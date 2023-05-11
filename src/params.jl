@@ -2,7 +2,7 @@ module model_params
     using CSV, Random, Distributions, DataFrames
 	using DataFrames, DataDrivenDiffEq, DataDrivenSparse
 	using LinearAlgebra, OrdinaryDiffEq, ModelingToolkit
-	using Statistics, Downloads, DrWatson
+	using Statistics, Downloads, DrWatson, Plots
 
 	# https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv
 	# https://covid19.who.int/WHO-COVID-19-global-data.csv
@@ -22,11 +22,10 @@ module model_params
 
 	# to be tested!
 	function system_identification(data, seed=1234)
-		eng = Xoshiro(seed)
 		prob = ContinuousDataDrivenProblem(Array(data)', 1:length(data[!,1]), GaussianKernel())
-		plot(prob) 
+		# plot(prob) 
 
-		# relevant states: S, I, R, D?
+		# relevant states?
 		@variables u[1:4]
 		polys = Operation[]
 		for i ∈ 0:3, j ∈ 0:3, k ∈ 0:3, l ∈ 0:3
@@ -35,13 +34,13 @@ module model_params
 		h = [cos.(u)...; sin.(u)...; unique(polys)...]
 		basis = Basis(h, u)
 
-		sampler = DataProcessing(split=0.8, shuffle=true, batchsize=30, rng=rng)
+		sampler = DataProcessing(split=0.8, shuffle=true, batchsize=30, rng=Xoshiro(seed))
 		# sparsity threshold
 		λs = exp10.(-10:0.1:0)
 		opt = STLSQ(λs) # iterate over different sparsity thresholds
 		res = solve(prob, basis, opt, options=DataDrivenCommonOptions(data_processing=sampler, digits=1))
 
-		plot(plot(prob), plot(res), layout=(1,2))
+		#plot(plot(prob), plot(res), layout=(1,2))
 
 		system = get_basis(res)
 		params = get_parameter_map(system)
@@ -59,9 +58,9 @@ module model_params
 		return (data[end,:tamponi]/data[1,:tamponi])^(1/length(data[!,1]))-1
 	end
 
-	function extract_params(df, C, max_travel_rate, population=58_850_717, seed=1234; outliers = [])
+	function extract_params(df, C, max_travel_rate, avg=1000, population=58_850_717, seed=1234; outliers = [])
 		rng = Xoshiro(seed)
-		pop = randexp(rng, C) * round(Int, (population / df[1,:nuovi_positivi])/C)
+		pop = randexp(rng, C) * avg # round(Int, (population / df[1,:nuovi_positivi]) / C) # alla fine non cambia il risultato
 		pop = length(outliers) > 0 ? append!(pop, outliers) : pop
 		C = length(outliers) > 0 ? C + length(outliers) : C
 		number_point_of_interest = map((x) -> round(Int, x), pop)
@@ -75,8 +74,6 @@ module model_params
 		migration_rate = (migration_rate .* max_travel_rate) ./ maxM
 		migration_rate[diagind(migration_rate)] .= 1.0
 
-		T = length(df[!,1])
-
 		γ = 14 # infective period
 		σ = 5 # exposed period
 		ω = 240 # immunity period
@@ -87,9 +84,8 @@ module model_params
 		θ = 0.0 # lockdown percentage
 		θₜ = 90 # lockdown period
 		q = 10 # quarantine period
-		threshold_before_growth = 0.05
 		R₀ = estimate_R₀(df[!, :nuovi_positivi])
-		ncontrols = df[1, :tamponi] / population # ratio of controls per day
+		ncontrols = df[1, :tamponi] / population
 		control_growth = estimate_control_growth(df)
 		# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
 		# people with confirmed covid case (:I) -> (73 with symptoms + 55 no symptoms)/2 = 64% accuracy
@@ -99,8 +95,7 @@ module model_params
 
 		return @dict(
 			number_point_of_interest, migration_rate, 
-			threshold_before_growth,
-			ncontrols, control_growth, T, control_accuracy,
+			ncontrols, control_growth, control_accuracy,
 			R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, θₜ,
 		)
 	end
