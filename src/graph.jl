@@ -164,9 +164,9 @@ module graph
 			agent.days_infected += 1
 		# perdita progressiva di immunità e aumento rischio exposure
 		elseif agent.status == :R
-			agent.days_immunity -= 1
+			# agent.days_immunity -= 1
 			# non sembra comportarsi come dovrebbe
-			if rand(model.rng) < 1/agent.days_immunity 
+			if rand(model.rng) < 1/agent.ω # 1/agent.days_immunity 
 				agent.status = :S
 				agent.days_infected = 0
 				agent.days_immunity = 0
@@ -209,7 +209,7 @@ module graph
 			end
 			# probabilità di guarigione
 			agent.status = :R
-			agent.days_immunity = agent.ω
+			# agent.days_immunity = agent.ω
 			agent.days_infected = 0
 			agent.β = 0.0
 		end

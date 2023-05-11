@@ -21,7 +21,9 @@ module model_params
 	end
 
 	# to be tested!
-	function system_identification(data, seed=1234)
+	# https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/
+	function system_identification(data, seed=1337)
+		# ERROR: InexactError: Int64(749.1302751376295)
 		prob = ContinuousDataDrivenProblem(Array(data)', 1:length(data[!,1]), GaussianKernel())
 		# plot(prob) 
 
