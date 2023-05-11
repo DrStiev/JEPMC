@@ -49,11 +49,14 @@ module test_abm
 	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; title="graph_agent_custom", path="img/video/", format=".mp4", frames=length(df[!,1])-1)
 	@time model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!, graph.model_step!; n=length(df[!,1])-1)
-	pplot.line_plot(select(data, Not([:happiness_happiness, :infected_detected, :quarantined_detected, :recovered_detected])), 
+	pplot.line_plot(
+		select(data, Not([:happiness_happiness, :infected_detected, :quarantined_detected, :recovered_detected])), 
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent", "pdf")
-	pplot.line_plot(select(data, [:infected_detected, :quarantined_detected, :recovered_detected]), 
+	pplot.line_plot(
+		select(data, [:infected_detected, :quarantined_detected, :recovered_detected]), 
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_countermeasures", "pdf")
-	pplot.line_plot(select(data, [:happiness_happiness]), 
+	pplot.line_plot(
+		select(data, [:happiness_happiness]), 
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "pdf")
 end
 

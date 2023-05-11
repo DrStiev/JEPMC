@@ -98,7 +98,7 @@ module graph
 		# mantengo la happiness tra [-1, 1]
 		agent.happiness = agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
 		# θ: variabile lockdown (percentuale)
-		if rand(model.rng) ≤ model.θ && model.θₜ > 0
+		if rand(model.rng) < model.θ && model.θₜ > 0
 			agent.happiness += rand(Normal(-0.1, 0.05))
 		else
 			if agent.detected ≠ :Q
@@ -115,11 +115,11 @@ module graph
 
 	function result!(agent, model)
 		if agent.status == :I
-			agent.detected = rand(model.rng) ≤ model.control_accuracy[1] ? :I : :S
+			agent.detected = rand(model.rng) < model.control_accuracy[1] ? :I : :S
 		elseif agent.status == :E
-			agent.detected = rand(model.rng) ≤ model.control_accuracy[2] ? :I : :S
+			agent.detected = rand(model.rng) < model.control_accuracy[2] ? :I : :S
 		else 
-			agent.detected = rand(model.rng) ≤ model.control_accuracy[3] ? :S : :I
+			agent.detected = rand(model.rng) < model.control_accuracy[3] ? :S : :I
 		end
 		return agent.detected
 	end
@@ -139,7 +139,7 @@ module graph
 			contact = model[contactID]  
 			# assunzione stravagante sul lockdown
 			lock = model.θₜ > 0 ? (1.0-model.θ) : 1
-			if contact.status == :S && rand(model.rng) ≤ (agent.β * model.η * lock)
+			if contact.status == :S && rand(model.rng) < (agent.β * model.η * lock)
 				contact.status = :E 
 				contact.β = abs(rand(Normal(model.R₀, model.R₀/10)))/contact.γ
 			end
@@ -150,11 +150,12 @@ module graph
 		# fine periodo di latenza
 		if agent.status == :E
 			agent.days_infected += 1
-			if rand(model.rng) ≤ model.ϵ
+			# non sembra entrare in azione
+			if rand(model.rng) < model.ϵ
 				agent.status = :S
 				agent.days_infected = 0
 				agent.β = 0.0
-			elseif agent.days_infected ≥ agent.σ
+			elseif agent.days_infected > agent.σ
 				agent.status = :I
 				agent.days_infected = 1
 			end
@@ -164,7 +165,8 @@ module graph
 		# perdita progressiva di immunità e aumento rischio exposure
 		elseif agent.status == :R
 			agent.days_immunity -= 1
-			if rand(model.rng) ≤ 1/agent.days_immunity 
+			# non sembra comportarsi come dovrebbe
+			if rand(model.rng) < 1/agent.days_immunity 
 				agent.status = :S
 				agent.days_infected = 0
 				agent.days_immunity = 0
@@ -175,7 +177,7 @@ module graph
 	function update_detection!(agent, model)
 		# probabilità di vaccinarsi
 		if agent.detected == :S
-			if rand(model.rng) ≤ model.ξ 
+			if rand(model.rng) < model.ξ 
 				agent.status = :R
 				agent.detected = :R
 				agent.days_immunity = agent.ω
@@ -201,16 +203,15 @@ module graph
 		# fine malattia
 		if agent.days_infected > agent.γ
 			# probabilità di morte
-			if rand(model.rng) ≤ agent.δ
+			if rand(model.rng) < agent.δ
 				remove_agent!(agent, model)
 				return
-			else
-				# probabilità di guarigione
-				agent.status = :R
-				agent.days_immunity = agent.ω
-				agent.days_infected = 0
-				agent.β = 0.0
 			end
+			# probabilità di guarigione
+			agent.status = :R
+			agent.days_immunity = agent.ω
+			agent.days_infected = 0
+			agent.β = 0.0
 		end
 	end	
 
