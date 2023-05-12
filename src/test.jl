@@ -60,6 +60,8 @@ module test_abm
 	pplot.line_plot(
 		select(data, [:happiness_happiness]),
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "pdf")
+
+	model_params.save_parameters(model.properties, "data/parameters/")
 end
 
 module test_controller

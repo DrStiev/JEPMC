@@ -2,7 +2,7 @@ module pplot
     using Plots, LaTeXStrings, StatsPlots
     using InteractiveDynamics, CairoMakie
     using DataFrames, SciMLBase, Dates, CSV
-    using Agents, GraphMakie
+    using Agents, GraphMakie, GLMakie
     using Statistics: mean
 
     city_size(agents) = 0.005 * length(agents)
@@ -21,11 +21,11 @@ module pplot
             push!(w, 0.004 * length(model.space.stored_ids[e.src]))
             push!(w, 0.004 * length(model.space.stored_ids[e.dst]))
         end
+        filter!(>(0), w)
         return w
     end
 
-    # FIXME
-    graphplotkwargs = (;
+    graphplotkwargs = (
         layout = GraphMakie.Shell(),
         arrow_show = false,
         edge_color = edge_color,
@@ -93,12 +93,12 @@ module pplot
             autolimits!(ax_seir)
         end
 
-        record(fig, name) do io
+        GLMakie.record(fig, name) do io
             for _ in 1:step
-                recordframe!(io)
+                GLMakie.recordframe!(io)
                 Agents.step!(abmobs, 1)
             end
-            recordframe!(io)
+            GLMakie.recordframe!(io)
         end
     end
 
@@ -108,10 +108,9 @@ module pplot
         isdir(path) == false && mkpath(path)
         name = path*title*"_"*string(today())*format
 
-        # experiment custom plot
         fig, ax, abmobs = abmplot(model;
         agent_step! = astep, model_step! = mstep, 
-        as=city_size, ac=city_color, graphplotkwargs...,
+        as=city_size, ac=city_color, graphplotkwargs = graphplotkwargs,
         adata=get_adata(), mdata=get_mdata(model), figure=(; resolution=(1600,800)))
         custom_layout(fig, abmobs, frames, name)
     end

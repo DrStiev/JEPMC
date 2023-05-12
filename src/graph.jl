@@ -18,6 +18,7 @@ module graph
 		σ::Int # agent exposure time
 		ω::Int # immunity period
 		δ::Float64 # mortality rate
+		η::Float64 # reduction from using countermeasures
 	end
 
 	function init(;
@@ -29,7 +30,7 @@ module graph
 		ω,  # periodo immunita
 		ξ,  # 1 / vaccinazione per milion per day
 		δ,  # mortality rate
-		η,  # 1 / countermeasures
+		η,  # 1 / countermeasures [0.0:1.0]
 		q,  # periodo quarantena
 		θ,  # percentage of people under full lockdown
 		θₜ, # duration of lockdown ≥ 0
@@ -49,7 +50,7 @@ module graph
 		properties = @dict(
 			number_point_of_interest, migration_rate, θₜ,
 			control_accuracy, ncontrols, control_growth, θ,
-			R₀, ξ, η, q, Is, C, qinit = q, is_lockdown=false,
+			R₀, ξ, q, Is, C, qinit = q, is_lockdown=false,
 		)
 		
 		# creo il modello 
@@ -62,7 +63,9 @@ module graph
 			σₐ = round(Int, abs(rand(Normal(σ, σ/10))))
 			δₐ = abs(rand(Normal(δ, δ/10)))
 			ωₐ = round(Int, abs(rand(Normal(ω, ω/10))))
-			add_agent!(city, model, 0, 0, 0, :S, :S, 0.0, 0.0, γₐ, σₐ, ωₐ, δₐ) # Suscettibile
+			ηₐ = abs(rand(Normal(η, η/10))) # semplicistico
+			ηₐ = ηₐ > 1.0 ? 1.0 : ηₐ # correzione valore out of bounds
+			add_agent!(city, model, 0, 0, 0, :S, :S, 0.0, 0.0, γₐ, σₐ, ωₐ, δₐ, ηₐ) # Suscettibile
 		end
 		# aggiungo il paziente zero
 		for city in 1:C
@@ -77,7 +80,7 @@ module graph
 		return model
 	end
 
-	function variant!(β, γ, σ, ω, δ)
+	function variant!()
 		# https://www.nature.com/articles/s41579-023-00878-2
 		# 240 giorni prima che iniziasse ad essere rilevata una
 		# mutazione (round(Int, abs(Normal(time, time/10))))
@@ -115,26 +118,20 @@ module graph
 			model.q = model.qinit
 			model.is_lockdown = false
 		end
-		# model.θₜ > 0 && (model.θₜ -= 1)
 	end
 
 	function agent_step!(agent, model)
 		# mantengo la happiness tra [-1, 1]
+		# piu' contromisure ci sono piu' infelici saranno i miei agenti
+		agent.happiness += rand(Normal(-(agent.η)^-1/1000, (agent.η)^-1/1000))
 		agent.happiness = agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
-		# θ: variabile lockdown (percentuale)
-		if rand(model.rng) < model.θ && model.θₜ > 0
-			agent.happiness += rand(Normal(-0.1, 0.05))
-		else
-			if agent.detected ≠ :Q
-				# possibilità di migrare e infettare sse non in quarantena
-				migrate!(agent, model)
-				transmit!(agent, model)
-			end
+		if agent.detected ≠ :Q
+			# possibilità di migrare e infettare sse non in quarantena
+			migrate!(agent, model)
+			transmit!(agent, model)
 		end
-		update_status!(agent, model)
-		update_detection!(agent, model)
+		update!(agent, model)
 		recover_or_die!(agent, model)
-		exit_quarantine!(agent, model)
 	end	
 
 	function result!(agent, model)
@@ -161,16 +158,14 @@ module graph
 		agent.status != :I && return
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]  
-			# assunzione stravagante sul lockdown
-			lock = model.θₜ > 0 ? (1.0-model.θ) : 1
-			if contact.status == :S && rand(model.rng) < (agent.β * model.η * lock)
+			if contact.status == :S && rand(model.rng) < (agent.β * agent.η * contact.η)
 				contact.status = :E 
 				contact.β = abs(rand(Normal(model.R₀, model.R₀/10)))/contact.γ
 			end
 		end
 	end
 
-	function update_status!(agent, model)
+	function update!(agent, model)
 		# fine periodo di latenza
 		if agent.status == :E
 			agent.days_infected += 1
@@ -191,9 +186,7 @@ module graph
 				agent.days_immunity = 0
 			end
 		end
-	end
 
-	function update_detection!(agent, model)
 		# probabilità di vaccinarsi
 		if agent.detected == :S
 			if rand(model.rng) < model.ξ 
@@ -210,7 +203,7 @@ module graph
 		elseif agent.detected == :Q 
 			agent.β = 0.0
 			agent.days_quarantined += 1
-			agent.happiness += rand(Normal(0, 0.05))
+			agent.happiness += rand(Normal(-0.05, 0.05))
 			# troppa o troppo poca felicita' possono portare problemi
 			if rand(model.rng) > 1-abs(agent.happiness) 
 				# riprende ad essere infettivo
@@ -235,9 +228,7 @@ module graph
 			agent.days_infected = 0
 			agent.β = 0.0
 		end
-	end	
 
-	function exit_quarantine!(agent, model)
 		if agent.detected == :Q && agent.days_quarantined > model.q 
 			if result!(agent, model) == :S
 				agent.days_quarantined = 0
@@ -247,7 +238,7 @@ module graph
 				agent.days_quarantined ÷= 2
 			end
 		end
-	end
+	end	
 
 	function collect(model, astep, mstep; n = 100)
         susceptible(x) = count(i == :S for i in x)

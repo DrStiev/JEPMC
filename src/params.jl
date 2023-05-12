@@ -127,7 +127,7 @@ module model_params
 		return u, p, (0.0, length(df[!, 1]))
 	end
 
-	function save_parameters(params, path, title = title)
+	function save_parameters(params, path, title="parameters")
 		isdir(path) == false && mkpath(path) 
 		CSV.write(path*title*"_"*string(today())*".csv", DataFrame(params))
 	end
