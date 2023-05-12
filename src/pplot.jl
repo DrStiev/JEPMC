@@ -26,8 +26,9 @@ module pplot
     end
 
     graphplotkwargs = (
-        layout = GraphMakie.Shell(),
-        arrow_show = false,
+        layout = GraphMakie.Spring(),
+        arrow_show = true,
+        arrow_shift = :end,
         edge_color = edge_color,
         edge_width = edge_width,
         edge_plottype = :linesegments
@@ -93,12 +94,13 @@ module pplot
             autolimits!(ax_seir)
         end
 
-        GLMakie.record(fig, name) do io
+        # GLMakie do not work on kos 
+        record(fig, name) do io
             for _ in 1:step
-                GLMakie.recordframe!(io)
+                recordframe!(io)
                 Agents.step!(abmobs, 1)
             end
-            GLMakie.recordframe!(io)
+            recordframe!(io)
         end
     end
 

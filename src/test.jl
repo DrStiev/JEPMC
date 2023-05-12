@@ -45,7 +45,7 @@ module test_abm
 	include("graph.jl")
 
 	df = model_params.read_data()
-	abm_parameters = model_params.extract_params(df, 20, 0.01, 100)
+	abm_parameters = model_params.extract_params(df, 20, 0.01, 2500)
 
 	@time model = graph.init(; abm_parameters...)
 	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; title="graph_agent_custom", path="img/video/", format=".mp4", frames=length(df[!,1])-1)
@@ -61,7 +61,8 @@ module test_abm
 		select(data, [:happiness_happiness]),
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "pdf")
 
-	model_params.save_parameters(model.properties, "data/parameters/")
+	# fix
+	#model_params.save_parameters(model.properties, "data/parameters/")
 end
 
 module test_controller

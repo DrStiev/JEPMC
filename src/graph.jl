@@ -130,8 +130,10 @@ module graph
 			migrate!(agent, model)
 			transmit!(agent, model)
 		end
-		update!(agent, model)
+		update_status!(agent, model)
+		update_detected!(agent, model)
 		recover_or_die!(agent, model)
+		exit_quarantine!(agent, model)
 	end	
 
 	function result!(agent, model)
@@ -165,7 +167,7 @@ module graph
 		end
 	end
 
-	function update!(agent, model)
+	function update_status!(agent, model)
 		# fine periodo di latenza
 		if agent.status == :E
 			agent.days_infected += 1
@@ -186,7 +188,9 @@ module graph
 				agent.days_immunity = 0
 			end
 		end
+	end
 
+	function update_detected!(agent, model)
 		# probabilità di vaccinarsi
 		if agent.detected == :S
 			if rand(model.rng) < model.ξ 
@@ -228,7 +232,9 @@ module graph
 			agent.days_infected = 0
 			agent.β = 0.0
 		end
+	end	
 
+	function exit_quarantine!(agent, model)
 		if agent.detected == :Q && agent.days_quarantined > model.q 
 			if result!(agent, model) == :S
 				agent.days_quarantined = 0
@@ -238,7 +244,7 @@ module graph
 				agent.days_quarantined ÷= 2
 			end
 		end
-	end	
+	end
 
 	function collect(model, astep, mstep; n = 100)
         susceptible(x) = count(i == :S for i in x)
