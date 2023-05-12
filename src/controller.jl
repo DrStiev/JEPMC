@@ -9,31 +9,12 @@ module controller
 	# parametri su cui il controllore può agire:
 	# ξ → percentage of population vaccined per model step [0.0 - 0.03]
 	# η → effect of the countermeasures [1.0 - 0.0) lower is better
-	# θ → percentage of people under generalized lockdown [0.0 - 0.75] 1.0 is practically impossible.
+	# θ → percentage of people under generalized lockdown [0.0 - 1.0).
 	# θₜ → total number of days (model step) in which θ is applied
 	# q → days of quarantine for each infected agent detected [0.0 - γ*2]
 	# control_growth → rateo of growth [0.0 - 1.0] 0.0 means no growth, 1.0 means double
-	# threshold_before_growth → threshold before increment controls. given by ncontrols / infected detected
-
-	# population = 2500.0
-	# df = model_params.read_data()
-	# abm_parameters = model_params.extract_params(df, 8, population, 0.01)
-	# model = graph.init(; abm_parameters...)
-	# max_iter = 100
-	# for i in 1:max_iter
-	# 	println("[$i]/[$max_iter]")
-	# 	data = graph.collect(model, graph.agent_step!, graph.model_step!; n=0)
-	# 	show(data)
-	# end
 
 	function policy!(data::DataFrame, minimize, maximize; saveat=1, time_delay=90)
-		# piglio i dati generati dall'ABM e li uso come base. 
-		# so cosa voglio massimizzare e cosa minimizzare
-		# uso un sistema di ODE come hybrid-model per le predizioni future
-		# aggiorno i dati dell'ABM e vedo come procede.
-		# nuovo screenshoot della situazione dopo time_delay passi (giorni)
-		# se migliorato bene, se peggiorato sono cazzi 
-
 		# https://docs.sciml.ai/SciMLSensitivity/dev/getting_started/
 		# https://docs.sciml.ai/SciMLSensitivity/dev/tutorials/parameter_estimation_ode/#odeparamestim
 		# https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/

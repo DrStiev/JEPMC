@@ -7,7 +7,9 @@ module model_params
 	# https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv
 	# https://covid19.who.int/WHO-COVID-19-global-data.csv
 	# https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv
+	# https://covid.ourworldindata.org/data/owid-covid-data.csv
 	function get_data(path, url="https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv")
+		# https://github.com/owid/covid-19-data/tree/master/public/data/
 		title = split(url,"/")
 		isdir(path) == false && mkpath(path)
 		df = DataFrame(CSV.File(
@@ -60,7 +62,7 @@ module model_params
 		return (data[end,:tamponi]/data[1,:tamponi])^(1/length(data[!,1]))-1
 	end
 
-	function extract_params(df, C, max_travel_rate, avg=1000, population=58_850_717, seed=1234; outliers = [])
+	function extract_params(df, C, max_travel_rate, avg=1000, population=58_850_717; outliers = [], seed=1337)
 		rng = Xoshiro(seed)
 		pop = randexp(rng, C) * avg # round(Int, (population / df[1,:nuovi_positivi]) / C) # alla fine non cambia il risultato
 		pop = length(outliers) > 0 ? append!(pop, outliers) : pop
@@ -78,13 +80,12 @@ module model_params
 
 		γ = 14 # infective period
 		σ = 5 # exposed period
-		ω = 240 # immunity period
+		ω = 280 # immunity period
 		ξ = 0.0 # vaccine ratio
 		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) # mortality
-		η = 1.0/20 # Countermeasures (social distancing, masks, etc...) (lower is better)
-		ϵ = 1.0/10 # strong immune system
+		η = 1.0/1 # Countermeasures (social distancing, masks, etc...) (lower is better)
 		θ = 0.0 # lockdown percentage
-		θₜ = 90 # lockdown period
+		θₜ = 0 # lockdown period
 		q = 10 # quarantine period
 		R₀ = estimate_R₀(df[!, :nuovi_positivi])
 		ncontrols = df[1, :tamponi] / population
@@ -98,7 +99,7 @@ module model_params
 		return @dict(
 			number_point_of_interest, migration_rate, 
 			ncontrols, control_growth, control_accuracy,
-			R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, θₜ,
+			R₀, γ, σ, ω, ξ, δ, η, q, θ, θₜ,
 		)
 	end
 

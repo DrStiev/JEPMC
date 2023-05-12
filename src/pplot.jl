@@ -25,7 +25,7 @@ module pplot
     end
 
     # FIXME
-    graphplotkwargs = (
+    graphplotkwargs = (;
         layout = GraphMakie.Shell(),
         arrow_show = false,
         edge_color = edge_color,
@@ -114,17 +114,6 @@ module pplot
         as=city_size, ac=city_color, graphplotkwargs...,
         adata=get_adata(), mdata=get_mdata(model), figure=(; resolution=(1600,800)))
         custom_layout(fig, abmobs, frames, name)
-    end
-
-    function video(model, astep, mstep; 
-        title="title", path="img/", format=".mkv", 
-        framerate = 15, frames = 100)
-        isdir(path) == false && mkpath(path)
-        name = path*title*"_"*string(today())*format
-
-        abmvideo(name, model, astep, mstep;
-            framerate=framerate, frames=frames,
-            title=title, as=city_size, ac=city_color, graphplotkwargs...)
     end
 
     function line_plot(data, timeperiod, path="", title = "title", format="png")
