@@ -22,7 +22,7 @@ module graph
 
 	function init(;
 		number_point_of_interest, migration_rate, 
-		ncontrols, control_growth, control_accuracy,
+		ncontrols, control_accuracy,
 		R₀, # R₀ 
 		γ,  # periodo infettivita'
 		σ,  # periodo esposizione
@@ -44,12 +44,13 @@ module graph
 		end
 		# scelgo il punto di interesse che avrà il paziente zero
 		Is = [zeros(Int, length(number_point_of_interest) - 1)..., 1]
-		ncontrols *= sum(number_point_of_interest)
+		ncontrols = round(Int, ncontrols*sum(number_point_of_interest))
 	
 		properties = @dict(
 			number_point_of_interest, migration_rate, θₜ,
-			control_accuracy, ncontrols, control_growth, θ,
+			control_accuracy, ncontrols, θ, infected_ratio=0.0,
 			R₀, ξ, q, Is, C, qinit = q, is_lockdown=false,
+			γ, σ, ω, δ, η,
 		)
 		
 		# creo il modello 
@@ -57,14 +58,9 @@ module graph
 
 		# aggiungo la mia popolazione al modello
 		for city in 1:C, _ in 1:number_point_of_interest[city]
-			# assumo μ = valore medio dati, σ = μ/10
-			γₐ = round(Int, abs(rand(Normal(γ, γ/10))))
-			σₐ = round(Int, abs(rand(Normal(σ, σ/10))))
-			δₐ = abs(rand(Normal(δ, δ/10)))
-			ωₐ = round(Int, abs(rand(Normal(ω, ω/10))))
 			ηₐ = abs(rand(Normal(η, η/10))) # semplicistico
 			ηₐ = ηₐ > 1.0 ? 1.0 : ηₐ # correzione valore out of bounds
-			add_agent!(city, model, 0, 0, :S, :S, 0.0, 0.0, γₐ, σₐ, ωₐ, δₐ, ηₐ) # Suscettibile
+			add_agent!(city, model, 0, 0, :S, :S, 0.0, 0.0, 0.0, 0, 0, 0.0, ηₐ) # Suscettibile
 		end
 		# aggiungo il paziente zero
 		for city in 1:C
@@ -81,9 +77,7 @@ module graph
 
 	function variant!()
 		# https://www.nature.com/articles/s41579-023-00878-2
-		# 240 giorni prima che iniziasse ad essere rilevata una
-		# mutazione (round(Int, abs(Normal(time, time/10))))
-		# nuova variante: modifica β, γ, σ, ω e δ tramite una normale
+		# nuova variante: modifica R₀
 	end
 
 	function model_step!(model)
@@ -91,14 +85,18 @@ module graph
 		# in quanto di quelli in :Q conosco già lo stato
 		population_sample = sample(model.rng, 
 			filter(x -> x.detected ≠ :Q, [agent for agent in allagents(model)]), 
-			round(Int, model.ncontrols))
-		for p in population_sample
-			result!(p, model)
+			model.ncontrols)
+		
+		# number of controls in time
+		infected_ratio = length(filter(x -> x == :I, [result!(p, model) for p in population_sample])) / length(population_sample)
+		if infected_ratio > model.infected_ratio
+			model.ncontrols = round(Int, model.ncontrols*(1+rand(Normal(0.25, 0.05)))) # simple growth
+			model.infected_ratio = infected_ratio
+		else
+			model.ncontrols = round(Int, model.ncontrols*(1-rand(Normal(0.25, 0.05))))
+			model.infected_ratio = infected_ratio
 		end
-		# ad ogni passo incremento il numero di controlli effettuati
-		# questo incremento potrebbe seguire una curva invece che 
-		# essere fissato
-		model.ncontrols += model.ncontrols*model.control_growth
+
 		if model.θₜ > 0
 			# lockdown (proprietà spaziale)
 			if model.θ > 0 && model.is_lockdown == false
@@ -163,7 +161,11 @@ module graph
 				(contact.status == :R && rand(model.rng) < 1/contact.ω)) && 
 				rand(model.rng) < (agent.β * agent.η * contact.η)
 				contact.status = :E 
-				contact.β = abs(rand(Normal(model.R₀, model.R₀/10)))/contact.γ
+				# assumo μ = valore medio dati, σ = μ/10
+				contact.γ = round(Int, abs(rand(Normal(model.γ, model.γ/10))))
+				contact.β = abs(rand(Normal(model.R₀/contact.γ, (model.R₀/contact.γ)/10)))
+				contact.σ = round(Int, abs(rand(Normal(model.σ, model.σ/10))))
+				contact.δ = abs(rand(Normal(model.δ, model.δ/10)))
 			end
 		end
 	end
@@ -193,6 +195,7 @@ module graph
 			if rand(model.rng) < model.ξ 
 				agent.status = :R
 				agent.detected = :R
+				agent.ω = round(Int, abs(rand(Normal(model.ω, model.ω/10))))
 			end
 		# metto in quarantena i pazienti che scopro essere positivi
 		elseif agent.detected == :I
@@ -207,7 +210,7 @@ module graph
 			# troppa o troppo poca felicita' possono portare problemi
 			if rand(model.rng) > 1-abs(agent.happiness) 
 				# riprende ad essere infettivo
-				agent.β = abs(rand(Normal(model.R₀, model.R₀/10)))/agent.γ
+				agent.β = abs(rand(Normal(model.R₀/agent.γ, (model.R₀/agent.γ)/10)))
 				migrate!(agent, model)
 				transmit!(agent, model)
 			end
@@ -226,6 +229,7 @@ module graph
 			agent.status = :R
 			agent.days_infected = 0
 			agent.β = 0.0
+			agent.ω = round(Int, abs(rand(Normal(model.ω, model.ω/10))))
 		end
 	end	
 

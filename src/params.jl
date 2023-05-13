@@ -9,17 +9,24 @@ module model_params
 	# https://covid19.who.int/WHO-COVID-19-global-data.csv
 	# https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv
 	# https://covid.ourworldindata.org/data/owid-covid-data.csv
-	function get_data(path, url="https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv")
+	function download_dataset(path, url="https://covid.ourworldindata.org/data/owid-covid-data.csv")
 		# https://github.com/owid/covid-19-data/tree/master/public/data/
 		title = split(url,"/")
 		isdir(path) == false && mkpath(path)
-		df = DataFrame(CSV.File(
+		return DataFrame(CSV.File(
 			Downloads.download(url, path*title[length(title)]), 
 			delim=",", header=1))
-		return df
 	end
 
-	function read_data(path="data/italy/dpc-covid19-ita-andamento-nazionale.csv")
+	function dataset_from_location(df, iso_code)
+		df = filter(:iso_code => ==(iso_code), df)
+		return select!(df, [:date, :population, 
+			:new_cases_smoothed, :new_deaths_smoothed, 
+			:reproduction_rate, :new_tests_smoothed, 
+			:new_vaccinations_smoothed])
+	end
+
+	function read_local_dataset(path="data/OWID/owid-covid-data.csv")
 		return DataFrame(CSV.File(path, delim=",", header=1))
 	end
 
@@ -53,19 +60,9 @@ module model_params
 		return system, params
 	end
 
-	# find better estimator maybe from paper
-	function estimate_R₀(data)
-		return mean([data[i+1]/data[i] for i in 1:length(data)-1])
-	end
-
-	# find better estimation
-	function estimate_control_growth(data)
-		return (data[end,:tamponi]/data[1,:tamponi])^(1/length(data[!,1]))-1
-	end
-
-	function extract_params(df, C, max_travel_rate, avg=1000, population=58_850_717; outliers = [], seed=1337)
+	function get_abm_parameters(df, C, max_travel_rate, avg=1000; outliers=[], seed=1337)
 		rng = Xoshiro(seed)
-		pop = randexp(rng, C) * avg # round(Int, (population / df[1,:nuovi_positivi]) / C) # alla fine non cambia il risultato
+		pop = randexp(rng, C) * avg 
 		pop = length(outliers) > 0 ? append!(pop, outliers) : pop
 		C = length(outliers) > 0 ? C + length(outliers) : C
 		number_point_of_interest = map((x) -> round(Int, x), pop)
@@ -83,49 +80,22 @@ module model_params
 		σ = 5 # exposed period
 		ω = 280 # immunity period
 		ξ = 0.0 # vaccine ratio
-		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) # mortality
+		δ = sum(skipmissing(df[!, :new_deaths_smoothed])) / 
+			sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
 		η = 1.0/1 # Countermeasures (social distancing, masks, etc...) (lower is better)
 		θ = 0.0 # lockdown percentage
 		θₜ = 0 # lockdown period
 		q = 10 # quarantine period
-		R₀ = estimate_R₀(df[!, :nuovi_positivi])
-		ncontrols = df[1, :tamponi] / population
-		control_growth = estimate_control_growth(df)
+		R₀ = first(skipmissing(df[!, :reproduction_rate]))
+		ncontrols = first(skipmissing(df[!, :new_tests_smoothed]))/df[1, :population]
 		# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
-		# people with confirmed covid case (:I) -> (73 with symptoms + 55 no symptoms) = 64% accuracy
-		# people with confirmed covid case (:E) -> 82% accuracy
-		# people with no covid (:S, :R) -> 99.7% accuracy 
 		control_accuracy = [0.64, 0.82, 0.997]
 
 		return @dict(
 			number_point_of_interest, migration_rate, 
-			ncontrols, control_growth, control_accuracy,
+			ncontrols, control_accuracy,
 			R₀, γ, σ, ω, ξ, δ, η, q, θ, θₜ,
 		)
-	end
-
-	function extract_params(df, population = 58_850_717)
-		e = 0.0/population
-		i = df[1,:nuovi_positivi]/population
-		r = df[1,:dimessi_guariti]/population
-		d = df[1,:deceduti]/population
-		s = (1.0-e-i-r-d)
-
-		γ = 1/14 # infective period
-		σ = 1/5 # exposed period
-		ω = 1/240 # immunity period
-		ξ = 0.0 # vaccine ratio
-		δ = df[nrow(df), :deceduti] / sum(df[!, :nuovi_positivi]) # mortality
-		η = 1.0/20 # Countermeasures (social distancing, masks, etc...) (lower is better)
-		ϵ = 1.0/10 # strong immune system
-		θ = 0.0 # lockdown percentage
-		θₜ = 1/90 # lockdown period
-		q = 1/10 # quarantine period
-		R₀ = estimate_R₀(df[!, :nuovi_positivi])
-
-		u = [s, e, i, r, d] # scaled between [0-1]
-		p = [R₀, γ, σ, ω, ξ, δ, η, ϵ, q, θ, θₜ]
-		return u, p, (0.0, length(df[!, 1]))
 	end
 
 	function save_parameters(params, path, title="parameters")

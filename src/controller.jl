@@ -12,7 +12,6 @@ module controller
 	# θ → percentage of people under generalized lockdown [0.0 - 1.0).
 	# θₜ → total number of days (model step) in which θ is applied
 	# q → days of quarantine for each infected agent detected [0.0 - γ*2]
-	# control_growth → rateo of growth [0.0 - 1.0] 0.0 means no growth, 1.0 means double
 
 	function policy!(data::DataFrame, minimize, maximize; saveat=1, time_delay=90)
 		# https://docs.sciml.ai/SciMLSensitivity/dev/getting_started/

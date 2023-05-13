@@ -1,17 +1,17 @@
 module test_parameters
-	using DataFrames
+	using DataFrames, FileIO, JLD2
 	include("params.jl")
 
-	@time df = model_params.get_data("data/italy/")
-	# need to start using owid data
-	@time df_alt = model_params.get_data("data/OWID/", "https://covid.ourworldindata.org/data/owid-covid-data.csv")
+	@time df = model_params.download_dataset("data/OWID/", "https://covid.ourworldindata.org/data/owid-covid-data.csv")
+	@time data = model_params.dataset_from_location(df, "ITA")
 
-	data = select(df, [:nuovi_positivi, :isolamento_domiciliare, :dimessi_guariti, :deceduti])
-	# InexactError: Int64(750.4522263578023)
-	@time sys, params = model_params.system_identification(data)
+	# LinearAlgebra.SingularException(3)
+	# https://stackoverflow.com/questions/68967232/why-does-julia-fails-to-solve-linear-system-systematically
+	@time sys, params = model_params.system_identification(select(data, Not([:date, :population, :reproduction_rate])))
 
-	@time abm_parameters = model_params.extract_params(df, 20, 0.01)
-	@time ode_parameters = model_params.extract_params(df)
+	@time abm_parameters = model_params.get_abm_parameters(data, 20, 0.01)
+	@time model_params.save_parameters(abm_parameters, "data/parameters/", "abm_parameters")
+	load("data/parameters/abm_parameters.jld2")
 end
 
 module test_plot
@@ -19,16 +19,14 @@ module test_plot
 	include("params.jl")
 	include("pplot.jl")
 
-	population = 58_850_717
-	df = model_params.read_data()
-	d = [population - sum([df[i,:totale_positivi], df[i,:dimessi_guariti], df[i,:deceduti]]) for i in 1:length(df[!,:dimessi_guariti])]
-	d = DataFrame([d], [:suscettibili])
-	@time pplot.line_plot(select(df, [:nuovi_positivi, :isolamento_domiciliare]),
-		df[!, :data], "img/data_plot/", "rapporto_nuovi_positivi_quarantena", "pdf")
-	@time pplot.line_plot(hcat(d, select(df, [:totale_positivi, :dimessi_guariti, :deceduti])),
-		df[!, :data], "img/data_plot/", "dpc-covid19-ita-andamento-nazionale", "pdf")
-	dtct = DataFrame([df[!, :totale_casi]./df[!, :tamponi]], [:rapporto_positivi_tamponi])
-	@time pplot.line_plot(select(df, [:totale_casi, :tamponi]), df[!, :data], "img/data_plot/", "rapporto_positivi_tamponi", "pdf")
+	@time df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
+	@time data = model_params.dataset_from_location(df, "ITA")
+
+	@time pplot.line_plot(
+		select(data, Not([:date, :population, :reproduction_rate])), 
+		data[!, :date], "img/data_plot/", "explorative_plot", "pdf")
+	@time pplot.line_plot(select(data, :reproduction_rate), data[!, :date], 
+		"img/data_plot/", "reproduction_rate", "pdf")
 end
 
 # TODO: to be implemented
@@ -39,16 +37,16 @@ module test_uode
 end
 
 module test_abm
-	using Agents, DataFrames, Random, Plots
+	using Agents, DataFrames
 	using Statistics: mean
-	using FileIO, JLD2
 
 	include("params.jl")
 	include("pplot.jl")
 	include("graph.jl")
 
-	df = model_params.read_data()
-	abm_parameters = model_params.extract_params(df, 20, 0.01, 2000)
+	df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
+	data = model_params.dataset_from_location(df, "ITA")
+	abm_parameters = model_params.get_abm_parameters(data, 20, 0.01)
 
 	@time model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!, graph.model_step!; n=length(df[!,1])-1)
@@ -63,9 +61,6 @@ module test_abm
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "pdf")
 	@time model = graph.init(; abm_parameters...)
 	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; title="graph_agent_custom", path="img/video/", format=".mp4", frames=length(df[!,1])-1)
-
-	model_params.save_parameters(model.properties, "data/parameters/", "abm_parameters")
-	load("data/parameters/abm_parameters.jld2")
 end
 
 module test_controller

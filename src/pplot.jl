@@ -119,14 +119,13 @@ module pplot
 
     function line_plot(data, timeperiod, path="", title = "title", format="png")
         isdir(path) == false && mkpath(path)
-        l = min(length(timeperiod), length(data[!, 1]))
-        dates = range(timeperiod[1], timeperiod[l], step=Day(1))
+        dates = range(timeperiod[1], timeperiod[length(timeperiod)], step=Day(1))
 	    tm_ticks = round.(dates, Month(1)) |> unique;
-        p = Plots.plot(timeperiod, Matrix(data[1:l,:]), labels=permutedims(names(data)), 
+        p = Plots.plot(timeperiod, Array(data), labels=permutedims(names(data)), 
             title=title, xticks=(tm_ticks, Dates.format.(tm_ticks, "uu/yyyy")), 
             xrot=45, xminorticks=true, xlim=extrema(dates))
         savefig(p, path*title*"_"*string(today())*"."*format)
-    end
+    end 
 
     function loss_plot(losses, path="", title = "title", format="png")
         isdir(path) == false && mkpath(path)
