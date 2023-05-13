@@ -3,10 +3,11 @@ module test_parameters
 	include("params.jl")
 
 	@time df = model_params.get_data("data/italy/")
-	# start using owid data
+	# need to start using owid data
 	@time df_alt = model_params.get_data("data/OWID/", "https://covid.ourworldindata.org/data/owid-covid-data.csv")
 
 	data = select(df, [:nuovi_positivi, :isolamento_domiciliare, :dimessi_guariti, :deceduti])
+	# InexactError: Int64(750.4522263578023)
 	@time sys, params = model_params.system_identification(data)
 
 	@time abm_parameters = model_params.extract_params(df, 20, 0.01)
@@ -40,15 +41,15 @@ end
 module test_abm
 	using Agents, DataFrames, Random, Plots
 	using Statistics: mean
+	using FileIO, JLD2
+
 	include("params.jl")
 	include("pplot.jl")
 	include("graph.jl")
 
 	df = model_params.read_data()
-	abm_parameters = model_params.extract_params(df, 20, 0.01, 2500)
+	abm_parameters = model_params.extract_params(df, 20, 0.01, 2000)
 
-	@time model = graph.init(; abm_parameters...)
-	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; title="graph_agent_custom", path="img/video/", format=".mp4", frames=length(df[!,1])-1)
 	@time model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!, graph.model_step!; n=length(df[!,1])-1)
 	pplot.line_plot(
@@ -60,9 +61,11 @@ module test_abm
 	pplot.line_plot(
 		select(data, [:happiness_happiness]),
 		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "pdf")
+	@time model = graph.init(; abm_parameters...)
+	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; title="graph_agent_custom", path="img/video/", format=".mp4", frames=length(df[!,1])-1)
 
-	# fix
-	#model_params.save_parameters(model.properties, "data/parameters/")
+	model_params.save_parameters(model.properties, "data/parameters/", "abm_parameters")
+	load("data/parameters/abm_parameters.jld2")
 end
 
 module test_controller

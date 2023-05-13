@@ -3,6 +3,7 @@ module model_params
 	using DataFrames, DataDrivenDiffEq, DataDrivenSparse
 	using LinearAlgebra, OrdinaryDiffEq, ModelingToolkit
 	using Statistics, Downloads, DrWatson, Plots, Dates
+	using JLD2, FileIO
 
 	# https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv
 	# https://covid19.who.int/WHO-COVID-19-global-data.csv
@@ -91,7 +92,7 @@ module model_params
 		ncontrols = df[1, :tamponi] / population
 		control_growth = estimate_control_growth(df)
 		# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
-		# people with confirmed covid case (:I) -> (73 with symptoms + 55 no symptoms)/2 = 64% accuracy
+		# people with confirmed covid case (:I) -> (73 with symptoms + 55 no symptoms) = 64% accuracy
 		# people with confirmed covid case (:E) -> 82% accuracy
 		# people with no covid (:S, :R) -> 99.7% accuracy 
 		control_accuracy = [0.64, 0.82, 0.997]
@@ -128,7 +129,7 @@ module model_params
 	end
 
 	function save_parameters(params, path, title="parameters")
-		isdir(path) == false && mkpath(path) 
-		CSV.write(path*title*"_"*string(today())*".csv", DataFrame(params))
+		isdir(path) == false && mkpath(path)
+		save(path*title*".jld2", params) 
 	end
 end

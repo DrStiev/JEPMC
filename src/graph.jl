@@ -8,7 +8,6 @@ module graph
 
 	@agent Person GraphAgent begin
 		days_infected::Int
-		days_immunity::Int
 		days_quarantined::Int
 		status::Symbol # :S, :E, :I, :R (:V)
 		detected::Symbol # :S, :I, :Q, :R (:V)
@@ -65,7 +64,7 @@ module graph
 			ωₐ = round(Int, abs(rand(Normal(ω, ω/10))))
 			ηₐ = abs(rand(Normal(η, η/10))) # semplicistico
 			ηₐ = ηₐ > 1.0 ? 1.0 : ηₐ # correzione valore out of bounds
-			add_agent!(city, model, 0, 0, 0, :S, :S, 0.0, 0.0, γₐ, σₐ, ωₐ, δₐ, ηₐ) # Suscettibile
+			add_agent!(city, model, 0, 0, :S, :S, 0.0, 0.0, γₐ, σₐ, ωₐ, δₐ, ηₐ) # Suscettibile
 		end
 		# aggiungo il paziente zero
 		for city in 1:C
@@ -160,7 +159,9 @@ module graph
 		agent.status != :I && return
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]  
-			if contact.status == :S && rand(model.rng) < (agent.β * agent.η * contact.η)
+			if (contact.status == :S ||
+				(contact.status == :R && rand(model.rng) < 1/contact.ω)) && 
+				rand(model.rng) < (agent.β * agent.η * contact.η)
 				contact.status = :E 
 				contact.β = abs(rand(Normal(model.R₀, model.R₀/10)))/contact.γ
 			end
@@ -170,22 +171,18 @@ module graph
 	function update_status!(agent, model)
 		# fine periodo di latenza
 		if agent.status == :E
-			agent.days_infected += 1
 			if agent.days_infected > agent.σ
 				agent.status = :I
 				agent.days_infected = 1
 			end
+			agent.days_infected += 1
 		# avanzamento malattia
 		elseif agent.status == :I
 			agent.days_infected += 1
 		# perdita progressiva di immunità e aumento rischio exposure
 		elseif agent.status == :R
-			# agent.days_immunity -= 1
-			# non sembra comportarsi come dovrebbe
-			if rand(model.rng) < 1/agent.ω # 1/agent.days_immunity 
+			if rand(model.rng) < 1/agent.ω 
 				agent.status = :S
-				agent.days_infected = 0
-				agent.days_immunity = 0
 			end
 		end
 	end
@@ -196,7 +193,6 @@ module graph
 			if rand(model.rng) < model.ξ 
 				agent.status = :R
 				agent.detected = :R
-				agent.days_immunity = agent.ω
 			end
 		# metto in quarantena i pazienti che scopro essere positivi
 		elseif agent.detected == :I
@@ -228,7 +224,6 @@ module graph
 			end
 			# probabilità di guarigione
 			agent.status = :R
-			# agent.days_immunity = agent.ω
 			agent.days_infected = 0
 			agent.β = 0.0
 		end

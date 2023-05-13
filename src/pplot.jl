@@ -1,7 +1,7 @@
 module pplot
     using Plots, LaTeXStrings, StatsPlots
     using InteractiveDynamics, CairoMakie
-    using DataFrames, SciMLBase, Dates, CSV
+    using DataFrames, Dates, CSV
     using Agents, GraphMakie, GLMakie
     using Statistics: mean
 
@@ -127,9 +127,6 @@ module pplot
             xrot=45, xminorticks=true, xlim=extrema(dates))
         savefig(p, path*title*"_"*string(today())*"."*format)
     end
-
-    line_plot(data::SciMLBase.ODESolution, timeperiod, path="", title = "title", format="png") = 
-        line_plot(select(DataFrame(data), Not(:timestamp)), timeperiod, path, title, format)
 
     function loss_plot(losses, path="", title = "title", format="png")
         isdir(path) == false && mkpath(path)
