@@ -65,7 +65,7 @@ module pplot
         # get information about the data known from the society
         id = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_detected))
         q = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).quarantined_detected))
-        rd = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_detected))
+        #rd = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_detected))
         
         # get information about the general mood of the society
         happiness = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).happiness_happiness))
@@ -81,7 +81,7 @@ module pplot
         ax_detected = Axis(count_layout[2, 1]; ylabel="Individuals detected")
         scatterlines!(ax_detected, id; label="infected")
         scatterlines!(ax_detected, q; label="quarantined")
-        scatterlines!(ax_detected, rd; label="recovered")
+        #scatterlines!(ax_detected, rd; label="recovered")
         Legend(count_layout[2, 2], ax_detected;)
 
         ax_happiness = Axis(count_layout[3, 1]; ylabel = "Average happiness")

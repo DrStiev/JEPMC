@@ -29,13 +29,6 @@ module test_plot
 		"img/data_plot/", "reproduction_rate", "pdf")
 end
 
-# TODO: to be implemented
-module test_uode
-	include("uode.jl")
-	include("params.jl")
-	include("pplot.jl")
-end
-
 module test_abm
 	using Agents, DataFrames
 	using Statistics: mean
@@ -45,22 +38,36 @@ module test_abm
 	include("graph.jl")
 
 	df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
-	data = model_params.dataset_from_location(df, "ITA")
-	abm_parameters = model_params.get_abm_parameters(data, 20, 0.01)
+	df = model_params.dataset_from_location(df, "ITA")
+	abm_parameters = model_params.get_abm_parameters(df, 20, 0.01)
 
 	@time model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!, graph.model_step!; n=length(df[!,1])-1)
 	pplot.line_plot(
-		select(data, Not([:happiness_happiness, :infected_detected, :quarantined_detected, :recovered_detected])),
-		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent", "pdf")
+		select(data, 
+			Not([:happiness_happiness, :infected_detected, 
+			:quarantined_detected, :recovered_detected])),
+		df[!,:date], "img/abm/", "graph_agent", "pdf")
 	pplot.line_plot(
-		select(data, [:infected_detected, :quarantined_detected, :recovered_detected]),
-		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_countermeasures", "pdf")
+		select(data, 
+			[:infected_detected, :quarantined_detected]), 
+			#:recovered_detected]),
+		df[!,:date], "img/abm/", "graph_agent_countermeasures", "pdf")
 	pplot.line_plot(
 		select(data, [:happiness_happiness]),
-		df[1:length(data[!,1]),:data], "img/abm/", "graph_agent_happiness", "pdf")
+		df[!,:date], "img/abm/", "graph_agent_happiness", "pdf")
+	
 	@time model = graph.init(; abm_parameters...)
-	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; title="graph_agent_custom", path="img/video/", format=".mp4", frames=length(df[!,1])-1)
+	@time pplot.custom_video(model, graph.agent_step!, graph.model_step!; 
+		title="graph_agent_custom", path="img/video/", 
+		format=".mp4", frames=length(df[!,1])-1)
+end
+
+# TODO: to be implemented
+module test_uode
+	include("uode.jl")
+	include("params.jl")
+	include("pplot.jl")
 end
 
 module test_controller
