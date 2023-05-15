@@ -8,7 +8,7 @@ module controller
 
 	# parametri su cui il controllore può agire:
 	# ξ → percentage of population vaccined per model step [0.0 - 0.03]
-	# η → effect of the countermeasures [1.0 - 0.0) lower is better
+	# η → countermeasures [1.0 - 0.0) lower is better
 	# θ → percentage of people under generalized lockdown [0.0 - 1.0).
 	# θₜ → total number of days (model step) in which θ is applied
 	# q → days of quarantine for each infected agent detected [0.0 - γ*2]

@@ -103,8 +103,6 @@ module graph
 				for p in population_sample
 					p.β = 0.0
 					p.detected = :L
-					# random value
-					p.η = 0.01 # "countermeasures" due to lockdown / quarantine
 				end
 			end
 			model.θₜ -= 1
@@ -119,6 +117,11 @@ module graph
 		# piu' contromisure ci sono piu' infelici saranno i miei agenti
 		agent.happiness += rand(Normal(-(agent.η)^-1/1000, (agent.η)^-1/1000))
 		agent.happiness = agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
+		# troppa o troppo poca felicita' possono portare problemi
+		if rand(model.rng) > 1-abs(agent.happiness) 
+			migrate!(agent, model)
+			transmit!(agent, model)
+		end
 		if agent.detected ≠ :Q && agent.detected ≠ :L
 			# possibilità di migrare e infettare sse non in quarantena
 			migrate!(agent, model)
@@ -152,22 +155,26 @@ module graph
 
 	function variant!()
 		# https://www.nature.com/articles/s41579-023-00878-2
-		# nuova variante modifica R₀ ogni tot?
+		# nuova variante ogni tot tempo?
 	end
 
 	function transmit!(agent, model)
 		agent.status != :I && return
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]  
-			if (contact.status == :S ||
-				(contact.status == :R && rand(model.rng) < 1/contact.ω)) && 
-				rand(model.rng) < (agent.β * agent.η * contact.η)
-				contact.status = :E 
-				# assumo μ = valore medio dati, σ = μ/10
-				contact.γ = round(Int, abs(rand(Normal(model.γ, model.γ/10))))
-				contact.β = abs(rand(Normal(model.R₀/contact.γ, model.R₀/contact.γ/10)))
-				contact.σ = round(Int, abs(rand(Normal(model.σ, model.σ/10))))
-				contact.δ = abs(rand(Normal(model.δ, model.δ/10)))
+			# se l'agente è in quarantena o è vigente il lockdown
+			# non è possibile che venga infettato o infetti
+			if contact.detected ≠ :Q && contact.detected ≠ :L
+				if (contact.status == :S ||
+					(contact.status == :R && rand(model.rng) < 1/contact.ω)) && 
+					rand(model.rng) < (agent.β * agent.η * contact.η)
+					contact.status = :E 
+					# assumo μ = valore medio dati, σ = μ/10
+					contact.γ = round(Int, abs(rand(Normal(model.γ, model.γ/10))))
+					contact.β = abs(rand(Normal(model.R₀/contact.γ, model.R₀/contact.γ/10)))
+					contact.σ = round(Int, abs(rand(Normal(model.σ, model.σ/10))))
+					contact.δ = abs(rand(Normal(model.δ, model.δ/10)))
+				end
 			end
 		end
 	end
@@ -203,25 +210,12 @@ module graph
 		elseif agent.detected == :I
 			agent.detected = :Q
 			agent.β = 0.0 # riduzione infettività
-			agent.η = 0.01 # "countermeasures" due to lockdown / quarantine
 			agent.days_quarantined = 1
 		# avanzamento quarantena
 		elseif agent.detected == :Q 
 			agent.β = 0.0
 			agent.days_quarantined += 1
 			agent.happiness += rand(Normal(-0.05, 0.05))
-			# random value
-			agent.η = 0.01 # "countermeasures" due to lockdown / quarantine
-			# troppa o troppo poca felicita' possono portare problemi
-			if rand(model.rng) > 1-abs(agent.happiness) 
-				# riprende ad essere infettivo
-				agent.β = abs(rand(Normal(model.R₀/agent.γ, model.R₀/agent.γ/10)))
-				ηₐ = abs(rand(Normal(model.η, model.η/10))) # semplicistico
-				ηₐ = ηₐ > 1.0 ? 1.0 : ηₐ # correzione valore out of bounds
-				agent.η = ηₐ
-				migrate!(agent, model)
-				transmit!(agent, model)
-			end
 		elseif agent.detected == :L
 			agent.happiness += rand(Normal(-0.05, 0.05))
 		end
@@ -247,11 +241,8 @@ module graph
 		if agent.detected == :Q && agent.days_quarantined > model.q 
 			if result!(agent, model) == :S
 				agent.days_quarantined = 0
-				if model.θₜ ≤ 0
+				if agent.detected ≠ :L || (agent.detected == :L && model.θₜ ≤ 0)
 					agent.detected = :R
-					ηₐ = abs(rand(Normal(model.η, model.η/10))) # semplicistico
-					ηₐ = ηₐ > 1.0 ? 1.0 : ηₐ # correzione valore out of bounds
-					agent.η = ηₐ
 				else
 					agent.detected = :L
 				end
