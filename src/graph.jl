@@ -10,7 +10,7 @@ module graph
 		days_infected::Int
 		days_quarantined::Int
 		status::Symbol # :S, :E, :I, :R
-		detected::Symbol # :S, :I, :Q, :L, :R (:V)
+		detected::Symbol # :S, :I, :Q, :L, :H, :R, :V
 		happiness::Float64 # [-1, 1]
 		β::Float64 # agent infectiveness
 		γ::Int # agent recovery time
@@ -29,7 +29,7 @@ module graph
 		ω,  # periodo immunita
 		ξ,  # 1 / vaccinazione per milion per day
 		δ,  # mortality rate
-		η,  # 1 / countermeasures [0.0:1.0]
+		η,  # countermeasures type
 		q,  # periodo quarantena
 		θ,  # percentage of people under full lockdown
 		θₜ, # duration of lockdown ≥ 0
@@ -49,8 +49,8 @@ module graph
 		properties = @dict(
 			number_point_of_interest, migration_rate, θₜ,
 			control_accuracy, ncontrols, θ, infected_ratio=0.0,
-			R₀, ξ, q, Is, C, qinit = q, is_lockdown=false,
-			γ, σ, ω, δ, η,
+			R₀, ξ, q, Is, C, is_lockdown=false,
+			γ, σ, ω, δ, η, ηₜ = [13, 21, 55, 144],
 		)
 		
 		# creo il modello 
@@ -84,13 +84,22 @@ module graph
 		
 		# number of controls in time
 		infected_ratio = length(filter(x -> x == :I, [result!(p, model) for p in population_sample])) / length(population_sample)
-		if infected_ratio > model.infected_ratio
-			model.ncontrols *= 1.5 # simple growth
-			model.infected_ratio = infected_ratio
-		else
-			model.ncontrols = round(Int, model.ncontrols/1.5)+1
-			model.infected_ratio = infected_ratio
-		end
+		model.ncontrols = infected_ratio ≥ model.infected_ratio ? 
+			round(Int, model.ncontrols*1.5) : round(Int, model.ncontrols/1.5)+1
+		# if infected_ratio ≥ model.infected_ratio
+		# 	model.ncontrols = round(Int, model.ncontrols*1.5) # simple growth
+		# else
+		# 	model.ncontrols = round(Int, model.ncontrols/1.5)+1
+		# end
+		model.infected_ratio = infected_ratio
+
+		# utilizzo una serie di fibonacci per il calcolo delle misure η
+		# prendo i valori associati a 4,7,9,11 [13,21,55,144]
+		# applico il successivo ogni 4,7,9,11 gg se il trand e' in crescita
+		# applico il precedente (partendo dalla fine) ogni 4,7,9,11 mesi
+		# se il trend e' in calo
+
+		# regole e rateo per i vaccini
 
 		if model.θₜ > 0
 			# lockdown (proprietà spaziale)
@@ -121,6 +130,7 @@ module graph
 		if rand(model.rng) > 1-abs(agent.happiness) 
 			migrate!(agent, model)
 			transmit!(agent, model)
+			agent.η = 1.0 # ignore countermeasures 
 		end
 		if agent.detected ≠ :Q && agent.detected ≠ :L
 			# possibilità di migrare e infettare sse non in quarantena
@@ -131,7 +141,19 @@ module graph
 		update_detected!(agent, model)
 		recover_or_die!(agent, model)
 		exit_quarantine!(agent, model)
+		countermeasures!(agent, model)
 	end	
+
+	function countermeasures!(agent, model)
+		# le contromisure utilizzate dagli agenti dipendono dal 
+		# loro stato piu' questo tende agli estremi meno saranno 
+		# collaborativi
+		if rand(model.rng) > abs(agent.happiness)
+			ηₐ = abs(rand(Normal(model.η, model.η/10))) # semplicistico
+			ηₐ = ηₐ > 1.0 ? 1.0 : ηₐ # correzione valore out of bounds
+			agent.η = ηₐ
+		end
+	end
 
 	function result!(agent, model)
 		if agent.status == :I
@@ -165,9 +187,10 @@ module graph
 			# se l'agente è in quarantena o è vigente il lockdown
 			# non è possibile che venga infettato o infetti
 			if contact.detected ≠ :Q && contact.detected ≠ :L
-				if (contact.status == :S ||
-					(contact.status == :R && rand(model.rng) < 1/contact.ω)) && 
-					rand(model.rng) < (agent.β * agent.η * contact.η)
+				if contact.status == :S && (rand(model.rng) < (agent.β * agent.η * contact.η))
+					# (contact.status == :S ||
+					# (contact.status == :R && rand(model.rng) < 1/contact.ω)) && 
+					# (rand(model.rng) < (agent.β * agent.η * contact.η))
 					contact.status = :E 
 					# assumo μ = valore medio dati, σ = μ/10
 					contact.γ = round(Int, abs(rand(Normal(model.γ, model.γ/10))))
@@ -203,7 +226,7 @@ module graph
 		if agent.detected == :S
 			if rand(model.rng) < model.ξ 
 				agent.status = :R
-				agent.detected = :R
+				agent.detected = :V
 				agent.ω = round(Int, abs(rand(Normal(model.ω, model.ω/10))))
 			end
 		# metto in quarantena i pazienti che scopro essere positivi
@@ -261,16 +284,19 @@ module graph
         dead(x) = sum(model.number_point_of_interest) - length(x) 
 
 		quarantined(x) = count(i == :Q for i in x)
+		lockdown(x) = count(i == :L for i in x)
+		vaccined(x) = count(i == :V for i in x)
 		happiness(x) = mean(x)
 
         to_collect = [(:status, susceptible), (:status, exposed), (:status, infected), 
 			(:status, recovered), (:happiness, happiness), (:detected, infected), 
-			(:detected, quarantined), (:detected, recovered), (:status, dead)]
+			(:detected, quarantined), (:detected, lockdown), (:detected, recovered), 
+			(:detected, vaccined), (:status, dead)]
         data, _ = run!(model, astep, mstep, n; adata = to_collect)
 		data[!, :dead_status] = data[!, end]
     	select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, 
-			:infected_detected, :quarantined_detected, :recovered_detected, 
-			:dead_status, :happiness_happiness)
+			:infected_detected, :quarantined_detected, :recovered_detected, :lockdown_detected, 
+			:vaccined_detected, :dead_status, :happiness_happiness)
         return data
     end
 end

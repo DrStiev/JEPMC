@@ -83,7 +83,8 @@ module model_params
 		ξ = 0.0 # vaccine ratio
 		δ = sum(skipmissing(df[!, :new_deaths_smoothed])) / 
 			sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
-		η = 1.0/1 # Countermeasures (social distancing, masks, etc...) (lower is better)
+			# -, sd, mask, ffp2
+		η = 1.0 # Countermeasures (social distancing, masks, etc...) (lower is better)
 		θ = 0.0 # lockdown percentage
 		θₜ = 0 # lockdown period
 		q = 10 # quarantine period

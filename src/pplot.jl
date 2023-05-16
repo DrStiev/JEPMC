@@ -42,11 +42,16 @@ module pplot
         exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
 		quarantined(x) = count(i == :Q for i in x)
+        lockdown(x) = count(i == :L for i in x)
         recovered(x) = count(i == :R for i in x)
+        vaccined(x) = count(i == :V for i in x)
         happiness(x) = mean(x)
 
-        return [(:status, susceptible), (:status, exposed), (:status, infected), (:status, recovered), 
-            (:detected, quarantined), (:detected, infected), (:detected, recovered), (:happiness, happiness)]
+        return [(:status, susceptible), (:status, exposed), 
+            (:status, infected), (:status, recovered), 
+            (:detected, quarantined), (:detected, infected), 
+            (:detected, recovered), (:detected, lockdown),
+            (:detected, vaccined), (:happiness, happiness)]
     end
 
     function get_mdata(model)
@@ -67,27 +72,30 @@ module pplot
         # get information about the data known from the society
         id = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_detected))
         q = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).quarantined_detected))
-        #rd = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_detected))
+        #l = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).lockdown_detected))
+        v = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).vaccined_detected))
+        rd = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_detected))
         
         # get information about the general mood of the society
         happiness = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).happiness_happiness))
 
         ax_seir = Axis(count_layout[1, 1]; ylabel="SEIR Dynamic")
-        scatterlines!(ax_seir, s; label="susceptible")
-        scatterlines!(ax_seir, e; label="exposed")
-        scatterlines!(ax_seir, i; label="infected")
-        scatterlines!(ax_seir, r; label="recovered")
-        scatterlines!(ax_seir, d; label="dead")
+        lines!(ax_seir, s; label="susceptible")
+        lines!(ax_seir, e; label="exposed")
+        lines!(ax_seir, i; label="infected")
+        lines!(ax_seir, r; label="recovered")
+        lines!(ax_seir, d; label="dead")
         Legend(count_layout[1, 2], ax_seir;)
         
         ax_detected = Axis(count_layout[2, 1]; ylabel="Individuals detected")
-        scatterlines!(ax_detected, id; label="infected")
-        scatterlines!(ax_detected, q; label="quarantined")
-        #scatterlines!(ax_detected, rd; label="recovered")
+        lines!(ax_detected, id; label="infected")
+        lines!(ax_detected, q; label="quarantined")
+        lines!(ax_detected, v; label="vaccined")
+        lines!(ax_detected, rd; label="recovered")
         Legend(count_layout[2, 2], ax_detected;)
 
         ax_happiness = Axis(count_layout[3, 1]; ylabel = "Average happiness")
-        scatterlines!(ax_happiness, happiness; label="happiness")
+        lines!(ax_happiness, happiness; label="happiness")
         Legend(count_layout[3, 2], ax_happiness;)
 
         on(abmobs.model) do m

@@ -40,19 +40,20 @@ module test_abm
 
 	df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
 	df = model_params.dataset_from_location(df, "ITA")
-	abm_parameters = model_params.get_abm_parameters(df, 20, 0.01)
+	abm_parameters = model_params.get_abm_parameters(df, 20, 0.01, 5000)
 
 	@time model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!, graph.model_step!; n=length(df[!,1])-1)
 	pplot.line_plot(
 		select(data, 
 			Not([:happiness_happiness, :infected_detected, 
-			:quarantined_detected, :recovered_detected])),
+			:quarantined_detected, :recovered_detected, 
+			:lockdown_detected, :vaccined_detected])),
 		df[!,:date], "img/abm/", "graph_agent", "pdf")
 	pplot.line_plot(
 		select(data, 
-			[:infected_detected, :quarantined_detected]), 
-			#:recovered_detected]),
+			[:infected_detected, :quarantined_detected, 
+			:recovered_detected, :vaccined_detected]),
 		df[!,:date], "img/abm/", "graph_agent_countermeasures", "pdf")
 	pplot.line_plot(
 		select(data, [:happiness_happiness]),
@@ -66,6 +67,7 @@ end
 
 # TODO: to be implemented
 module test_uode
+	using Plots, DataFrames
 	include("uode.jl")
 	include("params.jl")
 	include("pplot.jl")
@@ -73,6 +75,9 @@ module test_uode
 	df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
 	df = model_params.dataset_from_location(df, "ITA")
 	u,p,t = model_params.get_ode_parameters(df)
+	prob = uode.get_ode_problem(uode.seir!, u, t, p)
+	sol = uode.get_ode_solution(prob)
+	plot(sol)
 
 end
 
