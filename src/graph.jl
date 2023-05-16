@@ -9,8 +9,8 @@ module graph
 	@agent Person GraphAgent begin
 		days_infected::Int
 		days_quarantined::Int
-		status::Symbol # :S, :E, :I, :R (:V)
-		detected::Symbol # :S, :I, :Q (:L), :R (:V)
+		status::Symbol # :S, :E, :I, :R
+		detected::Symbol # :S, :I, :Q, :L, :R (:V)
 		happiness::Float64 # [-1, 1]
 		β::Float64 # agent infectiveness
 		γ::Int # agent recovery time
@@ -85,10 +85,10 @@ module graph
 		# number of controls in time
 		infected_ratio = length(filter(x -> x == :I, [result!(p, model) for p in population_sample])) / length(population_sample)
 		if infected_ratio > model.infected_ratio
-			model.ncontrols *= 2 # simple growth
+			model.ncontrols *= 1.5 # simple growth
 			model.infected_ratio = infected_ratio
 		else
-			model.ncontrols = round(Int, model.ncontrols*0.5)+1
+			model.ncontrols = round(Int, model.ncontrols/1.5)+1
 			model.infected_ratio = infected_ratio
 		end
 

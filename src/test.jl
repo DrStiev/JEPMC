@@ -1,10 +1,11 @@
 module test_parameters
-	using DataFrames, FileIO, JLD2
+	using DataFrames, FileIO, JLD2, Plots
 	include("params.jl")
 
 	@time df = model_params.download_dataset("data/OWID/", "https://covid.ourworldindata.org/data/owid-covid-data.csv")
 	@time data = model_params.dataset_from_location(df, "ITA")
 
+	plot(Array(select(data, Not([:date, :population, :reproduction_rate]))))
 	# LinearAlgebra.SingularException(3)
 	# https://stackoverflow.com/questions/68967232/why-does-julia-fails-to-solve-linear-system-systematically
 	@time sys, params = model_params.system_identification(select(data, Not([:date, :population, :reproduction_rate])))
@@ -68,6 +69,11 @@ module test_uode
 	include("uode.jl")
 	include("params.jl")
 	include("pplot.jl")
+
+	df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
+	df = model_params.dataset_from_location(df, "ITA")
+	u,p,t = model_params.get_ode_parameters(df)
+
 end
 
 module test_controller

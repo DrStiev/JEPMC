@@ -20,10 +20,11 @@ module model_params
 
 	function dataset_from_location(df, iso_code)
 		df = filter(:iso_code => ==(iso_code), df)
-		return select!(df, [:date, :population, 
-			:new_cases_smoothed, :new_deaths_smoothed, 
-			:reproduction_rate, :new_tests_smoothed, 
-			:new_vaccinations_smoothed])
+		return select!(df, [:date, 
+			:population, :reproduction_rate,
+			:new_cases_smoothed, :new_tests_smoothed, 
+			:new_vaccinations_smoothed, :hosp_patients, 
+			:new_deaths_smoothed])
 	end
 
 	function read_local_dataset(path="data/OWID/owid-covid-data.csv")
@@ -96,6 +97,22 @@ module model_params
 			ncontrols, control_accuracy,
 			R₀, γ, σ, ω, ξ, δ, η, q, θ, θₜ,
 		)
+	end
+
+	function get_ode_parameters(df)
+		γ = 14 # infective period
+		σ = 5 # exposed period
+		ω = 280 # immunity period
+		δ = sum(skipmissing(df[!, :new_deaths_smoothed])) / 
+			sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
+		R₀ = first(skipmissing(df[!, :reproduction_rate]))
+		S = df[1, :population]
+		E = 0
+		I = 1
+		R = 0
+		D = 0
+		tspan = (0, length(df[!, 1]))
+		return [S,E,I,R,D], [R₀, γ, σ, ω, δ], tspan
 	end
 
 	function save_parameters(params, path, title="parameters")

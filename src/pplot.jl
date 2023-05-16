@@ -5,6 +5,8 @@ module pplot
     using Agents, GraphMakie, GLMakie
     using Statistics: mean
 
+    GLMakie.activate!()
+
     city_size(agents) = 0.005 * length(agents)
     function city_color(agents)
         agent = length(agents)
