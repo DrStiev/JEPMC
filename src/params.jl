@@ -81,13 +81,13 @@ module model_params
 		σ = 5 # exposed period
 		ω = 280 # immunity period
 		ξ = 0.0 # vaccine ratio
+		# https://www.nature.com/articles/s41467-021-22944-0
 		δ = sum(skipmissing(df[!, :new_deaths_smoothed])) / 
 			sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
-			# -, sd, mask, ffp2
 		η = 1.0 # Countermeasures (social distancing, masks, etc...) (lower is better)
 		θ = 0.0 # lockdown percentage
 		θₜ = 0 # lockdown period
-		q = 10 # quarantine period
+		q = 14 # quarantine period
 		R₀ = first(skipmissing(df[!, :reproduction_rate]))
 		ncontrols = first(skipmissing(df[!, :new_tests_smoothed]))/df[1, :population]
 		# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).

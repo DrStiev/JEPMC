@@ -13,7 +13,8 @@ module pplot
         exposed = count(a.status == :E for a in agents)
         infected = count(a.status == :I for a in agents)
         recovered = count(a.status == :R for a in agents)
-        return RGBf((infected + exposed)/agent, recovered/agent, 0)
+        vaccined = count(a.detected == :V for a in agents)
+        return RGBf(infected/agent, recovered/agent, vaccined/agent)
     end
 
     edge_color(model) = fill((:grey, 0.25), GraphMakie.Graphs.ne(model.space.graph))

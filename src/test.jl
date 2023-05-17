@@ -31,7 +31,7 @@ module test_plot
 end
 
 module test_abm
-	using Agents, DataFrames
+	using Agents, DataFrames, Plots, Distributions
 	using Statistics: mean
 
 	include("params.jl")
@@ -40,8 +40,8 @@ module test_abm
 
 	df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
 	df = model_params.dataset_from_location(df, "ITA")
-	abm_parameters = model_params.get_abm_parameters(df, 20, 0.01, 5000)
 
+	abm_parameters = model_params.get_abm_parameters(df, 20 , 0.01, 2000)
 	@time model = graph.init(; abm_parameters...)
 	@time data = graph.collect(model, graph.agent_step!, graph.model_step!; n=length(df[!,1])-1)
 	pplot.line_plot(
