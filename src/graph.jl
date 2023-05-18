@@ -45,7 +45,7 @@ module graph
 			number_point_of_interest, migration_rate, θₜ,
 			control_accuracy, ncontrols, θ, infected_ratio=0.0,
 			R₀, ξ, q, Is, C, is_lockdown=false, β = R₀/γ,
-			γ, σ, ω, δ, η, ηₜ = [13, 21, 55, 144], i=1,
+			γ, σ, ω, δ, η, ηₜ = [1, 2, 3, 5, 8, 13, 21, 55, 89, 144], i=0,
 		)
 		
 		# creo il modello 
@@ -71,7 +71,7 @@ module graph
 		controls!(model)
 		countermeasures!(model)
 		lockdown!(model)
-		variant!(model)
+		# variant!(model)
 	end
 
 	function controls!(model)
@@ -83,7 +83,7 @@ module graph
 		# number of controls in time
 		infected_ratio = length(filter(x -> x == :I, [result!(p, model) for p in population_sample])) / length(population_sample)
 		model.ncontrols = infected_ratio ≥ model.infected_ratio ? 
-			model.ncontrols*1.01 : model.ncontrols/1.01
+			model.ncontrols*1.2 : model.ncontrols/1.2
 		model.infected_ratio = infected_ratio
 	end
 
@@ -93,17 +93,17 @@ module graph
 		end
 		if model.θₜ > 0
 			# lockdown (proprietà spaziale)
-			if model.θ > 0 && model.is_lockdown == false
+			if model.is_lockdown == false
 				model.is_lockdown = true
 				population_sample = sample(model.rng, 
 					filter(x -> x, [agent for agent in allagents(model)]), 
 					round(Int, count(allagents(model))*model.θ))
 				for p in population_sample
-					p.β = 0.0
 					p.detected = :L
 				end
 			end
 			model.θₜ -= 1
+			model.R₀ -= 0.0014 # random value
 		else
 			model.is_lockdown = false
 		end
@@ -128,14 +128,20 @@ module graph
 	function countermeasures!(model)
 		# regole e rateo per i vaccini
 		if rand(model.rng) < 1/365 # condizione di attivazione
-			model.ξ = abs(rand(Normal(0.003, 0.0003)))
+			model.ξ = abs(rand(Normal(0.0025, 0.00025)))
 		end
 		# inserisco e tolgo countermeasures
 		if model.infected_ratio ≥ 0.01 # condizione di attivazione
 			# aumentare le countermeasures via via con il tempo
-			model.η = 1/model.ηₜ[model.i]
 			model.i += 1
 			model.i = model.i > length(model.ηₜ) ? length(model.ηₜ) : model.i
+			model.η = 1/model.ηₜ[model.i]
+			model.R₀ -= 0.0014 # random value
+		else
+			model.i -= 1
+			model.i = model.i ≤ 0 ? 1 : model.i
+			model.η = 1/model.ηₜ[model.i]
+			model.R₀ += 0.0014 # random value
 		end
 	end
 
@@ -248,6 +254,7 @@ module graph
 			agent.status = :R
 			agent.days_infected = 0
 			agent.immunity_period = model.ω
+			variant!(model)
 		end
 	end	
 

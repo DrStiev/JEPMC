@@ -128,14 +128,14 @@ module pplot
         custom_layout(fig, abmobs, frames, name)
     end
 
-    function line_plot(data, timeperiod, path="", title = "title", format="png")
+    function save_plot(plot, path="", title = "title", format="png")
         isdir(path) == false && mkpath(path)
-        dates = range(timeperiod[1], timeperiod[length(timeperiod)], step=Day(1))
-	    tm_ticks = round.(dates, Month(1)) |> unique;
-        p = Plots.plot(timeperiod, Array(data), labels=permutedims(names(data)), 
-            title=title, xticks=(tm_ticks, Dates.format.(tm_ticks, "uu/yyyy")), 
-            xrot=45, xminorticks=true, xlim=extrema(dates))
-        savefig(p, path*title*"_"*string(today())*"."*format)
+        # dates = range(timeperiod[1], timeperiod[length(timeperiod)], step=Day(1))
+	    # tm_ticks = round.(dates, Month(1)) |> unique;
+        # p = Plots.plot(timeperiod, Array(data), labels=permutedims(names(data)), 
+        #     title=title, xticks=(tm_ticks, Dates.format.(tm_ticks, "uu/yyyy")), 
+        #     xrot=45, xminorticks=true, xlim=extrema(dates))
+        savefig(plot, path*title*"_"*string(today())*"."*format)
     end 
 
     function loss_plot(losses, path="", title = "title", format="png")
