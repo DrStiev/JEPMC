@@ -23,8 +23,7 @@ module model_params
 		df[!, :total_susceptible] = df[!, :population]-df[!, :total_cases]
 		return select(df, [:date]), 
 			select(df, [:new_cases_smoothed, :new_tests_smoothed, 
-				:new_vaccinations_smoothed, :new_deaths_smoothed,
-				:hosp_patients]),
+				:new_vaccinations_smoothed, :new_deaths_smoothed]),
 			select(df, [:total_susceptible, :total_cases, 
 				:total_deaths, :total_tests]),
 			select(df, [:reproduction_rate]) 
@@ -86,7 +85,7 @@ module model_params
 		q = 14 # quarantine period
 		R₀ = 3.54 
 			# first(skipmissing(df[!, :reproduction_rate]))
-		ncontrols = 7.28E-5
+		ncontrols = 0.00027#7.28E-5
 			# first(skipmissing(df[!, :new_tests_smoothed]))/df[1, :population]
 		# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
 		control_accuracy = [0.64, 0.82, 0.997]

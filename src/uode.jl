@@ -6,11 +6,11 @@ module uode
 	function seir!(du, u, p, t)
 		S,E,I,R,D = u
 		R₀, γ, σ, ω, δ = p
-		dS = -R₀/γ*S + 1/ω*R 
-		dE = R₀/γ*S - 1/σ*E 
-		dI = 1/σ*E - 1/γ*I - δ*I
-		dR = 1/γ*I - 1/ω*R 
-		dD = δ*I
+		dS = -R₀*γ*S*I + ω*R 
+		dE = R₀*γ*S*I - σ*E
+		dI = σ*E - γ*I - δ*I
+		dR = γ*I - ω*R
+		dD = δ*I*γ
 		du[1] = dS; du[2] = dE; du[3] = dI; du[4] = dR; du[5] = dD;
 	end
 

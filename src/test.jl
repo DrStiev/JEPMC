@@ -22,9 +22,9 @@ module test_plot
 	df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
 	date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA")
 
-	p = plot(plot(Array(day_info), labels=permutedims(names(day_info))), 
-		plot(Array(total_count), labels=permutedims(names(total_count))),
-		plot(Array(R₀), labels=permutedims(names(R₀))))
+	p = plot(plot(Array(day_info), labels=["Infected" "Tests" "Vaccinations" "Deaths"], title="Detected Dynamics"), 
+		plot(Array(total_count), labels=["Susceptible" "Infected" "Deaths" "Tests"], title="Overall Dynamics"),
+		plot(Array(R₀), labels="R₀", title="Reproduction Rate"))
 
 	pplot.save_plot(p, "img/data_plot/", "cumulative_plot", "pdf")
 end
@@ -54,9 +54,9 @@ module test_abm
 	p3 = select(data, [:happiness_happiness])
 
 	p = plot(
-		plot(Array(p1), labels=permutedims(names(p1))),
-		plot(Array(p2), labels=permutedims(names(p2))),
-		plot(Array(p3), labels=permutedims(names(p3))),
+		plot(Array(p1), labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"], title="ABM Full Dynamics"),
+		plot(Array(p2), labels=["Infected" "Quarantined" "Recovered" "Vaccined"], title="ABM Detected Agents"),
+		plot(Array(p3), labels="Happiness", title="Cumulative Happiness"),
 	)
 	pplot.save_plot(p, "img/abm/", "cumulative_plot", "pdf")
 	
@@ -69,23 +69,28 @@ module test_abm
 		format=".mp4", frames=length(date[!,1])-1)
 end
 
-# TODO: to be implemented
 module test_uode
-	using Plots, DataFrames
+	using Plots, DataFrames, Random, Distributions
 	include("uode.jl")
 	include("params.jl")
 	include("pplot.jl")
 
-	df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
-	df = model_params.dataset_from_location(df, "ITA")
-	u,p,t = model_params.get_ode_parameters(df)
+	# must be between [0-1] otherwise strange behaviour
+	u = [35488/35489, 0, 1/35489, 0, 0]
+	p = [3.54, 1.0/14, 1.0/5, 1.0/280, 0.007]
+	t = (1, 1231)
 	prob = uode.get_ode_problem(uode.seir!, u, t, p)
 	sol = uode.get_ode_solution(prob)
-	plot(sol)
+	
+	p = plot(sol, labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"], title="SEIR Dynamics")
+	pplot.save_plot(p, "img/ode/", "cumulative_plot", "pdf")
 
+	# LinearAlgebra.SingularException(3)
+	# sys, params = model_params.system_identification(Array(sol), sol.t)
 end
 
 module test_controller
+	# https://link.springer.com/article/10.1007/s40313-023-00993-8
 	include("params.jl")
 	include("pplot.jl")
 	include("controller.jl")

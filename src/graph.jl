@@ -9,7 +9,6 @@ module graph
 	@agent Person GraphAgent begin
 		days_infected::Int
 		days_quarantined::Int
-		immunity_period::Int
 		status::Symbol # :S, :E, :I, :R
 		detected::Symbol # :S, :I, :Q, :L, :H, :R, :V
 		happiness::Float64 # [-1, 1]
@@ -53,7 +52,7 @@ module graph
 
 		# aggiungo la mia popolazione al modello
 		for city in 1:C, _ in 1:number_point_of_interest[city]
-			add_agent!(city, model, 0, 0, 0, :S, :S, 0.0) # Suscettibile
+			add_agent!(city, model, 0, 0, :S, :S, 0.0) # Suscettibile
 		end
 		# aggiungo il paziente zero
 		for city in 1:C
@@ -69,9 +68,11 @@ module graph
 
 	function model_step!(model)
 		controls!(model)
-		countermeasures!(model)
+		if model.is_lockdown == false # condizione di attivazione
+			countermeasures!(model)
+		end
 		lockdown!(model)
-		# variant!(model)
+		variant!(model)
 	end
 
 	function controls!(model)
@@ -83,7 +84,7 @@ module graph
 		# number of controls in time
 		infected_ratio = length(filter(x -> x == :I, [result!(p, model) for p in population_sample])) / length(population_sample)
 		model.ncontrols = infected_ratio ≥ model.infected_ratio ? 
-			model.ncontrols*1.2 : model.ncontrols/1.2
+			model.ncontrols*(1+abs(rand(Normal(0,0.1)))) : model.ncontrols/(1+abs(rand(Normal(0,0.1))))
 		model.infected_ratio = infected_ratio
 	end
 
@@ -103,7 +104,7 @@ module graph
 				end
 			end
 			model.θₜ -= 1
-			model.R₀ -= 0.0014 # random value
+			model.R₀ -= abs(rand(Normal(0.0, 0.0014))) # random value
 		else
 			model.is_lockdown = false
 		end
@@ -115,13 +116,19 @@ module graph
 		# https://onlinelibrary.wiley.com/doi/10.1002/jmv.27331
 		# https://virologyj.biomedcentral.com/articles/10.1186/s12985-022-01951-7
 		# nuova variante ogni tot tempo? 
-		if rand(model.rng) < 8*10E-4 # condizione di attivazione
+		if rand(model.rng) ≤ 8*10E-4 # condizione di attivazione
 			model.R₀ = abs(rand(Normal(model.R₀, model.R₀/10)))
 			model.γ = round(Int, abs(rand(Normal(model.γ, model.γ/10))))
 			model.σ = round(Int, abs(rand(Normal(model.σ, model.σ/10))))
 			model.ω = round(Int, abs(rand(Normal(model.ω, model.ω/10))))
 			model.δ = abs(rand(Normal(model.δ, model.δ/10)))
 			model.β = model.R₀ / model.γ
+			# new infected
+			new_infected = random_agent(model)
+			new_infected.status = :I
+			new_infected.detected = :S
+			new_infected.days_infected = 1
+			new_infected.days_quarantined = 0
 		end
 	end
 
@@ -131,17 +138,18 @@ module graph
 			model.ξ = abs(rand(Normal(0.0025, 0.00025)))
 		end
 		# inserisco e tolgo countermeasures
-		if model.infected_ratio ≥ 0.01 # condizione di attivazione
+		if model.R₀ ≥ 1.0 # condizione di attivazione da rivedere
 			# aumentare le countermeasures via via con il tempo
 			model.i += 1
 			model.i = model.i > length(model.ηₜ) ? length(model.ηₜ) : model.i
 			model.η = 1/model.ηₜ[model.i]
-			model.R₀ -= 0.0014 # random value
+			model.R₀ -= abs(rand(Normal(0.0, 0.0014))) # random value
 		else
+			# find a way to increase or decrease countermeasures
 			model.i -= 1
 			model.i = model.i ≤ 0 ? 1 : model.i
 			model.η = 1/model.ηₜ[model.i]
-			model.R₀ += 0.0014 # random value
+			model.R₀ += abs(rand(Normal(0.0, 0.0014))) # random value
 		end
 	end
 
@@ -205,17 +213,15 @@ module graph
 		if agent.status == :E
 			if agent.days_infected > model.σ
 				agent.status = :I
-				agent.days_infected = 1
+				agent.days_infected = 0
 			end
 			agent.days_infected += 1
 		# avanzamento malattia
 		elseif agent.status == :I
 			agent.days_infected += 1
 		elseif agent.status == :R
-			if rand(model.rng) < 1/agent.immunity_period 
+			if rand(model.rng) < 1/model.ω 
 				agent.status = :S
-			else
-				agent.immunity_period -= 1
 			end
 		end
 	end
@@ -225,7 +231,6 @@ module graph
 		if agent.detected == :S
 			if rand(model.rng) < model.ξ 
 				agent.status = :R
-				agent.immunity_period = model.ω
 				agent.detected = :V
 			end
 		# metto in quarantena i pazienti che scopro essere positivi
@@ -253,8 +258,6 @@ module graph
 			# probabilità di guarigione
 			agent.status = :R
 			agent.days_infected = 0
-			agent.immunity_period = model.ω
-			variant!(model)
 		end
 	end	
 
@@ -262,7 +265,8 @@ module graph
 		if agent.detected == :Q && agent.days_quarantined > model.q 
 			if result!(agent, model) == :S
 				agent.days_quarantined = 0
-				if agent.detected ≠ :L || (agent.detected == :L && model.θₜ ≤ 0)
+				if agent.detected ≠ :L || 
+					(agent.detected == :L && model.θₜ ≤ 0)
 					agent.detected = :R
 				else
 					agent.detected = :L
@@ -275,6 +279,7 @@ module graph
 	end
 
 	function collect(model, astep, mstep; n = 100)
+		# add reproduction number 
         susceptible(x) = count(i == :S for i in x)
         exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
