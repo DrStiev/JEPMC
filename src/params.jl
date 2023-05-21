@@ -79,7 +79,7 @@ module model_params
 		δ = 0.007
 			# sum(skipmissing(df[!, :new_deaths_smoothed])) / 
 			# sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
-		η = 1.0 # Countermeasures (social distancing, masks, etc...) (lower is better)
+		η = 1.0/20 # Countermeasures speed
 		θ = 0.0 # lockdown percentage
 		θₜ = 0 # lockdown period
 		q = 14 # quarantine period
@@ -88,12 +88,12 @@ module model_params
 		ncontrols = 0.00027#7.28E-5
 			# first(skipmissing(df[!, :new_tests_smoothed]))/df[1, :population]
 		# https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
-		control_accuracy = [0.64, 0.82, 0.997]
+		control_accuracy = [0.775, 0.55, 0.997]
 
 		return @dict(
 			number_point_of_interest, migration_rate, 
 			ncontrols, control_accuracy,
-			R₀, γ, σ, ω, ξ, δ, η, q, θ, θₜ,
+			R₀, γ, σ, ω, ξ, δ, η, q, θ, θₜ, Rᵢ = 1.0,
 		)
 	end
 

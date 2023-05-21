@@ -18,12 +18,13 @@ module graph
 		number_point_of_interest, migration_rate, 
 		ncontrols, control_accuracy,
 		R₀, # R₀ 
+		Rᵢ, # # numero "buono" di riproduzione
 		γ,  # periodo infettivita'
 		σ,  # periodo esposizione
 		ω,  # periodo immunita
 		ξ,  # 1 / vaccinazione per milion per day
 		δ,  # mortality rate
-		η,  # countermeasures type
+		η,  # countermeasures speed (or percentage of people with countermeasures)
 		q,  # periodo quarantena
 		θ,  # percentage of people under full lockdown
 		θₜ, # duration of lockdown ≥ 0
@@ -43,8 +44,8 @@ module graph
 		properties = @dict(
 			number_point_of_interest, migration_rate, θₜ,
 			control_accuracy, ncontrols, θ, infected_ratio=0.0,
-			R₀, ξ, q, Is, C, is_lockdown=false, β = R₀/γ,
-			γ, σ, ω, δ, η, ηₜ = [1, 2, 3, 5, 8, 13, 21, 55, 89, 144], i=0,
+			R₀, ξ, q, Is, C, is_lockdown=false, is_countermeasures=false,
+			γ, σ, ω, δ, η, Rᵢ,
 		)
 		
 		# creo il modello 
@@ -67,12 +68,14 @@ module graph
 	end
 
 	function model_step!(model)
+		# possibilita' di variante
+		variant!(model)
+		# controlli 
 		controls!(model)
-		if model.is_lockdown == false # condizione di attivazione
+		# contromisure
+		if model.is_countermeasures
 			countermeasures!(model)
 		end
-		lockdown!(model)
-		variant!(model)
 	end
 
 	function controls!(model)
@@ -83,14 +86,42 @@ module graph
 			round(Int, model.ncontrols))
 		# number of controls in time
 		infected_ratio = length(filter(x -> x == :I, [result!(p, model) for p in population_sample])) / length(population_sample)
-		model.ncontrols = infected_ratio ≥ model.infected_ratio ? 
-			model.ncontrols*(1+abs(rand(Normal(0,0.1)))) : model.ncontrols/(1+abs(rand(Normal(0,0.1))))
+		if infected_ratio ≥ model.infected_ratio
+			model.ncontrols = model.ncontrols*(1+abs(rand(Normal(0, 0.1))))
+			model.is_countermeasures = true
+		else
+			model.ncontrols = model.ncontrols/(1+abs(rand(Normal(0, 0.1))))
+		end
 		model.infected_ratio = infected_ratio
 	end
 
-	function lockdown!(model)
-		if false # condizione di attivazione
-			model.θₜ = round(Int, abs(rand(Normal(60, 30))))
+	# very very simple function
+	function variant!(model)
+		# https://www.nature.com/articles/s41579-023-00878-2
+		# https://onlinelibrary.wiley.com/doi/10.1002/jmv.27331
+		# https://virologyj.biomedcentral.com/articles/10.1186/s12985-022-01951-7
+		# nuova variante ogni tot tempo? 
+		if rand(model.rng) ≤ 8*10E-4 # condizione di attivazione
+			# https://en.wikipedia.org/wiki/Basic_reproduction_number#Sample_values_for_various_infectious_diseases
+			newR₀ = rand(Uniform(2.4, 9.5))
+			model.R₀ = abs(rand(Normal(newR₀, newR₀/10)))
+			model.γ = round(Int, abs(rand(Normal(model.γ, model.γ/10))))
+			model.σ = round(Int, abs(rand(Normal(model.σ, model.σ/10))))
+			model.ω = round(Int, abs(rand(Normal(model.ω, model.ω/10))))
+			model.δ = abs(rand(Normal(model.δ, model.δ/10)))
+			# new infected
+			new_infected = random_agent(model)
+			new_infected.status = :I
+			new_infected.detected = :S
+			new_infected.days_infected = 1
+			new_infected.days_quarantined = 0
+		end
+	end
+
+	function countermeasures!(model)
+		# regole e rateo per i vaccini
+		if rand(model.rng) < 1/365 # condizione di attivazione
+			model.ξ = abs(rand(Normal(0.002, 0.0002)))
 		end
 		if model.θₜ > 0
 			# lockdown (proprietà spaziale)
@@ -104,57 +135,19 @@ module graph
 				end
 			end
 			model.θₜ -= 1
-			model.R₀ -= abs(rand(Normal(0.0, 0.0014))) # random value
+			model.R₀ -= model.θ * (model.R₀ - model.Rᵢ)
 		else
 			model.is_lockdown = false
-		end
-	end
-
-	# very very simple function
-	function variant!(model)
-		# https://www.nature.com/articles/s41579-023-00878-2
-		# https://onlinelibrary.wiley.com/doi/10.1002/jmv.27331
-		# https://virologyj.biomedcentral.com/articles/10.1186/s12985-022-01951-7
-		# nuova variante ogni tot tempo? 
-		if rand(model.rng) ≤ 8*10E-4 # condizione di attivazione
-			model.R₀ = abs(rand(Normal(model.R₀, model.R₀/10)))
-			model.γ = round(Int, abs(rand(Normal(model.γ, model.γ/10))))
-			model.σ = round(Int, abs(rand(Normal(model.σ, model.σ/10))))
-			model.ω = round(Int, abs(rand(Normal(model.ω, model.ω/10))))
-			model.δ = abs(rand(Normal(model.δ, model.δ/10)))
-			model.β = model.R₀ / model.γ
-			# new infected
-			new_infected = random_agent(model)
-			new_infected.status = :I
-			new_infected.detected = :S
-			new_infected.days_infected = 1
-			new_infected.days_quarantined = 0
-		end
-	end
-
-	function countermeasures!(model)
-		# regole e rateo per i vaccini
-		if rand(model.rng) < 1/365 # condizione di attivazione
-			model.ξ = abs(rand(Normal(0.0025, 0.00025)))
-		end
-		# inserisco e tolgo countermeasures
-		if model.R₀ ≥ 1.0 # condizione di attivazione da rivedere
-			# aumentare le countermeasures via via con il tempo
-			model.i += 1
-			model.i = model.i > length(model.ηₜ) ? length(model.ηₜ) : model.i
-			model.η = 1/model.ηₜ[model.i]
-			model.R₀ -= abs(rand(Normal(0.0, 0.0014))) # random value
-		else
-			# find a way to increase or decrease countermeasures
-			model.i -= 1
-			model.i = model.i ≤ 0 ? 1 : model.i
-			model.η = 1/model.ηₜ[model.i]
-			model.R₀ += abs(rand(Normal(0.0, 0.0014))) # random value
+			# effectiveness of countermeasures in relation to 
+			# the decrease of R₀
+			if model.R₀ ≥ (1.0 + model.R₀*1E-6)
+				model.R₀ -= model.η * (model.R₀ - model.Rᵢ)
+			end
 		end
 	end
 
 	function agent_step!(agent, model)
-		# happiness!(agent, -(model.η)^-1/1000, (model.η)^-1/10000)
+		happiness!(agent, -model.η, model.η/10)
 		if agent.detected ≠ :Q && agent.detected ≠ :L
 			# possibilità di migrare e infettare sse non in quarantena
 			migrate!(agent, model)
@@ -194,7 +187,7 @@ module graph
 
 	function transmit!(agent, model)
 		agent.status != :I && return
-		n = model.β * model.η * abs(randn(model.rng))
+		n = model.R₀ * model.γ * abs(randn(model.rng))
 		n ≤ 0 && return
 		for contactID in ids_in_position(agent, model)
 			contact = model[contactID]  
