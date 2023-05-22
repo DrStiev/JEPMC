@@ -43,7 +43,6 @@ module pplot
         exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
 		quarantined(x) = count(i == :Q for i in x)
-        lockdown(x) = count(i == :L for i in x)
         recovered(x) = count(i == :R for i in x)
         vaccined(x) = count(i == :V for i in x)
         happiness(x) = mean(x)
@@ -51,13 +50,14 @@ module pplot
         return [(:status, susceptible), (:status, exposed), 
             (:status, infected), (:status, recovered), 
             (:detected, quarantined), (:detected, infected), 
-            (:detected, recovered), (:detected, lockdown),
             (:detected, vaccined), (:happiness, happiness)]
     end
 
     function get_mdata(model)
         dead(model) = sum(model.number_point_of_interest) - nagents(model)
-        return [dead]
+        R₀(model) = model.R₀
+        controls(model) = round(Int, model.ncontrols)
+        return [dead, R₀, controls]
     end
 
     function custom_layout(fig, abmobs, step, name)
@@ -73,12 +73,14 @@ module pplot
         # get information about the data known from the society
         id = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).infected_detected))
         q = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).quarantined_detected))
-        #l = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).lockdown_detected))
         v = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).vaccined_detected))
-        rd = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).recovered_detected))
+        c = @lift(Point2f.($(abmobs.mdf).step, $(abmobs.mdf).controls))
         
         # get information about the general mood of the society
         happiness = @lift(Point2f.($(abmobs.adf).step, $(abmobs.adf).happiness_happiness))
+        
+        # get information about the R₀ index
+        Rₜ = @lift(Point2f.($(abmobs.mdf).step, $(abmobs.mdf).R₀))
 
         ax_seir = Axis(count_layout[1, 1]; ylabel="SEIR Dynamic")
         lines!(ax_seir, s; label="susceptible")
@@ -92,17 +94,23 @@ module pplot
         lines!(ax_detected, id; label="infected")
         lines!(ax_detected, q; label="quarantined")
         lines!(ax_detected, v; label="vaccined")
-        lines!(ax_detected, rd; label="recovered")
+        # lines!(ax_detected, rd; label="recovered")
+        lines!(ax_detected, c; label="tests")
         Legend(count_layout[2, 2], ax_detected;)
 
         ax_happiness = Axis(count_layout[3, 1]; ylabel = "Average happiness")
         lines!(ax_happiness, happiness; label="happiness")
         Legend(count_layout[3, 2], ax_happiness;)
 
+        ax_R₀ = Axis(count_layout[4, 1]; ylabel = "Reproduction number")
+        lines!(ax_R₀, Rₜ; label="R₀")
+        Legend(count_layout[4, 2], ax_R₀;)
+
         on(abmobs.model) do m
             autolimits!(ax_happiness)
             autolimits!(ax_detected)
             autolimits!(ax_seir)
+            autolimits!(ax_R₀)
         end
 
         # GLMakie do not work on kos 
@@ -130,11 +138,6 @@ module pplot
 
     function save_plot(plot, path="", title = "title", format="png")
         isdir(path) == false && mkpath(path)
-        # dates = range(timeperiod[1], timeperiod[length(timeperiod)], step=Day(1))
-	    # tm_ticks = round.(dates, Month(1)) |> unique;
-        # p = Plots.plot(timeperiod, Array(data), labels=permutedims(names(data)), 
-        #     title=title, xticks=(tm_ticks, Dates.format.(tm_ticks, "uu/yyyy")), 
-        #     xrot=45, xminorticks=true, xlim=extrema(dates))
         savefig(plot, path*title*"_"*string(today())*"."*format)
     end 
 

@@ -87,10 +87,10 @@ module graph
 		# number of controls in time
 		infected_ratio = length(filter(x -> x == :I, [result!(p, model) for p in population_sample])) / length(population_sample)
 		if infected_ratio ≥ model.infected_ratio
-			model.ncontrols = model.ncontrols*(1+abs(rand(Normal(0, 0.1))))
+			model.ncontrols = model.ncontrols*(1+abs(rand(Normal(0.1, 0.01))))
 			model.is_countermeasures = true
 		else
-			model.ncontrols = model.ncontrols/(1+abs(rand(Normal(0, 0.1))))
+			model.ncontrols = model.ncontrols/(1+abs(rand(Normal(0.1, 0.01))))
 		end
 		model.infected_ratio = infected_ratio
 	end
@@ -102,25 +102,29 @@ module graph
 		# https://virologyj.biomedcentral.com/articles/10.1186/s12985-022-01951-7
 		# nuova variante ogni tot tempo? 
 		if rand(model.rng) ≤ 8*10E-4 # condizione di attivazione
-			# https://en.wikipedia.org/wiki/Basic_reproduction_number#Sample_values_for_various_infectious_diseases
-			newR₀ = rand(Uniform(2.4, 9.5))
+			# https://it.wikipedia.org/wiki/Numero_di_riproduzione_di_base#Variabilit%C3%A0_e_incertezze_del_R0
+			newR₀ = rand(Uniform(3.3, 5.7))
 			model.R₀ = abs(rand(Normal(newR₀, newR₀/10)))
 			model.γ = round(Int, abs(rand(Normal(model.γ, model.γ/10))))
 			model.σ = round(Int, abs(rand(Normal(model.σ, model.σ/10))))
 			model.ω = round(Int, abs(rand(Normal(model.ω, model.ω/10))))
 			model.δ = abs(rand(Normal(model.δ, model.δ/10)))
-			# new infected
-			new_infected = random_agent(model)
-			new_infected.status = :I
-			new_infected.detected = :S
-			new_infected.days_infected = 1
-			new_infected.days_quarantined = 0
+			# new infects
+			new_infects = sample(model.rng, 
+				[a for a in allagents(model)], 
+				round(Int, length(allagents(model))*abs(rand(Normal(1E-4, 1E-5)))))
+			for i in new_infects
+				i.status = :I
+				i.days_infected = 1
+			end
 		end
 	end
 
 	function countermeasures!(model)
 		# regole e rateo per i vaccini
-		if rand(model.rng) < 1/365 # condizione di attivazione
+		if model.ξ > 0
+			model.ξ = rand(Uniform(0.0, abs(rand(Normal(0.002, 0.0002)))))
+		elseif rand(model.rng) < 1/365 # condizione di attivazione
 			model.ξ = abs(rand(Normal(0.002, 0.0002)))
 		end
 		if model.θₜ > 0
@@ -140,14 +144,16 @@ module graph
 			model.is_lockdown = false
 			# effectiveness of countermeasures in relation to 
 			# the decrease of R₀
-			if model.R₀ ≥ (1.0 + model.R₀*1E-6)
+			if model.R₀ > model.Rᵢ
 				model.R₀ -= model.η * (model.R₀ - model.Rᵢ)
 			end
 		end
 	end
 
 	function agent_step!(agent, model)
-		happiness!(agent, -model.η, model.η/10)
+		if model.is_countermeasures
+			happiness!(agent, -model.η/10, model.η/100)
+		end
 		if agent.detected ≠ :Q && agent.detected ≠ :L
 			# possibilità di migrare e infettare sse non in quarantena
 			migrate!(agent, model)
@@ -181,7 +187,7 @@ module graph
 		m = sample(model.rng, 1:(model.C), Weights(model.migration_rate[pid, :]))
 		if m ≠ pid
 			move_agent!(agent, m, model)
-			happiness!(agent, 0.1, 0.05)
+			happiness!(agent, 0.1, 0.01)
 		end
 	end
 
@@ -223,8 +229,13 @@ module graph
 		# probabilità di vaccinarsi
 		if agent.detected == :S
 			if rand(model.rng) < model.ξ 
-				agent.status = :R
-				agent.detected = :V
+				if agent.status == :E || agent.status == :I
+					agent.status = :I 
+					agent.detected = :I
+				else
+					agent.status = :R
+					agent.detected = :V
+				end
 			end
 		# metto in quarantena i pazienti che scopro essere positivi
 		elseif agent.detected == :I
@@ -233,7 +244,7 @@ module graph
 		# avanzamento quarantena
 		elseif agent.detected == :Q 
 			agent.days_quarantined += 1
-			happiness!(agent, -0.05, 0.05)
+			happiness!(agent, 0.0, 0.05)
 		elseif agent.detected == :L
 			happiness!(agent, -0.05, 0.05)
 		end
@@ -277,22 +288,23 @@ module graph
         exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
         recovered(x) = count(i == :R for i in x)
-        dead(x) = sum(model.number_point_of_interest) - length(x) 
 
 		quarantined(x) = count(i == :Q for i in x)
-		lockdown(x) = count(i == :L for i in x)
 		vaccined(x) = count(i == :V for i in x)
 		happiness(x) = mean(x)
 
-        to_collect = [(:status, susceptible), (:status, exposed), (:status, infected), 
-			(:status, recovered), (:happiness, happiness), (:detected, infected), 
-			(:detected, quarantined), (:detected, lockdown), (:detected, recovered), 
-			(:detected, vaccined), (:status, dead)]
-        data, _ = run!(model, astep, mstep, n; adata = to_collect)
-		data[!, :dead_status] = data[!, end]
-    	select!(data, :susceptible_status, :exposed_status, :infected_status, :recovered_status, 
-			:infected_detected, :quarantined_detected, :recovered_detected, :lockdown_detected, 
-			:vaccined_detected, :dead_status, :happiness_happiness)
+		R₀(model) = model.R₀
+		dead(model) = sum(model.number_point_of_interest) - nagents(model)
+		controls(model) = round(Int, model.ncontrols)
+
+        to_collect = [(:status, susceptible), (:status, exposed), 
+			(:status, infected), (:status, recovered), 
+			(:happiness, happiness), (:detected, infected), 
+			(:detected, quarantined), (:detected, vaccined)]
+        
+		dataa, datam = run!(model, astep, mstep, n; adata = to_collect, mdata=[dead, R₀, controls])
+		data = hcat(select(dataa, Not([:step])), 
+			select(datam, Not([:step])))
         return data
     end
 end

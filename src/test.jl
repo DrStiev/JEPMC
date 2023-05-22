@@ -30,7 +30,7 @@ module test_plot
 end
 
 module test_abm
-	using Agents, DataFrames, Plots, Distributions
+	using Agents, DataFrames, Plots, Distributions, Random
 	using Statistics: mean
 
 	include("params.jl")
@@ -45,18 +45,19 @@ module test_abm
 	@time data = graph.collect(model, graph.agent_step!, graph.model_step!; n=length(date[!,1])-1)
 	
 	p1 = select(data, 
-		Not([:happiness_happiness, :infected_detected, 
-		:quarantined_detected, :recovered_detected, 
-		:lockdown_detected, :vaccined_detected]))
+		[:susceptible_status, :exposed_status, 
+		:infected_status, :recovered_status, :dead])
 	p2 = select(data, 
 		[:infected_detected, :quarantined_detected, 
-		:recovered_detected, :vaccined_detected])
+		:vaccined_detected, :controls])
 	p3 = select(data, [:happiness_happiness])
+	p4 = select(data, [:R₀])
 
 	p = plot(
 		plot(Array(p1), labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"], title="ABM Full Dynamics"),
-		plot(Array(p2), labels=["Infected" "Quarantined" "Recovered" "Vaccined"], title="ABM Detected Agents"),
+		plot(Array(p2), labels=["Infected" "Quarantined" "Vaccined" "Tests"], title="ABM Detected Agents"),
 		plot(Array(p3), labels="Happiness", title="Cumulative Happiness"),
+		plot(Array(p4), labels="R₀", title="Reproduction number"),
 	)
 	pplot.save_plot(p, "img/abm/", "cumulative_plot", "pdf")
 	
