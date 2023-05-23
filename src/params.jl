@@ -11,7 +11,7 @@ using JLD2, FileIO
 # https://covid.ourworldindata.org/data/owid-covid-data.csv
 function download_dataset(
     path,
-    url = "https://covid.ourworldindata.org/data/owid-covid-data.csv",
+    url="https://covid.ourworldindata.org/data/owid-covid-data.csv",
 )
     # https://github.com/owid/covid-19-data/tree/master/public/data/
     title = split(url, "/")
@@ -19,8 +19,8 @@ function download_dataset(
     return DataFrame(
         CSV.File(
             Downloads.download(url, path * title[length(title)]),
-            delim = ",",
-            header = 1,
+            delim=",",
+            header=1,
         ),
     )
 end
@@ -29,7 +29,7 @@ function dataset_from_location(df, iso_code)
     df = filter(:iso_code => ==(iso_code), df)
     df[!, :total_susceptible] = df[!, :population] - df[!, :total_cases]
     return select(df, [:date]),
-    select(
+    mapcols(col -> replace(col, missing => 0), select(
         df,
         [
             :new_cases_smoothed,
@@ -37,29 +37,33 @@ function dataset_from_location(df, iso_code)
             :new_vaccinations_smoothed,
             :new_deaths_smoothed,
         ],
-    ),
-    select(df, [:total_susceptible, :total_cases, :total_deaths, :total_tests]),
-    select(df, [:reproduction_rate])
+    )),
+    mapcols(col -> replace(col, missing => 0), select(df, [:total_susceptible, :total_cases, :total_deaths, :total_tests])),
+    mapcols(col -> replace(col, missing => 0), select(df, [:reproduction_rate]))
 end
 
-function read_local_dataset(path = "data/OWID/owid-covid-data.csv")
-    return DataFrame(CSV.File(path, delim = ",", header = 1))
+function read_local_dataset(path="data/OWID/owid-covid-data.csv")
+    return DataFrame(CSV.File(path, delim=",", header=1))
 end
 
 # to be tested!
 # https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/
-function system_identification(data, ts, seed = 1337)
-    prob = ContinuousDataDrivenProblem(data, ts, GaussianKernel())
-    # relevant states?
-    @variables u[1:4]
-    polys = Operation[]
-    for i ∈ 0:3, j ∈ 0:3, k ∈ 0:3, l ∈ 0:3
-        push!(polys, u[1]^i * u[2]^j * u[3]^k * u[4]^l)
-    end
-    h = [cos.(u)...; sin.(u)...; unique(polys)...]
-    basis = Basis(h, u)
-    sampler =
-        DataProcessing(split = 0.8, shuffle = true, batchsize = 30, rng = Xoshiro(seed))
+function system_identification(data, ts, seed=1337)
+    prob = ContinuousDataDrivenProblem(
+        float.(data), float.(ts), GaussianKernel(),
+        U=(u, p, t) -> [exp(-((t - 5.0) / 5.0)^2)],
+        p=ones(2))
+
+    @variables u[1:size(data)[1]] c[1:1]
+    @parameters w[1:size(data)[1]]
+    u = collect(u)
+    c = collect(c)
+    w = collect(w)
+
+    h = Num[cos.(u .* w); sin.(u .* w); polynomial_basis(u, 5); c]
+    basis = Basis(h, u, parameters=w, controls=c)
+
+    sampler = DataProcessing(split=0.8, shuffle=true, batchsize=30, rng=Xoshiro(seed))
     # sparsity threshold
     λs = exp10.(-10:0.1:0)
     opt = STLSQ(λs) # iterate over different sparsity thresholds
@@ -67,14 +71,14 @@ function system_identification(data, ts, seed = 1337)
         prob,
         basis,
         opt,
-        options = DataDrivenCommonOptions(data_processing = sampler, digits = 1),
+        options=DataDrivenCommonOptions(data_processing=sampler, digits=1),
     )
     system = get_basis(res)
     params = get_parameter_map(system)
     return system, params
 end
 
-function get_abm_parameters(C, max_travel_rate, avg = 1000; outliers = [], seed = 1337)
+function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337)
     rng = Xoshiro(seed)
     pop = randexp(rng, C) * avg
     pop = length(outliers) > 0 ? append!(pop, outliers) : pop
@@ -100,7 +104,7 @@ function get_abm_parameters(C, max_travel_rate, avg = 1000; outliers = [], seed 
     δ = 0.007
     # sum(skipmissing(df[!, :new_deaths_smoothed])) / 
     # sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
-    η = 1.0 / 20 # Countermeasures speed
+    η = 1.0 / 100 # Countermeasures speed
     θ = 0.0 # lockdown percentage
     θₜ = 0 # lockdown period
     q = 14 # quarantine period
@@ -147,7 +151,7 @@ function get_ode_parameters(df)
     return [S, E, I, R, D], [R₀, γ, σ, ω, δ], tspan
 end
 
-function save_parameters(params, path, title = "parameters")
+function save_parameters(params, path, title="parameters")
     isdir(path) == false && mkpath(path)
     save(path * title * ".jld2", params)
 end

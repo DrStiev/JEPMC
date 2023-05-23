@@ -2,15 +2,15 @@ module test_parameters
 using DataFrames
 include("params.jl")
 
-df = model_params.download_dataset(
+model_params.download_dataset(
     "data/OWID/",
     "https://covid.ourworldindata.org/data/owid-covid-data.csv",
 )
+df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
 date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA")
 
 # LinearAlgebra.SingularException(3)
-# https://stackoverflow.com/questions/68967232/why-does-julia-fails-to-solve-linear-system-systematically
-# @time sys, params = model_params.system_identification(Array(day_info)', [i for i in 1:length(day_info[!, 1])])
+@time sys, params = model_params.system_identification(float.(Array(day_info))', float.((1:length(day_info[!, 1]))))
 
 abm_parameters = model_params.get_abm_parameters(20, 0.01)
 model_params.save_parameters(abm_parameters, "data/parameters/", "abm_parameters")
@@ -28,15 +28,15 @@ date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA"
 p = plot(
     plot(
         Array(day_info),
-        labels = ["Infected" "Tests" "Vaccinations" "Deaths"],
-        title = "Detected Dynamics",
+        labels=["Infected" "Tests" "Vaccinations" "Deaths"],
+        title="Detected Dynamics",
     ),
     plot(
         Array(total_count),
-        labels = ["Susceptible" "Infected" "Deaths" "Tests"],
-        title = "Overall Dynamics",
+        labels=["Susceptible" "Infected" "Deaths" "Tests"],
+        title="Overall Dynamics",
     ),
-    plot(Array(R₀), labels = "R₀", title = "Reproduction Rate"),
+    plot(Array(R₀), labels="R₀", title="Reproduction Rate"),
 )
 
 pplot.save_plot(p, "img/data_plot/", "cumulative_plot", "pdf")
@@ -53,10 +53,13 @@ include("graph.jl")
 df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
 date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA")
 
-abm_parameters = model_params.get_abm_parameters(20, 0.01, 2000)
+abm_parameters = model_params.get_abm_parameters(20, 0.01, 3300)
 @time model = graph.init(; abm_parameters...)
+
+# data = graph.collect(model, graph.agent_step!, graph.model_step!; n=7)
+
 @time data =
-    graph.collect(model, graph.agent_step!, graph.model_step!; n = length(date[!, 1]) - 1)
+    graph.collect(model, graph.agent_step!, graph.model_step!; n=length(date[!, 1]) - 1)
 
 p1 = select(
     data,
@@ -70,16 +73,16 @@ p4 = select(data, [:R₀])
 p = plot(
     plot(
         Array(p1),
-        labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-        title = "ABM Full Dynamics",
+        labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        title="ABM Full Dynamics",
     ),
     plot(
         Array(p2),
-        labels = ["Infected" "Quarantined" "Vaccined" "Tests"],
-        title = "ABM Detected Agents",
+        labels=["Infected" "Quarantined" "Vaccined" "Tests"],
+        title="ABM Detected Agents",
     ),
-    plot(Array(p3), labels = "Happiness", title = "Cumulative Happiness"),
-    plot(Array(p4), labels = "R₀", title = "Reproduction number"),
+    plot(Array(p3), labels="Happiness", title="Cumulative Happiness"),
+    plot(Array(p4), labels="R₀", title="Reproduction number"),
 )
 pplot.save_plot(p, "img/abm/", "cumulative_plot", "pdf")
 
@@ -91,10 +94,10 @@ pplot.save_plot(p, "img/abm/", "cumulative_plot", "pdf")
     model,
     graph.agent_step!,
     graph.model_step!;
-    title = "graph_abm",
-    path = "img/video/",
-    format = ".mp4",
-    frames = length(date[!, 1]) - 1,
+    title="graph_abm",
+    path="img/video/",
+    format=".mp4",
+    frames=length(date[!, 1]) - 1
 )
 end
 
@@ -113,8 +116,8 @@ sol = uode.get_ode_solution(prob)
 
 p = plot(
     sol,
-    labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-    title = "SEIR Dynamics",
+    labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+    title="SEIR Dynamics",
 )
 pplot.save_plot(p, "img/ode/", "cumulative_plot", "pdf")
 

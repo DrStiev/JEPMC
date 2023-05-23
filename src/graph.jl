@@ -6,6 +6,8 @@ using InteractiveDynamics
 using Statistics: mean
 using Distributions
 
+include("controller.jl")
+
 @agent Person GraphAgent begin
     days_infected::Int
     days_quarantined::Int
@@ -30,12 +32,12 @@ function init(;
     q,  # periodo quarantena
     θ,  # percentage of people under full lockdown
     θₜ, # duration of lockdown ≥ 0
-    seed = 1337,
+    seed=1337
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
     # normalizzo il migration rate
-    migration_rate_sum = sum(migration_rate, dims = 2)
+    migration_rate_sum = sum(migration_rate, dims=2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
@@ -91,9 +93,9 @@ function model_step!(model)
     # controlli 
     controls!(model)
     # contromisure
-    if model.is_countermeasures
-        countermeasures!(model)
-    end
+    # if model.is_countermeasures
+    #     countermeasures!(model)
+    # end
 end
 
 function controls!(model)
@@ -104,16 +106,17 @@ function controls!(model)
         filter(x -> x.detected ≠ :Q, [agent for agent in allagents(model)]),
         round(Int, model.ncontrols),
     )
-    # number of controls in time
-    infected_ratio =
-        length(filter(x -> x == :I, [result!(p, model) for p in population_sample])) / length(population_sample)
-    if infected_ratio ≥ model.infected_ratio
-        model.ncontrols = model.ncontrols * (1 + abs(rand(Normal(0.1, 0.01))))
-        model.is_countermeasures = true
-    else
-        model.ncontrols = model.ncontrols / (1 + abs(rand(Normal(0.1, 0.01))))
-    end
-    model.infected_ratio = infected_ratio
+    _ = [result!(p, model) for p in population_sample]
+    # # number of controls in time
+    # infected_ratio =
+    #     length(filter(x -> x == :I, [result!(p, model) for p in population_sample])) / length(population_sample)
+    # if infected_ratio ≥ model.infected_ratio
+    #     model.ncontrols = model.ncontrols * (1 + abs(rand(Normal(0.1, 0.01))))
+    #     model.is_countermeasures = true
+    # else
+    #     model.ncontrols = model.ncontrols / (1 + abs(rand(Normal(0.1, 0.01))))
+    # end
+    # model.infected_ratio = infected_ratio
 end
 
 # very very simple function
@@ -176,9 +179,6 @@ function countermeasures!(model)
 end
 
 function agent_step!(agent, model)
-    if model.is_countermeasures
-        happiness!(agent, -model.η / 10, model.η / 100)
-    end
     if agent.detected ≠ :Q && agent.detected ≠ :L
         # possibilità di migrare e infettare sse non in quarantena
         migrate!(agent, model)
@@ -213,13 +213,14 @@ function migrate!(agent, model)
     m = sample(model.rng, 1:(model.C), Weights(model.migration_rate[pid, :]))
     if m ≠ pid
         move_agent!(agent, m, model)
-        happiness!(agent, 0.1, 0.01)
+        h = 0.1 - (0.1 *model.η)
+        happiness!(agent, h, h/10)
     end
 end
 
 function transmit!(agent, model)
     agent.status != :I && return
-    n = model.R₀ * model.γ * abs(randn(model.rng))
+    n = model.R₀ / model.γ * abs(randn(model.rng))
     n ≤ 0 && return
     for contactID in ids_in_position(agent, model)
         contact = model[contactID]
@@ -307,8 +308,7 @@ function exit_quarantine!(agent, model)
     end
 end
 
-function collect(model, astep, mstep; n = 100)
-    # add reproduction number 
+function collect(model, astep, mstep; n=100)
     susceptible(x) = count(i == :S for i in x)
     exposed(x) = count(i == :E for i in x)
     infected(x) = count(i == :I for i in x)
@@ -330,11 +330,15 @@ function collect(model, astep, mstep; n = 100)
         (:happiness, happiness),
         (:detected, infected),
         (:detected, quarantined),
+        (:detected, recovered),
         (:detected, vaccined),
     ]
 
+    # chiamo controller ogni x passi della run 
+    # per applicare delle nuove policy
+
     dataa, datam =
-        run!(model, astep, mstep, n; adata = to_collect, mdata = [dead, R₀, controls])
+        run!(model, astep, mstep, n; adata=to_collect, mdata=[dead, R₀, controls])
     data = hcat(select(dataa, Not([:step])), select(datam, Not([:step])))
     return data
 end
