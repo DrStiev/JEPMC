@@ -1,17 +1,21 @@
 module controller
-# for the neural network training
-using OrdinaryDiffEq,
-    SciMLSensitivity, Optimization, OptimizationOptimisers, OptimizationOptimJL
-# for the symbolic model discovery
-using ModelingToolkit, DataDrivenDiffEq, DataDrivenSparse, Zygote
-# external libraries
-using Lux, ComponentArrays
+# SciML Tools
+using OrdinaryDiffEq, ModelingToolkit, DataDrivenDiffEq, SciMLSensitivity, DataDrivenSparse
+using Optimization, OptimizationOptimisers, OptimizationOptimJL
+
+# Standard Libraries
+using LinearAlgebra, Statistics
+
+# External Libraries
+using ComponentArrays, Lux, Zygote, Plots, StableRNGs
+
 using DataFrames, Plots, Random, Agents, Distributions, LinearAlgebra, Statistics
 using DrWatson: @dict
 
 # parametri su cui il controllore può agire:
 # η → countermeasures (0.0 - 1.0)
 # Rᵢ → objective value for R₀
+# ξ → vaccination rate
 
 # include("params.jl")
 # include("graph.jl")
@@ -43,6 +47,9 @@ function countermeasures!(model::StandardABM, data::DataFrame)
         model.η = model.η ≥ 1 ? 1 : model.η * 2
     elseif ratio < 0
         model.η /= 2
+    end
+    if model.ξ == 0 && rand(model.rng) < 1 / 40
+        model.ξ = abs(rand(Normal(0.0003, 0.00003)))
     end
 end
 

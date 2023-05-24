@@ -115,7 +115,7 @@ function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337
     δ = 0.007
     # sum(skipmissing(df[!, :new_deaths_smoothed])) / 
     # sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
-    η = 1.0 / 1000 # Countermeasures speed
+    η = 1.0 / 100 # Countermeasures speed
     R₀ = 3.54
     # first(skipmissing(df[!, :reproduction_rate]))
 

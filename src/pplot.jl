@@ -2,11 +2,11 @@ module pplot
 using Plots, LaTeXStrings, StatsPlots
 using InteractiveDynamics, CairoMakie
 using DataFrames, Dates, CSV
-using Agents, GraphMakie, GLMakie
+using Agents, GraphMakie #, GLMakie
 using Statistics: mean
 using ProgressMeter
 
-GLMakie.activate!()
+# GLMakie.activate!()
 
 city_size(agents) = 0.005 * length(agents)
 function city_color(agents)
@@ -104,7 +104,7 @@ function custom_layout(fig, abmobs, step, name)
     p = if typeof(step) <: Int
         ProgressMeter.Progress(step; enabled=true, desc="run! progress: ")
     else
-        ProgressMeter.ProgressUnknown(desc="run! steps done: ", enabled=showprogress)
+        ProgressMeter.ProgressUnknown(desc="run! steps done: ", enabled=true)
     end
 
     on(abmobs.model) do m

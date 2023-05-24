@@ -11,8 +11,6 @@ include("controller.jl")
 
 @agent Person GraphAgent begin
     days_infected::Int
-    days_quarantined::Int
-    days_immunity::Int
     status::Symbol # :S, :E, :I, :R
     happiness::Float64 # [-1, 1]
 end
@@ -61,7 +59,7 @@ function init(;
 
     # aggiungo la mia popolazione al modello
     for city = 1:C, _ = 1:number_point_of_interest[city]
-        add_agent!(city, model, 0, 0, 0, :S, 0.0) # Suscettibile
+        add_agent!(city, model, 0, :S, 0.0) # Suscettibile
     end
     # aggiungo il paziente zero
     for city = 1:C
@@ -154,11 +152,15 @@ function transmit!(agent, model)
 end
 
 function update!(agent, model)
-    # fine periodo di latenza
-    if agent.status == :E
+    # possibilita di vaccinazione
+    if agent.status == :S
+        if rand(model.rng) < model.ξ
+            agent.status = :R
+        end
+        # fine periodo di latenza
+    elseif agent.status == :E
         if agent.days_infected > model.σ
             agent.status = :I
-            agent.days_infected = 0
         end
         agent.days_infected += 1
         # avanzamento malattia
@@ -166,10 +168,8 @@ function update!(agent, model)
         agent.days_infected += 1
         # perdita immunita'
     elseif agent.status == :R
-        agent.days_immunity -= 1
-        if rand(model.rng) < 1 / agent.days_immunity
+        if rand(model.rng) < 1 / model.ω
             agent.status = :S
-            agent.days_immunity = 0
         end
     end
 end
@@ -184,7 +184,6 @@ function recover_or_die!(agent, model)
         end
         # probabilità di guarigione
         agent.status = :R
-        agent.days_immunity = model.ω
         agent.days_infected = 0
     end
 end
@@ -215,7 +214,7 @@ function collect(model, astep=agent_step!, mstep=model_step!; n=100, controller_
     p = if typeof(n) <: Int
         ProgressMeter.Progress(n; enabled=true, desc="run! progress: ")
     else
-        ProgressMeter.ProgressUnknown(desc="run! steps done: ", enabled=showprogress)
+        ProgressMeter.ProgressUnknown(desc="run! steps done: ", enabled=true)
     end
 
     s = 0
