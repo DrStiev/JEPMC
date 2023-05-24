@@ -10,7 +10,10 @@ df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
 date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA")
 
 # LinearAlgebra.SingularException(3)
-@time sys, params = model_params.system_identification(float.(Array(day_info))', float.((1:length(day_info[!, 1]))))
+@time sys, params = model_params.system_identification(
+    float.(Array(day_info))',
+    float.((1:length(day_info[!, 1]))),
+)
 
 abm_parameters = model_params.get_abm_parameters(20, 0.01)
 model_params.save_parameters(abm_parameters, "data/parameters/", "abm_parameters")
@@ -53,20 +56,17 @@ include("graph.jl")
 df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
 date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA")
 
-abm_parameters = model_params.get_abm_parameters(20, 0.01, 3300)
-@time model = graph.init(; abm_parameters...)
+abm_parameters = model_params.get_abm_parameters(20, 0.001, 3300)
+model = graph.init(; abm_parameters...)
 
-# data = graph.collect(model, graph.agent_step!, graph.model_step!; n=7)
-
-@time data =
-    graph.collect(model, graph.agent_step!, graph.model_step!; n=length(date[!, 1]) - 1)
+# data = graph.collect(model; n=30, controller_step=7)
+data = graph.collect(model; n=length(date[!, 1]) - 1)
 
 p1 = select(
     data,
     [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
 )
-p2 =
-    select(data, [:infected_detected, :quarantined_detected, :vaccined_detected, :controls])
+p2 = select(data, [:active_countermeasures])
 p3 = select(data, [:happiness_happiness])
 p4 = select(data, [:R₀])
 
@@ -76,29 +76,25 @@ p = plot(
         labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
         title="ABM Full Dynamics",
     ),
-    plot(
-        Array(p2),
-        labels=["Infected" "Quarantined" "Vaccined" "Tests"],
-        title="ABM Detected Agents",
-    ),
+    plot(Array(p2), labels="η", title="Countermeasures strickness"),
     plot(Array(p3), labels="Happiness", title="Cumulative Happiness"),
     plot(Array(p4), labels="R₀", title="Reproduction number"),
 )
 pplot.save_plot(p, "img/abm/", "cumulative_plot", "pdf")
 
-# InexactError: Int64(122232.19613926377)
-# sys, params = model_params.system_identification(Array(p1)', 1:length(p1[!,1]))
+# sys, params = model_params.system_identification(Array(p1)', (1:length(p1[!,1])))
 
-@time model = graph.init(; abm_parameters...)
-@time pplot.custom_video(
-    model,
-    graph.agent_step!,
-    graph.model_step!;
-    title="graph_abm",
-    path="img/video/",
-    format=".mp4",
-    frames=length(date[!, 1]) - 1
-)
+# TODO: SISTEMAMI
+# model = graph.init(; abm_parameters...)
+# pplot.custom_video(
+#     model,
+#     graph.agent_step!,
+#     graph.model_step!;
+#     title="graph_abm",
+#     path="img/video/",
+#     format=".mp4",
+#     frames=length(date[!, 1]) - 1
+# )
 end
 
 module test_uode
@@ -127,9 +123,23 @@ end
 
 module test_controller
 # https://link.springer.com/article/10.1007/s40313-023-00993-8
+using Agents, DataFrames, Plots, Distributions, Random
+using Statistics: mean
+
 include("params.jl")
 include("pplot.jl")
+include("graph.jl")
 include("controller.jl")
-# il controllore dovrebbe prendere i dati dopo tot passi del collect e tirare le somme
-# successivamente modifica i parametri e fa riprendere il collect  e cosi via fino alla fine
+
+df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
+date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA")
+
+abm_parameters = model_params.get_abm_parameters(20, 0.001, 3300)
+@time model = graph.init(; abm_parameters...)
+
+data = graph.collect(model, graph.agent_step!, graph.model_step!; n=30)
+select(data, [:infected_detected, :controls])
+model.step_count
+model.properties
+
 end

@@ -29,16 +29,22 @@ function dataset_from_location(df, iso_code)
     df = filter(:iso_code => ==(iso_code), df)
     df[!, :total_susceptible] = df[!, :population] - df[!, :total_cases]
     return select(df, [:date]),
-    mapcols(col -> replace(col, missing => 0), select(
-        df,
-        [
-            :new_cases_smoothed,
-            :new_tests_smoothed,
-            :new_vaccinations_smoothed,
-            :new_deaths_smoothed,
-        ],
-    )),
-    mapcols(col -> replace(col, missing => 0), select(df, [:total_susceptible, :total_cases, :total_deaths, :total_tests])),
+    mapcols(
+        col -> replace(col, missing => 0),
+        select(
+            df,
+            [
+                :new_cases_smoothed,
+                :new_tests_smoothed,
+                :new_vaccinations_smoothed,
+                :new_deaths_smoothed,
+            ],
+        ),
+    ),
+    mapcols(
+        col -> replace(col, missing => 0),
+        select(df, [:total_susceptible, :total_cases, :total_deaths, :total_tests]),
+    ),
     mapcols(col -> replace(col, missing => 0), select(df, [:reproduction_rate]))
 end
 
@@ -50,9 +56,12 @@ end
 # https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/
 function system_identification(data, ts, seed=1337)
     prob = ContinuousDataDrivenProblem(
-        float.(data), float.(ts), GaussianKernel(),
+        float.(data),
+        float.(ts),
+        GaussianKernel(),
         U=(u, p, t) -> [exp(-((t - 5.0) / 5.0)^2)],
-        p=ones(2))
+        p=ones(2),
+    )
 
     @variables u[1:size(data)[1]] c[1:1]
     @parameters w[1:size(data)[1]]
@@ -63,7 +72,8 @@ function system_identification(data, ts, seed=1337)
     h = Num[cos.(u .* w); sin.(u .* w); polynomial_basis(u, 5); c]
     basis = Basis(h, u, parameters=w, controls=c)
 
-    sampler = DataProcessing(split=0.8, shuffle=true, batchsize=30, rng=Xoshiro(seed))
+    sampler =
+        DataProcessing(split=0.8, shuffle=true, batchsize=30, rng=Xoshiro(seed))
     # sparsity threshold
     λs = exp10.(-10:0.1:0)
     opt = STLSQ(λs) # iterate over different sparsity thresholds
@@ -75,6 +85,7 @@ function system_identification(data, ts, seed=1337)
     )
     system = get_basis(res)
     params = get_parameter_map(system)
+
     return system, params
 end
 
@@ -104,22 +115,13 @@ function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337
     δ = 0.007
     # sum(skipmissing(df[!, :new_deaths_smoothed])) / 
     # sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
-    η = 1.0 / 100 # Countermeasures speed
-    θ = 0.0 # lockdown percentage
-    θₜ = 0 # lockdown period
-    q = 14 # quarantine period
+    η = 1.0 / 1000 # Countermeasures speed
     R₀ = 3.54
     # first(skipmissing(df[!, :reproduction_rate]))
-    ncontrols = 0.00027#7.28E-5
-    # first(skipmissing(df[!, :new_tests_smoothed]))/df[1, :population]
-    # https://www.cochrane.org/CD013705/INFECTN_how-accurate-are-rapid-antigen-tests-diagnosing-covid-19#:~:text=In%20people%20with%20confirmed%20COVID,cases%20had%20positive%20antigen%20tests).
-    control_accuracy = [0.775, 0.55, 0.997]
 
     return @dict(
         number_point_of_interest,
         migration_rate,
-        ncontrols,
-        control_accuracy,
         R₀,
         γ,
         σ,
@@ -127,10 +129,7 @@ function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337
         ξ,
         δ,
         η,
-        q,
-        θ,
-        θₜ,
-        Rᵢ = 1.0,
+        Rᵢ = 0.95,
     )
 end
 
