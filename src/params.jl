@@ -89,6 +89,10 @@ function system_identification(data, ts, seed=1337)
     return system, params
 end
 
+# TODO: Uncertainti Quantified Deep Bayesian Model Discovery
+# https://docs.sciml.ai/Overview/stable/showcase/bayesian_neural_ode/
+
+
 function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337)
     rng = Xoshiro(seed)
     pop = randexp(rng, C) * avg

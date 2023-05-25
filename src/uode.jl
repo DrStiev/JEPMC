@@ -1,8 +1,13 @@
 module uode
-# implement a simple ODE system and solver for seir model
-# refers to. https://stackoverflow.com/questions/75902221/how-to-solve-the-error-undefvarerror-interpolatingadjoint-not-defined-using-d
 using OrdinaryDiffEq
 
+# TODO: secondo me si può realizzare l'idea di usare
+# le ode per la descrizione dei passi del modello
+# https://juliadynamics.github.io/Agents.jl/stable/examples/diffeq/
+
+# TODO: implementami
+# ho un modello semplice che cerco di perfezionare
+# utilizzando https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
 function seir!(du, u, p, t)
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ = p
@@ -25,4 +30,6 @@ end
 function get_ode_solution(prob)
     return solve(prob, Tsit5())
 end
+
+# TODO: https://docs.sciml.ai/Overview/stable/showcase/symbolic_analysis/
 end
