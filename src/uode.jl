@@ -32,4 +32,7 @@ function get_ode_solution(prob)
 end
 
 # TODO: https://docs.sciml.ai/Overview/stable/showcase/symbolic_analysis/
+
+# TODO: https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0269843#abstract0
+# TODO: https://appliednetsci.springeropen.com/articles/10.1007/s41109-021-00378-3
 end
