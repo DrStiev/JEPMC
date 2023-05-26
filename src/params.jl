@@ -11,7 +11,7 @@ using JLD2, FileIO
 # https://covid.ourworldindata.org/data/owid-covid-data.csv
 function download_dataset(
     path,
-    url="https://covid.ourworldindata.org/data/owid-covid-data.csv",
+    url = "https://covid.ourworldindata.org/data/owid-covid-data.csv",
 )
     # https://github.com/owid/covid-19-data/tree/master/public/data/
     title = split(url, "/")
@@ -19,8 +19,8 @@ function download_dataset(
     return DataFrame(
         CSV.File(
             Downloads.download(url, path * title[length(title)]),
-            delim=",",
-            header=1,
+            delim = ",",
+            header = 1,
         ),
     )
 end
@@ -48,19 +48,19 @@ function dataset_from_location(df, iso_code)
     mapcols(col -> replace(col, missing => 0), select(df, [:reproduction_rate]))
 end
 
-function read_local_dataset(path="data/OWID/owid-covid-data.csv")
-    return DataFrame(CSV.File(path, delim=",", header=1))
+function read_local_dataset(path = "data/OWID/owid-covid-data.csv")
+    return DataFrame(CSV.File(path, delim = ",", header = 1))
 end
 
 # to be tested!
 # https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/
-function system_identification(data, ts, seed=1337)
+function system_identification(data, ts, seed = 1337)
     prob = ContinuousDataDrivenProblem(
         float.(data),
         float.(ts),
         GaussianKernel(),
-        U=(u, p, t) -> [exp(-((t - 5.0) / 5.0)^2)],
-        p=ones(2),
+        U = (u, p, t) -> [exp(-((t - 5.0) / 5.0)^2)],
+        p = ones(2),
     )
 
     @variables u[1:size(data)[1]] c[1:1]
@@ -70,10 +70,10 @@ function system_identification(data, ts, seed=1337)
     w = collect(w)
 
     h = Num[cos.(u .* w); sin.(u .* w); polynomial_basis(u, 5); c]
-    basis = Basis(h, u, parameters=w, controls=c)
+    basis = Basis(h, u, parameters = w, controls = c)
 
     sampler =
-        DataProcessing(split=0.8, shuffle=true, batchsize=30, rng=Xoshiro(seed))
+        DataProcessing(split = 0.8, shuffle = true, batchsize = 30, rng = Xoshiro(seed))
     # sparsity threshold
     λs = exp10.(-10:0.1:0)
     opt = STLSQ(λs) # iterate over different sparsity thresholds
@@ -81,7 +81,7 @@ function system_identification(data, ts, seed=1337)
         prob,
         basis,
         opt,
-        options=DataDrivenCommonOptions(data_processing=sampler, digits=1),
+        options = DataDrivenCommonOptions(data_processing = sampler, digits = 1),
     )
     system = get_basis(res)
     params = get_parameter_map(system)
@@ -93,7 +93,7 @@ end
 # https://docs.sciml.ai/Overview/stable/showcase/bayesian_neural_ode/
 
 
-function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337)
+function get_abm_parameters(C, max_travel_rate, avg = 1000; outliers = [], seed = 1337)
     rng = Xoshiro(seed)
     pop = randexp(rng, C) * avg
     pop = length(outliers) > 0 ? append!(pop, outliers) : pop
@@ -123,38 +123,25 @@ function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337
     R₀ = 3.54
     # first(skipmissing(df[!, :reproduction_rate]))
 
-    return @dict(
-        number_point_of_interest,
-        migration_rate,
-        R₀,
-        γ,
-        σ,
-        ω,
-        ξ,
-        δ,
-        η,
-        Rᵢ = 0.95,
-    )
+    return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, η, Rᵢ = 0.95,)
 end
 
-function get_ode_parameters(df)
+function get_ode_parameters()
     γ = 14 # infective period
     σ = 5 # exposed period
     ω = 280 # immunity period
-    δ =
-        sum(skipmissing(df[!, :new_deaths_smoothed])) /
-        sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
-    R₀ = first(skipmissing(df[!, :reproduction_rate]))
-    S = df[1, :population]
+    δ = 0.007
+    R₀ = 3.54
+    S = 58557 / 58558
     E = 0
-    I = 1
+    I = 1 / 58558
     R = 0
     D = 0
-    tspan = (0, length(df[!, 1]))
-    return [S, E, I, R, D], [R₀, γ, σ, ω, δ], tspan
+    tspan = (1, 1200)
+    return [S, E, I, R, D], [R₀, 1 / γ, 1 / σ, 1 / ω, δ], tspan
 end
 
-function save_parameters(params, path, title="parameters")
+function save_parameters(params, path, title = "parameters")
     isdir(path) == false && mkpath(path)
     save(path * title * ".jld2", params)
 end

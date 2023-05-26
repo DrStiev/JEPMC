@@ -30,12 +30,12 @@ function edge_width(model)
 end
 
 graphplotkwargs = (
-    layout=GraphMakie.Spring(),
-    arrow_show=true,
-    arrow_shift=:end,
-    edge_color=edge_color,
-    edge_width=edge_width,
-    edge_plottype=:linesegments,
+    layout = GraphMakie.Spring(),
+    arrow_show = true,
+    arrow_shift = :end,
+    edge_color = edge_color,
+    edge_width = edge_width,
+    edge_plottype = :linesegments,
 )
 
 function get_adata()
@@ -81,30 +81,30 @@ function custom_layout(fig, abmobs, step, name)
     # get information about the countermeasures applied
     η = @lift(Point2f.($(abmobs.mdf).step, $(abmobs.mdf).η))
 
-    ax_seir = Axis(count_layout[1, 1]; ylabel="SEIR Dynamic")
-    lines!(ax_seir, s; label="susceptible")
-    lines!(ax_seir, e; label="exposed")
-    lines!(ax_seir, i; label="infected")
-    lines!(ax_seir, r; label="recovered")
-    lines!(ax_seir, d; label="dead")
+    ax_seir = Axis(count_layout[1, 1]; ylabel = "SEIR Dynamic")
+    lines!(ax_seir, s; label = "susceptible")
+    lines!(ax_seir, e; label = "exposed")
+    lines!(ax_seir, i; label = "infected")
+    lines!(ax_seir, r; label = "recovered")
+    lines!(ax_seir, d; label = "dead")
     Legend(count_layout[1, 2], ax_seir;)
 
-    ax_happiness = Axis(count_layout[2, 1]; ylabel="Average happiness")
-    lines!(ax_happiness, happiness; label="happiness")
+    ax_happiness = Axis(count_layout[2, 1]; ylabel = "Average happiness")
+    lines!(ax_happiness, happiness; label = "happiness")
     Legend(count_layout[2, 2], ax_happiness;)
 
-    ax_R₀ = Axis(count_layout[3, 1]; ylabel="Reproduction number")
-    lines!(ax_R₀, Rₜ; label="R₀")
+    ax_R₀ = Axis(count_layout[3, 1]; ylabel = "Reproduction number")
+    lines!(ax_R₀, Rₜ; label = "R₀")
     Legend(count_layout[3, 2], ax_R₀;)
 
-    ax_eta = Axis(count_layout[4, 1]; ylabel="Countermeasures strickness")
-    lines!(ax_eta, η; label="η")
+    ax_eta = Axis(count_layout[4, 1]; ylabel = "Countermeasures strickness")
+    lines!(ax_eta, η; label = "η")
     Legend(count_layout[4, 2], ax_eta;)
 
     p = if typeof(step) <: Int
-        ProgressMeter.Progress(step; enabled=true, desc="run! progress: ")
+        ProgressMeter.Progress(step; enabled = true, desc = "run! progress: ")
     else
-        ProgressMeter.ProgressUnknown(desc="run! steps done: ", enabled=true)
+        ProgressMeter.ProgressUnknown(desc = "run! steps done: ", enabled = true)
     end
 
     on(abmobs.model) do m
@@ -130,41 +130,41 @@ function custom_video(
     model,
     astep,
     mstep;
-    title="title",
-    path="img/",
-    format=".mkv",
-    frames=100
+    title = "title",
+    path = "img/",
+    format = ".mkv",
+    frames = 100,
 )
     isdir(path) == false && mkpath(path)
     name = path * title * "_" * string(today()) * format
 
     fig, ax, abmobs = abmplot(
         model;
-        (agent_step!)=astep,
-        (model_step!)=mstep,
-        as=city_size,
-        ac=city_color,
-        graphplotkwargs=graphplotkwargs,
-        adata=get_adata(),
-        mdata=get_mdata(model),
-        figure=(; resolution=(1600, 800))
+        (agent_step!) = astep,
+        (model_step!) = mstep,
+        as = city_size,
+        ac = city_color,
+        graphplotkwargs = graphplotkwargs,
+        adata = get_adata(),
+        mdata = get_mdata(model),
+        figure = (; resolution = (1600, 800)),
     )
     custom_layout(fig, abmobs, frames, name)
 end
 
-function save_plot(plot, path="", title="title", format="png")
+function save_plot(plot, path = "", title = "title", format = "png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "_" * string(today()) * "." * format)
 end
 
-function loss_plot(losses, path="", title="title", format="png")
+function loss_plot(losses, path = "", title = "title", format = "png")
     isdir(path) == false && mkpath(path)
     p = Plots.plot(
         losses,
-        yaxis=:log,
-        xaxis=:log,
-        xlabel="Iterations",
-        ylabel="loss",
+        yaxis = :log,
+        xaxis = :log,
+        xlabel = "Iterations",
+        ylabel = "loss",
     )
     savefig(p, path * title * "_" * string(today()) * "." * format)
 end

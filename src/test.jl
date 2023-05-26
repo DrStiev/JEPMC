@@ -31,15 +31,15 @@ date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA"
 p = plot(
     plot(
         Array(day_info),
-        labels=["Infected" "Tests" "Vaccinations" "Deaths"],
-        title="Detected Dynamics",
+        labels = ["Infected" "Tests" "Vaccinations" "Deaths"],
+        title = "Detected Dynamics",
     ),
     plot(
         Array(total_count),
-        labels=["Susceptible" "Infected" "Deaths" "Tests"],
-        title="Overall Dynamics",
+        labels = ["Susceptible" "Infected" "Deaths" "Tests"],
+        title = "Overall Dynamics",
     ),
-    plot(Array(R₀), labels="R₀", title="Reproduction Rate"),
+    plot(Array(R₀), labels = "R₀", title = "Reproduction Rate"),
 )
 
 pplot.save_plot(p, "img/data_plot/", "cumulative_plot", "pdf")
@@ -56,11 +56,11 @@ include("graph.jl")
 df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
 date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA")
 
-abm_parameters = model_params.get_abm_parameters(20, 0.001, 3300)
+abm_parameters = model_params.get_abm_parameters(20, 0.01, 3300)
 model = graph.init(; abm_parameters...)
 
-# data = graph.collect(model; n=30, controller_step=7)
-data = graph.collect(model; n=length(date[!, 1]) - 1)
+data = graph.collect(model; n = 30, controller_step = 7)
+data = graph.collect(model; n = length(date[!, 1]) - 1)
 
 p1 = select(
     data,
@@ -73,12 +73,12 @@ p4 = select(data, [:R₀])
 p = plot(
     plot(
         Array(p1),
-        labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-        title="ABM Full Dynamics",
+        labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        title = "ABM Full Dynamics",
     ),
-    plot(Array(p2), labels="η", title="Countermeasures strickness"),
-    plot(Array(p3), labels="Happiness", title="Cumulative Happiness"),
-    plot(Array(p4), labels="R₀", title="Reproduction number"),
+    plot(Array(p2), labels = "η", title = "Countermeasures strickness"),
+    plot(Array(p3), labels = "Happiness", title = "Cumulative Happiness"),
+    plot(Array(p4), labels = "R₀", title = "Reproduction number"),
 )
 pplot.save_plot(p, "img/abm/", "cumulative_plot", "pdf")
 
@@ -104,16 +104,14 @@ include("params.jl")
 include("pplot.jl")
 
 # must be between [0-1] otherwise strange behaviour
-u = [35488 / 35489, 0, 1 / 35489, 0, 0]
-p = [3.54, 1.0 / 14, 1.0 / 5, 1.0 / 280, 0.007]
-t = (1, 1231)
+u, p, t = model_params.get_ode_parameters()
 prob = uode.get_ode_problem(uode.seir!, u, t, p)
 sol = uode.get_ode_solution(prob)
 
 p = plot(
     sol,
-    labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-    title="SEIR Dynamics",
+    labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+    title = "SEIR Dynamics",
 )
 pplot.save_plot(p, "img/ode/", "cumulative_plot", "pdf")
 
@@ -137,9 +135,14 @@ date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA"
 abm_parameters = model_params.get_abm_parameters(20, 0.001, 3300)
 @time model = graph.init(; abm_parameters...)
 
-data = graph.collect(model, graph.agent_step!, graph.model_step!; n=30)
+data = graph.collect(model, graph.agent_step!, graph.model_step!; n = 30)
 select(data, [:infected_detected, :controls])
 model.step_count
 model.properties
 
+end
+
+module to_be_implemented
+# creo una matrice di spostamento tra i vari nodi
+# creo un grafo come Graph(M+M')
 end

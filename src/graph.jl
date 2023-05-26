@@ -8,6 +8,7 @@ using Distributions
 using ProgressMeter
 
 include("controller.jl")
+include("uode.jl")
 
 @agent Person GraphAgent begin
     days_infected::Int
@@ -26,36 +27,40 @@ function init(;
     ξ,  # 1 / vaccinazione per milion per day
     δ,  # mortality rate
     η,  # countermeasures speed and effectiveness (0-1)
-    seed=1337
+    seed = 1337,
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
     # normalizzo il migration rate
-    migration_rate_sum = sum(migration_rate, dims=2)
+    migration_rate_sum = sum(migration_rate, dims = 2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
     # scelgo il punto di interesse che avrà il paziente zero
     Is = [zeros(Int, length(number_point_of_interest) - 1)..., 1]
 
-    properties = @dict(
-        number_point_of_interest,
-        migration_rate,
-        step_count = 0,
-        R₀,
-        ξ,
-        Is,
-        C,
-        γ,
-        σ,
-        ω,
-        δ,
-        η,
-        Rᵢ,
-    )
-
     # creo il modello 
-    model = ABM(Person, GraphSpace(Agents.Graphs.complete_graph(C)); properties, rng)
+    model = ABM(
+        Person,
+        GraphSpace(Agents.Graphs.complete_graph(C));
+        properties = @dict(
+            number_point_of_interest,
+            migration_rate,
+            new_migration_rate = migration_rate, # ← migration rate modified with (1-η)
+            step_count = 0,
+            R₀,
+            ξ,
+            Is,
+            C,
+            γ,
+            σ,
+            ω,
+            δ,
+            η,
+            Rᵢ,
+        ),
+        rng,
+    )
 
     # aggiungo la mia popolazione al modello
     for city = 1:C, _ = 1:number_point_of_interest[city]
@@ -75,9 +80,31 @@ end
 
 function model_step!(model)
     model.step_count += 1
+    threshold = 1E-4
+    # get info and then apply η
+    graph_status = [get_node_status(model, pos) for pos = 1:model.C]
+    node_at_risk = findall(x -> x > threshold, graph_status)
+    reduce_migration_rates!(model, node_at_risk)
+    # reduce R₀ due to η
     update!(model)
     # possibilita' di variante
     variant!(model)
+end
+
+function get_node_status(model, pos)
+    agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
+    infects = filter(x -> x.status == :I, agents)
+    return length(infects) / length(agents)
+end
+
+function reduce_migration_rates!(model, nodes)
+    for c = 1:model.C
+        if in.(c, Ref(nodes))
+            stationary = model.migration_rate[c, c]
+            model.migration_rate[c, :] = model.migration_rate[c, :] .* (1 - model.η)
+            model.migration_rate[c, c] = stationary
+        end
+    end
 end
 
 function update!(model)
@@ -188,7 +215,13 @@ function recover_or_die!(agent, model)
     end
 end
 
-function collect(model, astep=agent_step!, mstep=model_step!; n=100, controller_step=7)
+function collect(
+    model,
+    astep = agent_step!,
+    mstep = model_step!;
+    n = 100,
+    controller_step = 7,
+)
     susceptible(x) = count(i == :S for i in x)
     exposed(x) = count(i == :E for i in x)
     infected(x) = count(i == :I for i in x)
@@ -212,9 +245,9 @@ function collect(model, astep=agent_step!, mstep=model_step!; n=100, controller_
     df_model = init_model_dataframe(model, mdata)
 
     p = if typeof(n) <: Int
-        ProgressMeter.Progress(n; enabled=true, desc="run! progress: ")
+        ProgressMeter.Progress(n; enabled = true, desc = "run! progress: ")
     else
-        ProgressMeter.ProgressUnknown(desc="run! steps done: ", enabled=true)
+        ProgressMeter.ProgressUnknown(desc = "run! steps done: ", enabled = true)
     end
 
     s = 0

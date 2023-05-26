@@ -62,7 +62,7 @@ function policy!(model::StandardABM, data::DataFrame)
     # cerco di massimizzare la happiness e minimizzare gli infetti
 end
 
-function policy!(data::DataFrame; seed=1337)
+function policy!(data::DataFrame; seed = 1337)
     # https://docs.sciml.ai/SciMLSensitivity/dev/getting_started/
     # https://docs.sciml.ai/SciMLSensitivity/dev/tutorials/parameter_estimation_ode/#odeparamestim
     # https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/

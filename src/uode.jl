@@ -23,13 +23,9 @@ function seir!(du, u, p, t)
     du[5] = dD
 end
 
-function get_ode_problem(F, u, tspan, p)
-    return ODEProblem(F, u, tspan, p)
-end
-
-function get_ode_solution(prob)
-    return solve(prob, Tsit5())
-end
+get_ode_problem(F, u, tspan, p) = ODEProblem(F, u, tspan, p)
+get_ode_solution(prob) = solve(prob, Tsit5())
+get_ode_integrator(prob) = OrdinaryDiffEq.init(prob, Tsit5(); advance_to_stop = true)
 
 # TODO: https://docs.sciml.ai/Overview/stable/showcase/symbolic_analysis/
 
