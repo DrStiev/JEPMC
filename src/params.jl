@@ -3,7 +3,7 @@ using CSV, Random, Distributions, DataFrames
 using DataFrames, DataDrivenDiffEq, DataDrivenSparse
 using LinearAlgebra, OrdinaryDiffEq, ModelingToolkit
 using Statistics, Downloads, DrWatson, Plots, Dates
-using JLD2, FileIO
+using JLD2, FileIO, StableRNGs
 
 # https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv
 # https://covid19.who.int/WHO-COVID-19-global-data.csv
@@ -11,7 +11,7 @@ using JLD2, FileIO
 # https://covid.ourworldindata.org/data/owid-covid-data.csv
 function download_dataset(
     path,
-    url = "https://covid.ourworldindata.org/data/owid-covid-data.csv",
+    url="https://covid.ourworldindata.org/data/owid-covid-data.csv",
 )
     # https://github.com/owid/covid-19-data/tree/master/public/data/
     title = split(url, "/")
@@ -19,8 +19,8 @@ function download_dataset(
     return DataFrame(
         CSV.File(
             Downloads.download(url, path * title[length(title)]),
-            delim = ",",
-            header = 1,
+            delim=",",
+            header=1,
         ),
     )
 end
@@ -48,40 +48,33 @@ function dataset_from_location(df, iso_code)
     mapcols(col -> replace(col, missing => 0), select(df, [:reproduction_rate]))
 end
 
-function read_local_dataset(path = "data/OWID/owid-covid-data.csv")
-    return DataFrame(CSV.File(path, delim = ",", header = 1))
+function read_local_dataset(path="data/OWID/owid-covid-data.csv")
+    return DataFrame(CSV.File(path, delim=",", header=1))
 end
 
 # to be tested!
 # https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/
-function system_identification(data, ts, seed = 1337)
-    prob = ContinuousDataDrivenProblem(
-        float.(data),
-        float.(ts),
-        GaussianKernel(),
-        U = (u, p, t) -> [exp(-((t - 5.0) / 5.0)^2)],
-        p = ones(2),
-    )
+function system_identification(data, ts, seed=1337)
+    rng = StableRNG(seed)
+    prob = ContinuousDataDrivenProblem(float.(data), float.(ts), GaussianKernel())
 
-    @variables u[1:size(data)[1]] c[1:1]
-    @parameters w[1:size(data)[1]]
-    u = collect(u)
-    c = collect(c)
-    w = collect(w)
+    len = size(data)[1]
+    @variables u[1:len]
+    h = polynomial_basis(u, 5)
+    basis = Basis(h, u)
+    println(basis)
 
-    h = Num[cos.(u .* w); sin.(u .* w); polynomial_basis(u, 5); c]
-    basis = Basis(h, u, parameters = w, controls = c)
-
-    sampler =
-        DataProcessing(split = 0.8, shuffle = true, batchsize = 30, rng = Xoshiro(seed))
+    sampler = DataProcessing(split=0.8, shuffle=true, batchsize=30, rng=rng)
     # sparsity threshold
-    λs = exp10.(-10:0.1:0)
+    λs = exp10.(-10:0.1:10)
     opt = STLSQ(λs) # iterate over different sparsity thresholds
+    println("prob: $(size(prob)), basis: $(size(basis))")
+    # DimensionMismatch: arrays could not be broadcast to a common size; got a dimension with lengths 5 and 0
     res = solve(
         prob,
         basis,
         opt,
-        options = DataDrivenCommonOptions(data_processing = sampler, digits = 1),
+        options=DataDrivenCommonOptions(data_processing=sampler, digits=1),
     )
     system = get_basis(res)
     params = get_parameter_map(system)
@@ -93,7 +86,7 @@ end
 # https://docs.sciml.ai/Overview/stable/showcase/bayesian_neural_ode/
 
 
-function get_abm_parameters(C, max_travel_rate, avg = 1000; outliers = [], seed = 1337)
+function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337)
     rng = Xoshiro(seed)
     pop = randexp(rng, C) * avg
     pop = length(outliers) > 0 ? append!(pop, outliers) : pop
@@ -126,22 +119,25 @@ function get_abm_parameters(C, max_travel_rate, avg = 1000; outliers = [], seed 
     return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, η, Rᵢ = 0.95,)
 end
 
-function get_ode_parameters()
+function get_ode_parameters(C, avg=1000)
+    rng = Xoshiro(1337)
+    pop = randexp(rng, C) * avg
+    number_point_of_interest = map((x) -> round(Int, x), pop)
     γ = 14 # infective period
     σ = 5 # exposed period
     ω = 280 # immunity period
     δ = 0.007
     R₀ = 3.54
-    S = 58557 / 58558
+    S = (sum(number_point_of_interest) - 1) / sum(number_point_of_interest)
     E = 0
-    I = 1 / 58558
+    I = 1 / sum(number_point_of_interest)
     R = 0
     D = 0
     tspan = (1, 1200)
     return [S, E, I, R, D], [R₀, 1 / γ, 1 / σ, 1 / ω, δ], tspan
 end
 
-function save_parameters(params, path, title = "parameters")
+function save_parameters(params, path, title="parameters")
     isdir(path) == false && mkpath(path)
     save(path * title * ".jld2", params)
 end

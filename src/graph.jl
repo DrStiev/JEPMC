@@ -27,12 +27,12 @@ function init(;
     ξ,  # 1 / vaccinazione per milion per day
     δ,  # mortality rate
     η,  # countermeasures speed and effectiveness (0-1)
-    seed = 1337,
+    seed=1337
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
     # normalizzo il migration rate
-    migration_rate_sum = sum(migration_rate, dims = 2)
+    migration_rate_sum = sum(migration_rate, dims=2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
@@ -43,7 +43,7 @@ function init(;
     model = ABM(
         Person,
         GraphSpace(Agents.Graphs.complete_graph(C));
-        properties = @dict(
+        properties=@dict(
             number_point_of_interest,
             migration_rate,
             new_migration_rate = migration_rate, # ← migration rate modified with (1-η)
@@ -59,7 +59,7 @@ function init(;
             η,
             Rᵢ,
         ),
-        rng,
+        rng
     )
 
     # aggiungo la mia popolazione al modello
@@ -81,6 +81,8 @@ end
 function model_step!(model)
     model.step_count += 1
     threshold = 1E-4
+    # spread virus using a seir model
+    spread!(model)
     # get info and then apply η
     graph_status = [get_node_status(model, pos) for pos = 1:model.C]
     node_at_risk = findall(x -> x > threshold, graph_status)
@@ -89,6 +91,10 @@ function model_step!(model)
     update!(model)
     # possibilita' di variante
     variant!(model)
+end
+
+function spread!(model)
+
 end
 
 function get_node_status(model, pos)
@@ -100,9 +106,9 @@ end
 function reduce_migration_rates!(model, nodes)
     for c = 1:model.C
         if in.(c, Ref(nodes))
-            stationary = model.migration_rate[c, c]
-            model.migration_rate[c, :] = model.migration_rate[c, :] .* (1 - model.η)
-            model.migration_rate[c, c] = stationary
+            stationary = model.new_migration_rate[c, c]
+            model.new_migration_rate[c, :] = model.new_migration_rate[c, :] .* (1 - model.η)
+            model.new_migration_rate[c, c] = stationary
         end
     end
 end
@@ -157,7 +163,7 @@ end
 
 function migrate!(agent, model)
     pid = agent.pos
-    m = sample(model.rng, 1:(model.C), Weights(model.migration_rate[pid, :]))
+    m = sample(model.rng, 1:(model.C), Weights(model.new_migration_rate[pid, :]))
     if m ≠ pid
         move_agent!(agent, m, model)
         happiness!(agent, 0.1, 0.01)
@@ -172,6 +178,7 @@ function transmit!(agent, model)
         contact = model[contactID]
         if contact.status == :S
             contact.status = :E
+            contact.days_infected = 1
             n -= 1
             n ≤ 0 && return
         end
@@ -186,8 +193,9 @@ function update!(agent, model)
         end
         # fine periodo di latenza
     elseif agent.status == :E
-        if agent.days_infected > model.σ
+        if agent.days_infected ≥ model.σ
             agent.status = :I
+            agent.days_infected = 0
         end
         agent.days_infected += 1
         # avanzamento malattia
@@ -203,7 +211,7 @@ end
 
 function recover_or_die!(agent, model)
     # fine malattia
-    if agent.days_infected > model.γ
+    if agent.days_infected ≥ model.γ
         # probabilità di morte
         if rand(model.rng) < model.δ
             remove_agent!(agent, model)
@@ -217,10 +225,10 @@ end
 
 function collect(
     model,
-    astep = agent_step!,
-    mstep = model_step!;
-    n = 100,
-    controller_step = 7,
+    astep=agent_step!,
+    mstep=model_step!;
+    n=100,
+    controller_step=7
 )
     susceptible(x) = count(i == :S for i in x)
     exposed(x) = count(i == :E for i in x)
@@ -245,9 +253,9 @@ function collect(
     df_model = init_model_dataframe(model, mdata)
 
     p = if typeof(n) <: Int
-        ProgressMeter.Progress(n; enabled = true, desc = "run! progress: ")
+        ProgressMeter.Progress(n; enabled=true, desc="run! progress: ")
     else
-        ProgressMeter.ProgressUnknown(desc = "run! steps done: ", enabled = true)
+        ProgressMeter.ProgressUnknown(desc="run! steps done: ", enabled=true)
     end
 
     s = 0
@@ -260,6 +268,7 @@ function collect(
         end
         step!(model, agent_step!, model_step!, 1)
         if mod(s, controller_step) == 0 && s ≠ 0
+            controller.predict(model, df_agent, (1.0:length(df_agent[!, 1])))
             controller.countermeasures!(model, df_agent[s-controller_step+1:s, :])
         end
         s += 1
