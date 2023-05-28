@@ -59,12 +59,10 @@ date, day_info, total_count, R₀ = model_params.dataset_from_location(df, "ITA"
 abm_parameters = model_params.get_abm_parameters(20, 0.01, 3300)
 model = graph.init(; abm_parameters...)
 
-data = graph.collect(model; n=30, controller_step=7)
-data[7:14, :]
-include("controller.jl")
-r = controller.countermeasures!(model, data[21:28, :])
-data = graph.collect(model; n=length(date[!, 1]) - 1)
-log10(0.33)
+data = graph.collect(model; n=length(date[!, 1]) - 1, controller_step=7)
+graph.save_dataframe(data, "data/abm/", "ABM SEIR")
+df = model_params.read_local_dataset("data/abm/ABM SEIR_2023-05-28.csv")
+
 p1 = select(
     data,
     [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],

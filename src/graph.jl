@@ -6,27 +6,27 @@ using InteractiveDynamics
 using Statistics: mean
 using Distributions
 using ProgressMeter
+using CSV, Dates
 
 include("controller.jl")
 include("uode.jl")
 
 @agent Person GraphAgent begin
-    days_infected::Int
     status::Symbol # :S, :E, :I, :R
     happiness::Float64 # [-1, 1]
 end
 
 function init(;
-    number_point_of_interest,
-    migration_rate,
-    R₀, # R₀ 
-    Rᵢ, # # numero "buono" di riproduzione
-    γ,  # periodo infettivita'
-    σ,  # periodo esposizione
-    ω,  # periodo immunita
-    ξ,  # 1 / vaccinazione per milion per day
-    δ,  # mortality rate
-    η,  # countermeasures speed and effectiveness (0-1)
+    number_point_of_interest::Vector{Int},
+    migration_rate::Array,
+    R₀::Float64, # R₀ 
+    Rᵢ::Float64, # # numero "buono" di riproduzione
+    γ::Int,  # periodo infettivita'
+    σ::Int,  # periodo esposizione
+    ω::Int,  # periodo immunita
+    ξ::Float64,  # 1 / vaccinazione per milion per day
+    δ::Float64,  # mortality rate
+    η::Float64,  # countermeasures speed and effectiveness (0-1)
     seed=1337
 )
     rng = Xoshiro(seed)
@@ -40,13 +40,12 @@ function init(;
     Is = [zeros(Int, length(number_point_of_interest) - 1)..., 1]
 
     # creo il modello 
-    model = ABM(
+    model = StandardABM(
         Person,
         GraphSpace(Agents.Graphs.complete_graph(C));
         properties=@dict(
             number_point_of_interest,
             migration_rate,
-            new_migration_rate = migration_rate, # ← migration rate modified with (1-η)
             step_count = 0,
             R₀,
             ξ,
@@ -64,7 +63,7 @@ function init(;
 
     # aggiungo la mia popolazione al modello
     for city = 1:C, _ = 1:number_point_of_interest[city]
-        add_agent!(city, model, 0, :S, 0.0) # Suscettibile
+        add_agent!(city, model, :S, 0.0) # Suscettibile
     end
     # aggiungo il paziente zero
     for city = 1:C
@@ -72,55 +71,48 @@ function init(;
         for n = 1:Is[city]
             agent = model[inds[n]]
             agent.status = :I # Infetto
-            agent.days_infected = 1
         end
     end
     return model
 end
 
-function model_step!(model)
+function model_step!(model::StandardABM)
     model.step_count += 1
-    threshold = 1E-4
-    # spread virus using a seir model
-    spread!(model)
     # get info and then apply η
-    graph_status = [get_node_status(model, pos) for pos = 1:model.C]
-    node_at_risk = findall(x -> x > threshold, graph_status)
-    reduce_migration_rates!(model, node_at_risk)
+    nar = node_at_risk(model, 1E-4)
     # reduce R₀ due to η
     update!(model)
     # possibilita' di variante
     variant!(model)
 end
 
-function spread!(model)
-
+function node_at_risk(model::StandardABM, threshold=1E-4)
+    function get_node_status(model::StandardABM, pos::Int)
+        agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
+        infects = filter(x -> x.status == :I, agents)
+        return length(infects) / length(agents)
+    end
+    graph_status = [get_node_status(model, pos) for pos = 1:model.C]
+    return findall(x -> x > threshold, graph_status)
 end
 
-function get_node_status(model, pos)
-    agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
-    infects = filter(x -> x.status == :I, agents)
-    return length(infects) / length(agents)
-end
-
-function reduce_migration_rates!(model, nodes)
+function reduce_migration_rates!(model::StandardABM, nodes::Vector{Int})
     for c = 1:model.C
         if in.(c, Ref(nodes))
-            stationary = model.new_migration_rate[c, c]
-            model.new_migration_rate[c, :] = model.new_migration_rate[c, :] .* (1 - model.η)
-            model.new_migration_rate[c, c] = stationary
+            model.migration_rate[c, :] = 0.0
+            model.migration_rate[c, c] = 1.0
         end
     end
 end
 
-function update!(model)
+function update!(model::StandardABM)
     if model.R₀ > model.Rᵢ
         model.R₀ -= model.η * (model.R₀ - model.Rᵢ)
     end
 end
 
 # very very simple function
-function variant!(model)
+function variant!(model::StandardABM)
     # https://www.nature.com/articles/s41579-023-00878-2
     # https://onlinelibrary.wiley.com/doi/10.1002/jmv.27331
     # https://virologyj.biomedcentral.com/articles/10.1186/s12985-022-01951-7
@@ -141,12 +133,11 @@ function variant!(model)
         )
         for i in new_infects
             i.status = :I
-            i.days_infected = 1
         end
     end
 end
 
-function agent_step!(agent, model)
+function agent_step!(agent, model::StandardABM)
     happiness!(agent, -model.η / 10, model.η / 20)
     migrate!(agent, model)
     transmit!(agent, model)
@@ -154,64 +145,49 @@ function agent_step!(agent, model)
     recover_or_die!(agent, model)
 end
 
-function happiness!(agent, val, std)
+function happiness!(agent, val::Float64, std::Float64)
     agent.happiness += rand(Normal(val, std))
     # mantengo la happiness tra [-1, 1]
     agent.happiness =
         agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
 end
 
-function migrate!(agent, model)
+function migrate!(agent, model::StandardABM)
     pid = agent.pos
-    m = sample(model.rng, 1:(model.C), Weights(model.new_migration_rate[pid, :]))
+    m = sample(model.rng, 1:(model.C), Weights(model.migration_rate[pid, :]))
     if m ≠ pid
         move_agent!(agent, m, model)
         happiness!(agent, 0.1, 0.01)
     end
 end
-
-function transmit!(agent, model)
+# https://github.com/epirecipes/sir-julia/blob/master/markdown/abm/abm.md
+function transmit!(agent, model::StandardABM)
     agent.status != :I && return
-    n = model.R₀ / model.γ * abs(randn(model.rng))
-    n ≤ 0 && return
-    for contactID in ids_in_position(agent, model)
-        contact = model[contactID]
-        if contact.status == :S
+    ncontacts = rand(Poisson(model.R₀))
+    for i in 1:ncontacts
+        contact = model[rand(ids_in_position(agent, model))]
+        if contact.status == :S && (rand(model.rng) < model.R₀ / model.γ)
             contact.status = :E
-            contact.days_infected = 1
-            n -= 1
-            n ≤ 0 && return
         end
     end
 end
 
-function update!(agent, model)
+function update!(agent, model::StandardABM)
     # possibilita di vaccinazione
-    if agent.status == :S
-        if rand(model.rng) < model.ξ
-            agent.status = :R
-        end
+    if agent.status == :S && (rand(model.rng) < model.ξ)
+        agent.status = :R
         # fine periodo di latenza
-    elseif agent.status == :E
-        if agent.days_infected ≥ model.σ
-            agent.status = :I
-            agent.days_infected = 0
-        end
-        agent.days_infected += 1
-        # avanzamento malattia
-    elseif agent.status == :I
-        agent.days_infected += 1
+    elseif agent.status == :E && (rand(model.rng) < 1 / model.σ)
+        agent.status = :I
         # perdita immunita'
-    elseif agent.status == :R
-        if rand(model.rng) < 1 / model.ω
-            agent.status = :S
-        end
+    elseif agent.status == :R && (rand(model.rng) < 1 / model.ω)
+        agent.status = :S
     end
 end
 
-function recover_or_die!(agent, model)
+function recover_or_die!(agent, model::StandardABM)
     # fine malattia
-    if agent.days_infected ≥ model.γ
+    if agent.status == :I && (rand(model.rng) < 1 / model.γ)
         # probabilità di morte
         if rand(model.rng) < model.δ
             remove_agent!(agent, model)
@@ -219,12 +195,11 @@ function recover_or_die!(agent, model)
         end
         # probabilità di guarigione
         agent.status = :R
-        agent.days_infected = 0
     end
 end
 
 function collect(
-    model,
+    model::StandardABM,
     astep=agent_step!,
     mstep=model_step!;
     n=100,
@@ -275,5 +250,10 @@ function collect(
         ProgressMeter.next!(p)
     end
     return hcat(select(df_agent, Not([:step])), select(df_model, Not([:step])))
+end
+
+function save_dataframe(data::DataFrame, path, title="StandardABM")
+    isdir(path) == false && mkpath(path)
+    CSV.write(path * title * "_" * string(today()) * ".csv", data)
 end
 end

@@ -84,20 +84,21 @@ function ude_dynamics!(du, u, p, t, p_true)
     du[2]
 end
 
+# https://github.com/epirecipes/sir-julia
+# https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_lockdown_optimization/ode_lockdown_optimization.md
+# https://github.com/epirecipes/sir-julia/blob/master/markdown/ude/ude.md
+# https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_ddeq/ode_ddeq.md
 function countermeasures!(model::StandardABM, data::DataFrame; β=3)
-    slope(x, β) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide
     # applico delle contromisure rozze per iniziare
+    # simil sigmoide. 
+    slope(x, β) = 1 / (1 + (x / (1 - x))^(-β))
     length(data[!, :infected_status]) == 0 && return
     # cappo il ratio tra [-1,1]
     ratio = length(data[!, 1]) / (data[end, :infected_status] - data[1, :infected_status])
-    s = slope(abs(ratio), β)
+    s = slope(abs(ratio), β) / 3
     # rapida crescita, lenta decrescita
     if ratio > 0
-        if s > model.η
-            model.η = s
-        else
-            model.η *= (1 + s)
-        end
+        model.η = s ≥ model.η ? s : model.η * (1 + s)
         model.η = model.η ≥ 1 ? 1 : model.η
     elseif ratio < 0
         model.η /= (1 + s)
@@ -105,7 +106,8 @@ function countermeasures!(model::StandardABM, data::DataFrame; β=3)
     if model.ξ == 0 && rand(model.rng) < 1 / 40
         model.ξ = abs(rand(Normal(0.0003, 0.00003)))
     end
-    return ratio
+    println()
+    println(model.η)
 end
 
 function predict(model::StandardABM, data::DataFrame, tspan)

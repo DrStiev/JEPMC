@@ -25,7 +25,7 @@ function download_dataset(
     )
 end
 
-function dataset_from_location(df, iso_code)
+function dataset_from_location(df::DataFrame, iso_code::String)
     df = filter(:iso_code => ==(iso_code), df)
     df[!, :total_susceptible] = df[!, :population] - df[!, :total_cases]
     return select(df, [:date]),
@@ -54,7 +54,7 @@ end
 
 # to be tested!
 # https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/
-function system_identification(data, ts, seed=1337)
+function system_identification(data::Array, ts, seed=1337)
     rng = StableRNG(seed)
     prob = ContinuousDataDrivenProblem(float.(data), float.(ts), GaussianKernel())
 
@@ -86,7 +86,7 @@ end
 # https://docs.sciml.ai/Overview/stable/showcase/bayesian_neural_ode/
 
 
-function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337)
+function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; outliers=[], seed=1337)
     rng = Xoshiro(seed)
     pop = randexp(rng, C) * avg
     pop = length(outliers) > 0 ? append!(pop, outliers) : pop
@@ -119,7 +119,7 @@ function get_abm_parameters(C, max_travel_rate, avg=1000; outliers=[], seed=1337
     return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, η, Rᵢ = 0.95,)
 end
 
-function get_ode_parameters(C, avg=1000)
+function get_ode_parameters(C::Int, avg=1000)
     rng = Xoshiro(1337)
     pop = randexp(rng, C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
