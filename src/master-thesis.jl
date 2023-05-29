@@ -1,8 +1,8 @@
-using Pkg
-using JuliaFormatter
+using Pkg, JuliaFormatter
 Pkg.activate(".")
 format(".")
-Pkg.update()
-Pkg.resolve()
-Pkg.precompile()
-Pkg.instantiate()
+
+# Pkg.update()
+# Pkg.resolve()
+# Pkg.precompile()
+# Pkg.instantiate()

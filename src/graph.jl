@@ -27,12 +27,12 @@ function init(;
     ξ::Float64,  # 1 / vaccinazione per milion per day
     δ::Float64,  # mortality rate
     η::Float64,  # countermeasures speed and effectiveness (0-1)
-    seed=1337
+    seed = 1337,
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
     # normalizzo il migration rate
-    migration_rate_sum = sum(migration_rate, dims=2)
+    migration_rate_sum = sum(migration_rate, dims = 2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
@@ -43,7 +43,7 @@ function init(;
     model = StandardABM(
         Person,
         GraphSpace(Agents.Graphs.complete_graph(C));
-        properties=@dict(
+        properties = @dict(
             number_point_of_interest,
             migration_rate,
             step_count = 0,
@@ -58,7 +58,7 @@ function init(;
             η,
             Rᵢ,
         ),
-        rng
+        rng,
     )
 
     # aggiungo la mia popolazione al modello
@@ -86,7 +86,7 @@ function model_step!(model::StandardABM)
     variant!(model)
 end
 
-function node_at_risk(model::StandardABM, threshold=1E-4)
+function node_at_risk(model::StandardABM, threshold = 1E-4)
     function get_node_status(model::StandardABM, pos::Int)
         agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
         infects = filter(x -> x.status == :I, agents)
@@ -164,7 +164,7 @@ end
 function transmit!(agent, model::StandardABM)
     agent.status != :I && return
     ncontacts = rand(Poisson(model.R₀))
-    for i in 1:ncontacts
+    for i = 1:ncontacts
         contact = model[rand(ids_in_position(agent, model))]
         if contact.status == :S && (rand(model.rng) < model.R₀ / model.γ)
             contact.status = :E
@@ -198,62 +198,42 @@ function recover_or_die!(agent, model::StandardABM)
     end
 end
 
-function collect(
-    model::StandardABM,
-    astep=agent_step!,
-    mstep=model_step!;
-    n=100,
-    controller_step=7
-)
-    susceptible(x) = count(i == :S for i in x)
-    exposed(x) = count(i == :E for i in x)
-    infected(x) = count(i == :I for i in x)
-    recovered(x) = count(i == :R for i in x)
-    happiness(x) = mean(x)
+function collect(model::StandardABM; astep = agent_step!, mstep = model_step!, n = 100)
 
-    R₀(model) = model.R₀
-    dead(model) = sum(model.number_point_of_interest) - nagents(model)
-    active_countermeasures(model) = model.η
+    function get_observable_data()
+        susceptible(x) = count(i == :S for i in x)
+        exposed(x) = count(i == :E for i in x)
+        infected(x) = count(i == :I for i in x)
+        recovered(x) = count(i == :R for i in x)
+        happiness(x) = mean(x)
 
-    adata = [
-        (:status, susceptible),
-        (:status, exposed),
-        (:status, infected),
-        (:status, recovered),
-        (:happiness, happiness),
-    ]
+        R₀(model) = model.R₀
+        dead(model) = sum(model.number_point_of_interest) - nagents(model)
+        active_countermeasures(model) = model.η
 
-    mdata = [dead, R₀, active_countermeasures]
-    df_agent = init_agent_dataframe(model, adata)
-    df_model = init_model_dataframe(model, mdata)
-
-    p = if typeof(n) <: Int
-        ProgressMeter.Progress(n; enabled=true, desc="run! progress: ")
-    else
-        ProgressMeter.ProgressUnknown(desc="run! steps done: ", enabled=true)
+        adata = [
+            (:status, susceptible),
+            (:status, exposed),
+            (:status, infected),
+            (:status, recovered),
+            (:happiness, happiness),
+        ]
+        mdata = [dead, R₀, active_countermeasures]
+        return adata, mdata
     end
 
-    s = 0
-    while Agents.until(s, n, model)
-        if should_we_collect(s, model, true)
-            collect_agent_data!(df_agent, model, adata, s)
-        end
-        if should_we_collect(s, model, true)
-            collect_model_data!(df_model, model, mdata, s)
-        end
-        step!(model, agent_step!, model_step!, 1)
-        if mod(s, controller_step) == 0 && s ≠ 0
-            controller.predict(model, df_agent, (1.0:length(df_agent[!, 1])))
-            controller.countermeasures!(model, df_agent[s-controller_step+1:s, :])
-        end
-        s += 1
-        ProgressMeter.next!(p)
-    end
-    return hcat(select(df_agent, Not([:step])), select(df_model, Not([:step])))
+    adata, mdata = get_observable_data()
+    ad, md = run!(model, astep, mstep, n; adata = adata, mdata = mdata, showprogress = true)
+
+    return hcat(select(ad, Not([:step])), select(md, Not([:step])))
 end
 
-function save_dataframe(data::DataFrame, path, title="StandardABM")
+function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
     isdir(path) == false && mkpath(path)
     CSV.write(path * title * "_" * string(today()) * ".csv", data)
+end
+
+function load_dataset(path::String)
+    return DataFrame(CSV.File(path, delim = ",", header = 1))
 end
 end

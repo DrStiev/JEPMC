@@ -28,11 +28,19 @@ function sys_id()
     abm_parameters = model_params.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n=30, controller_step=7)
-    X = Array(select(
-        data,
-        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
-    ))
+    data = graph.collect(model; n = 30, controller_step = 7)
+    X = Array(
+        select(
+            data,
+            [
+                :susceptible_status,
+                :exposed_status,
+                :infected_status,
+                :recovered_status,
+                :dead,
+            ],
+        ),
+    )
     # X = float.(Array(select(data, [:susceptible_status, :exposed_status, :infected_status, :dead])))
     ts = 1:length(data[!, 1])
 
@@ -51,26 +59,38 @@ function embeddedML()
     abm_parameters = model_params.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n=30, controller_step=7)
+    data = graph.collect(model; n = 30, controller_step = 7)
     p1 = select(
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
     )
-    plot(Array(p1), labels=["S" "E" "I" "R" "D"])
+    plot(Array(p1), labels = ["S" "E" "I" "R" "D"])
 
     rng = StableRNG(1111)
 
-    X = Array(select(
-        data,
-        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
-    ))
+    X = Array(
+        select(
+            data,
+            [
+                :susceptible_status,
+                :exposed_status,
+                :infected_status,
+                :recovered_status,
+                :dead,
+            ],
+        ),
+    )
     t = length(data[!, 1])
 
     rbf(x) = exp.(-(x .^ 2))
 
     # Multilayer FeedForward
-    U = Lux.Chain(Lux.Dense(2, 5, rbf), Lux.Dense(5, 5, rbf), Lux.Dense(5, 5, rbf),
-        Lux.Dense(5, 2))
+    U = Lux.Chain(
+        Lux.Dense(2, 5, rbf),
+        Lux.Dense(5, 5, rbf),
+        Lux.Dense(5, 5, rbf),
+        Lux.Dense(5, 2),
+    )
     # Get the initial parameters and state variables of the model
     p, st = Lux.setup(rng, U)
 end
@@ -88,7 +108,7 @@ end
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_lockdown_optimization/ode_lockdown_optimization.md
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/ude/ude.md
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_ddeq/ode_ddeq.md
-function countermeasures!(model::StandardABM, data::DataFrame; β=3)
+function countermeasures!(model::StandardABM, data::DataFrame; β = 3)
     # applico delle contromisure rozze per iniziare
     # simil sigmoide. 
     slope(x, β) = 1 / (1 + (x / (1 - x))^(-β))
@@ -123,7 +143,7 @@ function policy!(model::StandardABM, data::DataFrame)
     # cerco di massimizzare la happiness e minimizzare gli infetti
 end
 
-function policy!(data::DataFrame; seed=1337)
+function policy!(data::DataFrame; seed = 1337)
     # https://docs.sciml.ai/SciMLSensitivity/dev/getting_started/
     # https://docs.sciml.ai/SciMLSensitivity/dev/tutorials/parameter_estimation_ode/#odeparamestim
     rng = Xoshiro(seed)

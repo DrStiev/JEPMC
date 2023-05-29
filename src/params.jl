@@ -28,24 +28,16 @@ end
 function dataset_from_location(df::DataFrame, iso_code::String)
     df = filter(:iso_code => ==(iso_code), df)
     df[!, :total_susceptible] = df[!, :population] - df[!, :total_cases]
-    return select(df, [:date]),
-    mapcols(
-        col -> replace(col, missing => 0),
-        select(
-            df,
-            [
-                :new_cases_smoothed,
-                :new_tests_smoothed,
-                :new_vaccinations_smoothed,
-                :new_deaths_smoothed,
-            ],
-        ),
-    ),
-    mapcols(
-        col -> replace(col, missing => 0),
-        select(df, [:total_susceptible, :total_cases, :total_deaths, :total_tests]),
-    ),
-    mapcols(col -> replace(col, missing => 0), select(df, [:reproduction_rate]))
+    return select(df, [:date]), select(
+        df,
+        [
+            :new_cases_smoothed,
+            :new_tests_smoothed,
+            :new_vaccinations_smoothed,
+            :new_deaths_smoothed,
+        ],
+    ), select(df, [:total_susceptible, :total_cases, :total_deaths, :total_tests]),
+    select(df, [:reproduction_rate])
 end
 
 function read_local_dataset(path="data/OWID/owid-covid-data.csv")
@@ -86,11 +78,9 @@ end
 # https://docs.sciml.ai/Overview/stable/showcase/bayesian_neural_ode/
 
 
-function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; outliers=[], seed=1337)
+function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=1337)
     rng = Xoshiro(seed)
     pop = randexp(rng, C) * avg
-    pop = length(outliers) > 0 ? append!(pop, outliers) : pop
-    C = length(outliers) > 0 ? C + length(outliers) : C
     number_point_of_interest = map((x) -> round(Int, x), pop)
     migration_rate = zeros(C, C)
     for c = 1:C
@@ -119,8 +109,8 @@ function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; outliers
     return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, η, Rᵢ = 0.95,)
 end
 
-function get_ode_parameters(C::Int, avg=1000)
-    rng = Xoshiro(1337)
+function get_ode_parameters(C::Int, avg=1000; seed=1337)
+    rng = Xoshiro(seed)
     pop = randexp(rng, C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     γ = 14 # infective period

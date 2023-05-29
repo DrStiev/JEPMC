@@ -28,7 +28,7 @@ function Fseir!(du, u, p, t)
     R₀, γ, σ, ω, δ, Δ = p
     dS = -R₀ * γ * S * I + ω * R + Δ * S
     dE = R₀ * γ * S * I - σ * E + Δ * E
-    dI = σ * E - γ * I - δ * I 
+    dI = σ * E - γ * I - δ * I
     dR = γ * I - ω * R + Δ * R
     dD = δ * I * γ
     du[1] = dS
@@ -40,7 +40,7 @@ end
 
 get_ode_problem(F, u, tspan, p) = ODEProblem(F, u, tspan, p)
 get_ode_solution(prob) = solve(prob, Tsit5())
-get_ode_integrator(prob) = OrdinaryDiffEq.init(prob, Tsit5(); advance_to_stop=true)
+get_ode_integrator(prob) = OrdinaryDiffEq.init(prob, Tsit5(); advance_to_stop = true)
 
 # TODO: https://docs.sciml.ai/Overview/stable/showcase/symbolic_analysis/
 
