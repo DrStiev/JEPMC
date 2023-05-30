@@ -9,6 +9,7 @@ using OrdinaryDiffEq
 # ho un modello semplice che cerco di perfezionare
 # utilizzando https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
 function seir!(du, u, p, t)
+    # https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_lockdown/ode_lockdown.md
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ = p
     dS = -R₀ * γ * S * I + ω * R

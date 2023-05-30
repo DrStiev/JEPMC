@@ -8,9 +8,6 @@ using Distributions
 using ProgressMeter
 using CSV, Dates
 
-include("controller.jl")
-include("uode.jl")
-
 @agent Person GraphAgent begin
     status::Symbol # :S, :E, :I, :R
     happiness::Float64 # [-1, 1]
@@ -27,23 +24,24 @@ function init(;
     ξ::Float64,  # 1 / vaccinazione per milion per day
     δ::Float64,  # mortality rate
     η::Float64,  # countermeasures speed and effectiveness (0-1)
-    seed = 1337,
+    seed=42
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
     # normalizzo il migration rate
-    migration_rate_sum = sum(migration_rate, dims = 2)
+    migration_rate_sum = sum(migration_rate, dims=2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
     # scelgo il punto di interesse che avrà il paziente zero
-    Is = [zeros(Int, length(number_point_of_interest) - 1)..., 1]
+    Is = [zeros(Int, length(number_point_of_interest))...]
+    Is[rand(rng, 1:length(Is))]
 
     # creo il modello 
     model = StandardABM(
         Person,
         GraphSpace(Agents.Graphs.complete_graph(C));
-        properties = @dict(
+        properties=@dict(
             number_point_of_interest,
             migration_rate,
             step_count = 0,
@@ -58,7 +56,7 @@ function init(;
             η,
             Rᵢ,
         ),
-        rng,
+        rng
     )
 
     # aggiungo la mia popolazione al modello
@@ -79,19 +77,28 @@ end
 function model_step!(model::StandardABM)
     model.step_count += 1
     # get info and then apply η
-    nar = node_at_risk(model, 1E-4)
+    # nar = node_at_risk(model, 1E-4)
     # reduce R₀ due to η
     update!(model)
     # possibilita' di variante
     variant!(model)
 end
 
-function node_at_risk(model::StandardABM, threshold = 1E-4)
+function reduce_migration_rate!(pos::Core.AbstractArray)
+    for p in pos
+        model.migration_rate[p, :] = 0.0
+        model.migration[:, p] = 0.0
+        model.migration_rate[p, p] = 1.0
+    end
+end
+
+function node_at_risk(model::StandardABM; threshold=NaN)
     function get_node_status(model::StandardABM, pos::Int)
         agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
         infects = filter(x -> x.status == :I, agents)
         return length(infects) / length(agents)
     end
+    threshold = isnan(threshold) ? 1 / 10^trunc(Int, sum(model.number_point_of_interest)) : 1 / 10^threshold
     graph_status = [get_node_status(model, pos) for pos = 1:model.C]
     return findall(x -> x > threshold, graph_status)
 end
@@ -119,10 +126,9 @@ function variant!(model::StandardABM)
     # nuova variante ogni tot tempo? 
     if rand(model.rng) ≤ 8 * 10E-4 # condizione di attivazione
         # https://it.wikipedia.org/wiki/Numero_di_riproduzione_di_base#Variabilit%C3%A0_e_incertezze_del_R0
-        newR₀ = rand(Uniform(3.3, 5.7))
-        model.R₀ = abs(rand(Normal(newR₀, newR₀ / 10)))
-        model.γ = round(Int, abs(rand(Normal(model.γ, model.γ / 10))))
-        model.σ = round(Int, abs(rand(Normal(model.σ, model.σ / 10))))
+        model.R₀ = abs(rand(Normal(3.54)))
+        model.γ = round(Int, abs(rand(Normal(model.γ))))
+        model.σ = round(Int, abs(rand(Normal(model.σ))))
         model.ω = round(Int, abs(rand(Normal(model.ω, model.ω / 10))))
         model.δ = abs(rand(Normal(model.δ, model.δ / 10)))
         # new infects
@@ -163,9 +169,9 @@ end
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/abm/abm.md
 function transmit!(agent, model::StandardABM)
     agent.status != :I && return
-    ncontacts = rand(Poisson(model.R₀))
+    ncontacts = rand(model.rng, Poisson(model.R₀))
     for i = 1:ncontacts
-        contact = model[rand(ids_in_position(agent, model))]
+        contact = model[rand(model.rng, ids_in_position(agent, model))]
         if contact.status == :S && (rand(model.rng) < model.R₀ / model.γ)
             contact.status = :E
         end
@@ -198,7 +204,7 @@ function recover_or_die!(agent, model::StandardABM)
     end
 end
 
-function collect(model::StandardABM; astep = agent_step!, mstep = model_step!, n = 100)
+function collect(model::StandardABM; astep=agent_step!, mstep=model_step!, n=100)
 
     function get_observable_data()
         susceptible(x) = count(i == :S for i in x)
@@ -223,17 +229,17 @@ function collect(model::StandardABM; astep = agent_step!, mstep = model_step!, n
     end
 
     adata, mdata = get_observable_data()
-    ad, md = run!(model, astep, mstep, n; adata = adata, mdata = mdata, showprogress = true)
+    ad, md = run!(model, astep, mstep, n; adata=adata, mdata=mdata, showprogress=true)
 
     return hcat(select(ad, Not([:step])), select(md, Not([:step])))
 end
 
-function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
+function save_dataframe(data::DataFrame, path::String, title="StandardABM")
     isdir(path) == false && mkpath(path)
     CSV.write(path * title * "_" * string(today()) * ".csv", data)
 end
 
 function load_dataset(path::String)
-    return DataFrame(CSV.File(path, delim = ",", header = 1))
+    return DataFrame(CSV.File(path, delim=",", header=1))
 end
 end

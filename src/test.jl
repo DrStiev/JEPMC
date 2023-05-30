@@ -4,8 +4,7 @@ using Statistics: mean
 using Graphs, GraphPlot
 using Distributed
 
-include("params.jl")
-# include("pplot.jl")
+include("utils.jl")
 include("graph.jl")
 include("controller.jl")
 include("uode.jl")
@@ -15,24 +14,29 @@ function save_plot(plot, path="", title="title", format="png")
     savefig(plot, path * title * "_" * string(today()) * "." * format)
 end
 
-function parameters(iso_code::String)
-    model_params.download_dataset(
-        "data/OWID/",
-        "https://covid.ourworldindata.org/data/owid-covid-data.csv",
-    )
-    df = model_params.read_local_dataset("data/OWID/owid-covid-data.csv")
-    return model_params.dataset_from_location(df, iso_code)
+function test_dataset(url::String, path::String, iso_code::String)
+    dataset.download_dataset(path, url)
+    df = dataset.read_dataset("data/OWID/owid-covid-data.csv")
+    return dataset.dataset_from_location(df, iso_code)
 end
 
-function test_save_parameters(iso_code::String)
-    date, day_info, total_count, R₀ = parameters(iso_code)
-    abm_parameters = model_params.get_abm_parameters(20, 0.01, 3300)
-    model_params.save_parameters(abm_parameters, "data/parameters/", "abm_parameters")
-    params = model_params.load_parameters("data/parameters/abm_parameters.jld2")
+test_dataset(
+    "https://covid.ourworldindata.org/data/owid-covid-data.csv",
+    "data/OWID/",
+    "ITA",
+)
+
+function test_parameters()
+    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
+    ode_parameters = parameters.get_ode_parameters(20, 3300)
+    parameters.save_parameters(abm_parameters, "data/parameters/", "abm_parameters")
+    parameters.load_parameters("data/parameters/abm_parameters.jld2")
 end
 
-function plot_current_situation(iso_code::String)
-    date, day_info, total_count, R₀ = parameters("ITA")
+test_parameters()
+
+function plot_current_situation(path::String, iso_code::String)
+    date, day_info, total_count, R₀ = dataset.dataset_from_location(dataset.read_dataset(path), iso_code)
     p = plot(
         plot(
             Array(day_info),
@@ -49,11 +53,31 @@ function plot_current_situation(iso_code::String)
     save_plot(p, "img/data_plot/", "cumulative_plot", "pdf")
 end
 
+plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
+
+# not working for fucking reason
+function test_system_identification()
+    p = parameters.get_abm_parameters(20, 0.01, 3300)
+    model = graph.init(; p...)
+    data = graph.collect(model; n=30)
+
+    d = Array(select(data, [:susceptible_status, :infected_status, :recovered_status]))'
+    ts = (1.0:length(data[!, 1]))
+
+    display(d)
+    println("data: $(size(d)), time: $(length(ts))")
+
+    eq, p_map = SysId.SIR_id(d, ts)
+    println("equation: $eq\nparameters: $p_map")
+end
+
+test_system_identification()
+
 function test_abm()
-    abm_parameters = model_params.get_abm_parameters(20, 0.01, 3300)
+    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n=length(date[!, 1]) - 1)
+    data = graph.collect(model; n=1200)
     graph.save_dataframe(data, "data/abm/", "ABM SEIR NO INTERVENTION")
     df = graph.load_dataset("data/abm/ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
 
@@ -78,34 +102,41 @@ function test_abm()
     save_plot(p, "img/abm/", "ABM SEIR NO INTERVENTION", "pdf")
 end
 
+test_abm()
+
 function test_uode()
     # must be between [0-1] otherwise strange behaviour
-    u, p, t = model_params.get_ode_parameters(20, 3300)
-    prob = uode.get_ode_problem(uode.seir!, u, t, p)
+    u, p, t = parameters.get_ode_parameters(20, 3300)
+    prob = uode.get_ode_problem(uode.seir!, u, (1.0,30), p)
     sol = uode.get_ode_solution(prob)
 
-    p = plot(
-        sol,
-        labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-        title="SEIR Dynamics NO INTERVENTION",
-    )
-    save_plot(p, "img/ode/", "ODE SEIR NO INTERVENTION", "pdf")
+    display(sol)
+
+    # p = plot(
+    #     sol,
+    #     labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+    #     title="SEIR Dynamics NO INTERVENTION",
+    # )
+    # save_plot(p, "img/ode/", "ODE SEIR NO INTERVENTION", "pdf")
 end
+
+test_uode()
 
 function test_controller()
     # https://link.springer.com/article/10.1007/s40313-023-00993-8
-    date, day_info, total_count, R₀ = parameters("ITA")
+    p = parameters.get_abm_parameters(20, 0.01, 3300)
+    model = graph.init(; p...)
 
-    abm_parameters = model_params.get_abm_parameters(20, 0.01, 3300)
-    model = graph.init(; abm_parameters...)
-
-    # rework!
-    data = graph.collect(model, graph.agent_step!, graph.model_step!; n=30)
-    select(data, [:infected_detected, :controls])
-    model.step_count
-    model.properties
-
+    data = graph.collect(model; n=30)
+    p1 = select(
+        data,
+        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
+    )
+    X̂, Ŷ = controller.predict(p1, (1.0, length(p1[!, 1])))
+    println("-> $X̂\n-> $Ŷ")
 end
+
+test_controller()
 
 function test_in_test()
     # creo una matrice di spostamento tra i vari nodi
@@ -194,8 +225,5 @@ function test_in_test()
     )
 end
 
-parameters("ITA")
-test_save_parameters("ITA")
-plot_current_situation("ITA")
-test_abm()
-test_uode()
+using DifferentialEquations
+

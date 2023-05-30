@@ -1,18 +1,7 @@
-module model_params
-using CSV, Random, Distributions, DataFrames
-using DataFrames, DataDrivenDiffEq, DataDrivenSparse
-using LinearAlgebra, OrdinaryDiffEq, ModelingToolkit
-using Statistics, Downloads, DrWatson, Plots, Dates
-using JLD2, FileIO, StableRNGs
+module dataset
+using CSV, DataFrames, Downloads
 
-# https://raw.githubusercontent.com/owid/covid-19-data/master/public/data/owid-covid-data.csv
-# https://covid19.who.int/WHO-COVID-19-global-data.csv
-# https://raw.githubusercontent.com/pcm-dpc/COVID-19/master/dati-andamento-nazionale/dpc-covid19-ita-andamento-nazionale.csv
-# https://covid.ourworldindata.org/data/owid-covid-data.csv
-function download_dataset(
-    path,
-    url="https://covid.ourworldindata.org/data/owid-covid-data.csv",
-)
+function download_dataset(path::String, url::String)
     # https://github.com/owid/covid-19-data/tree/master/public/data/
     title = split(url, "/")
     isdir(path) == false && mkpath(path)
@@ -40,47 +29,19 @@ function dataset_from_location(df::DataFrame, iso_code::String)
     select(df, [:reproduction_rate])
 end
 
-function read_local_dataset(path="data/OWID/owid-covid-data.csv")
+function read_dataset(path::String)
     return DataFrame(CSV.File(path, delim=",", header=1))
 end
-
-# to be tested!
-# https://docs.sciml.ai/DataDrivenDiffEq/stable/libs/datadrivensparse/examples/example_02/
-function system_identification(data::Array, ts, seed=1337)
-    rng = StableRNG(seed)
-    prob = ContinuousDataDrivenProblem(float.(data), float.(ts), GaussianKernel())
-
-    len = size(data)[1]
-    @variables u[1:len]
-    h = polynomial_basis(u, 5)
-    basis = Basis(h, u)
-    println(basis)
-
-    sampler = DataProcessing(split=0.8, shuffle=true, batchsize=30, rng=rng)
-    # sparsity threshold
-    λs = exp10.(-10:0.1:10)
-    opt = STLSQ(λs) # iterate over different sparsity thresholds
-    println("prob: $(size(prob)), basis: $(size(basis))")
-    # DimensionMismatch: arrays could not be broadcast to a common size; got a dimension with lengths 5 and 0
-    res = solve(
-        prob,
-        basis,
-        opt,
-        options=DataDrivenCommonOptions(data_processing=sampler, digits=1),
-    )
-    system = get_basis(res)
-    params = get_parameter_map(system)
-
-    return system, params
 end
 
-# TODO: Uncertainti Quantified Deep Bayesian Model Discovery
-# https://docs.sciml.ai/Overview/stable/showcase/bayesian_neural_ode/
-
+module parameters
+using JLD2, FileIO, Dates
+using Random, Distributions, DataFrames
+using LinearAlgebra: diagind
+using DrWatson: @dict
 
 function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=1337)
-    rng = Xoshiro(seed)
-    pop = randexp(rng, C) * avg
+    pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     migration_rate = zeros(C, C)
     for c = 1:C
@@ -100,18 +61,14 @@ function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=133
     ξ = 0.0 # vaccine ratio
     # https://www.nature.com/articles/s41467-021-22944-0
     δ = 0.007
-    # sum(skipmissing(df[!, :new_deaths_smoothed])) / 
-    # sum(skipmissing(df[!, :new_cases_smoothed])) # mortality
-    η = 1.0 / 100 # Countermeasures speed
+    η = 1.0 / 1000 # Countermeasures speed
     R₀ = 3.54
-    # first(skipmissing(df[!, :reproduction_rate]))
 
-    return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, η, Rᵢ = 0.95,)
+    return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, η, Rᵢ = 0.99,)
 end
 
 function get_ode_parameters(C::Int, avg=1000; seed=1337)
-    rng = Xoshiro(seed)
-    pop = randexp(rng, C) * avg
+    pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     γ = 14 # infective period
     σ = 5 # exposed period
@@ -133,4 +90,28 @@ function save_parameters(params, path, title="parameters")
 end
 
 load_parameters(path) = load(path)
+end
+
+module SysId
+using OrdinaryDiffEq, DataDrivenDiffEq, ModelingToolkit
+using Random, DataDrivenSparse
+
+function SIR_id(data::Core.AbstractArray, ts::Core.AbstractArray; seed=1337)
+    prob = ContinuousDataDrivenProblem(float.(data), float.(ts), GaussianKernel())
+    println(prob)
+
+    @variables t s(t) i(t) r(t)
+    u = [s; i; r]
+    Ψ = Basis(polynomial_basis(u, 5), u, iv=t)
+    println(Ψ)
+
+    # use SINDy to inference the system. Could use EDMD but 
+    # for noisy data SINDy is stabler and find simpler (sparser)
+    # solution. However, large amounts of noise can break SINDy too.
+    opt = STLSQ(exp10.(-5:0.1:1))
+    res = solve(prob, Ψ, opt, options=DataDrivenCommonOptions(digits=1))
+    println(get_basis(res))
+    system = result(res)
+    return equations(system), parameter_map(system)
+end
 end
