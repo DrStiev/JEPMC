@@ -61,10 +61,9 @@ function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=133
     ξ = 0.0 # vaccine ratio
     # https://www.nature.com/articles/s41467-021-22944-0
     δ = 0.007
-    η = 1.0 / 1000 # Countermeasures speed
     R₀ = 3.54
 
-    return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, η, Rᵢ = 0.99,)
+    return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, Rᵢ = 0.99,)
 end
 
 function get_ode_parameters(C::Int, avg=1000; seed=1337)

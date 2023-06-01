@@ -77,27 +77,22 @@ function test_abm()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n=1200)
+    data = graph.collect(model; n=1200, showprogress=true)
     graph.save_dataframe(data, "data/abm/", "ABM SEIR NO INTERVENTION")
     df = graph.load_dataset("data/abm/ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
 
-    p1 = select(
-        data,
-        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
-    )
-    p2 = select(data, [:active_countermeasures])
-    p3 = select(data, [:happiness_happiness])
-    p4 = select(data, [:R₀])
-
+    p1, p2, p3 = split_dataset(data)
+    l = @layout [grid(1, 1)
+        grid(1, 2)]
     p = plot(
         plot(
             Array(p1),
             labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
             title="ABM Dynamics",
         ),
-        plot(Array(p2), labels="η", title="Countermeasures strickness"),
-        plot(Array(p3), labels="Happiness", title="Cumulative Happiness"),
-        plot(Array(p4), labels="R₀", title="Reproduction number"),
+        plot(Array(p2), labels=["η" "Happiness"], title="Agents response to η"),
+        plot(Array(p3), labels="R₀", title="Reproduction number"),
+        layout=l,
     )
     save_plot(p, "img/abm/", "ABM SEIR NO INTERVENTION", "pdf")
 end
@@ -107,7 +102,7 @@ test_abm()
 function test_uode()
     # must be between [0-1] otherwise strange behaviour
     u, p, t = parameters.get_ode_parameters(20, 3300)
-    prob = uode.get_ode_problem(uode.seir!, u, (1.0,30), p)
+    prob = uode.get_ode_problem(uode.seir!, u, (1.0, 30), p)
     sol = uode.get_ode_solution(prob)
 
     display(sol)
@@ -122,18 +117,37 @@ end
 
 test_uode()
 
-function test_controller()
-    # https://link.springer.com/article/10.1007/s40313-023-00993-8
-    p = parameters.get_abm_parameters(20, 0.01, 3300)
-    model = graph.init(; p...)
-
-    data = graph.collect(model; n=30)
+function split_dataset(data)
     p1 = select(
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
     )
-    X̂, Ŷ = controller.predict(p1, (1.0, length(p1[!, 1])))
-    println("-> $X̂\n-> $Ŷ")
+    p2 = select(data, [:active_countermeasures, :happiness_happiness])
+    p3 = select(data, [:R₀])
+    return p1, p2, p3
+end
+
+function test_controller()
+    # https://link.springer.com/article/10.1007/s40313-023-00993-8
+    p = parameters.get_abm_parameters(20, 0.01, 3300)
+    model = graph.init(; p...)
+    data = DataFrame()
+
+    callback = function (plt)
+        display(plt)
+    end
+
+    timeshift = 7
+    for i in 1:trunc(Int, 100 / timeshift)
+        dataₜ = graph.collect(model; n=timeshift - 1)
+        data = vcat(data, dataₜ)
+        controller.countermeasures!(model, dataₜ)
+        p1, p2, p3, p4, p = split_dataset(data)
+        callback(p)
+    end
+
+    # p1, p2, p3, p4, p = split_dataset(data)
+    # controller.predict(p1, (0.0, length(p1[!, 1])))
 end
 
 test_controller()
@@ -225,5 +239,5 @@ function test_in_test()
     )
 end
 
-using DifferentialEquations
-
+abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
+model = graph.init(; abm_parameters...)

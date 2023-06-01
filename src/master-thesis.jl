@@ -2,7 +2,8 @@ using Pkg, JuliaFormatter
 Pkg.activate(".")
 format(".")
 
-# Pkg.update()
-# Pkg.resolve()
-# Pkg.precompile()
-# Pkg.instantiate()
+Pkg.status()
+Pkg.update()
+Pkg.resolve()
+Pkg.precompile()
+Pkg.instantiate()

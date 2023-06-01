@@ -19,34 +19,33 @@ using LinearAlgebra, Statistics, StableRNGs
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/ude/ude.md
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_ddeq/ode_ddeq.md
 function countermeasures!(model::StandardABM, data::DataFrame; β=3, saveat=3)
-    # applico delle contromisure rozze per iniziare
-    # simil sigmoide. 
+    # applico delle contromisure rozze per iniziare 
     # https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_optim/ode_optim.md
     # beta feature
     # NAR = model.node_at_risk(model)
     # model.reduce_migration_rate!(NAR)
-    slope(x, β) = 1 / (1 + (x / (1 - x))^(-β))
+    slope(x, β) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide.
     length(data[!, :infected_status]) == 0 && return
     # cappo il ratio tra [-1,1]
     ratio = length(data[!, 1]) / (data[end, :infected_status] - data[1, :infected_status])
-    s = slope(abs(ratio), β)
+    s = slope(abs(ratio), 3) / 3
     # rapida crescita, lenta decrescita
-    if ratio > 0
-        model.η = s ≥ model.η ? s : model.η * (1 + s)
-        model.η = model.η ≥ 1 ? 1 : model.η
-    elseif ratio < 0
-        model.η /= (1 + s)
+    if ratio > 0.0
+        model.η = s ≥ model.η ? s : model.η * (1.0 + s)
+    elseif ratio < 0.0
+        model.η /= (1.0 + s)
     end
-    # if model.ξ == 0 && rand(model.rng) < 1 / 40
-    #     model.ξ = abs(rand(Normal(0.0003, 0.00003)))
-    # end
+    model.η = model.η ≥ 1.0 ? 1.0 : model.η
+    model.η = isnan(model.η) ? 0.0 : model.η
 end
 
 # https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
 function predict(data::DataFrame, tspan::Tuple; seed=1337)
     tspan = float.(tspan)
     rng = StableRNG(seed)
-    X = Array(data)'
+    Xₙ = float.(Array(data)')
+    N = sum(Xₙ[:, 1])
+    Xₙ = Xₙ ./ N
     rbf(x) = exp.(-(x .^ 2))
 
     # define our UDE. We will use Lux.jl to define the neural network
@@ -58,17 +57,21 @@ function predict(data::DataFrame, tspan::Tuple; seed=1337)
 
     # we define the UDE as a dynamical system
     function ude_dynamics!(du, u, p, t)
-        dS, dE, dI, dR, dD = U(u, p, st)[1]
-        [dS, dE, dI, dR, dD]
+        û = U(u, p, st)[1] # network prediction
+        du[1] = û[1]
+        du[2] = û[2]
+        du[3] = û[3]
+        du[4] = û[4]
+        du[5] = û[5]
     end
-    prob_nn = ODEProblem(ude_dynamics!, X[:, 1], tspan, p)
+    prob_nn = ODEProblem(ude_dynamics!, Xₙ[:, 1], tspan, p)
 
     # let's build a training loop around our UDE
     # function predict which runs our simulation at new
     # neural network weights. Reacall that weights are the parameters
     # of the ODE, so we want to update the parameters and then run 
     # again
-    function predict(θ, X=X[:, 1], T=tspan)
+    function predict(θ, X=Xₙ[:, 1], T=tspan)
         _prob = remake(prob_nn, u0=X, tspan=(T[1], T[end]), p=θ)
         Array(solve(_prob, Vern7(), saveat=T, abstol=1e-6, reltol=1e-6))
     end
@@ -77,7 +80,7 @@ function predict(data::DataFrame, tspan::Tuple; seed=1337)
     # and check its L2 loss against the dataset
     function loss(θ)
         X̂ = predict(θ)
-        mean(abs2, X .- X̂)
+        mean(abs2, Xₙ .- X̂)
     end
 
     # last but not least we want to track out optimization to 
@@ -110,9 +113,55 @@ function predict(data::DataFrame, tspan::Tuple; seed=1337)
     # Rename the best candidate
     p_trained = res2.u
     ts = first(tspan):(mean(diff(tspan))/2):last(tspan)
-    X̂ = predict(p_trained, X[:, 1], ts)
+    X̂ = predict(p_trained, Xₙ[:, 1], ts)
     Ŷ = U(X̂, p_trained, st)[1]
-    return X̂, Ŷ
+
+    @variables u[1:size(Xₙ)[1]]
+    b = polynomial_basis(u, 4)
+    basis = Basis(b, u)
+
+    nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
+
+    λ = exp10.(-3:0.01:3)
+    opt = ADMM(λ)
+
+    options = DataDrivenCommonOptions(maxiters=10_000,
+        normalize=DataNormalization(ZScoreTransform),
+        selector=bic, digits=1,
+        data_processing=DataProcessing(split=0.9,
+            batchsize=30,
+            shuffle=true,
+            rng=StableRNG(1111)))
+
+    nn_res = solve(nn_problem, basis, opt, options=options)
+    nn_eqs = get_basis(nn_res)
+    println(nn_res)
+
+    # Define the recovered, hybrid model
+    function recovered_dynamics!(du, u, p, t)
+        û = nn_eqs(u, p) # Recovered equations
+        du[1] = û[1]
+        du[2] = û[2]
+        du[3] = û[3]
+        du[4] = û[4]
+        du[5] = û[5]
+    end
+
+    estimation_prob = ODEProblem(recovered_dynamics!, u0, tspan, get_parameter_values(nn_eqs))
+    estimate = solve(estimation_prob, Tsit5(), saveat=solution.t)
+
+    function parameter_loss(p)
+        Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
+        sum(abs2, Ŷ .- Y)
+    end
+
+    optf = Optimization.OptimizationFunction((x, p) -> parameter_loss(x), adtype)
+    optprob = Optimization.OptimizationProblem(optf, get_parameter_values(nn_eqs))
+    parameter_res = Optimization.solve(optprob, Optim.LBFGS(), maxiters=1000)
+
+    t_long = (0.0, 50.0)
+    estimation_prob = ODEProblem(recovered_dynamics!, u0, t_long, parameter_res)
+    estimate_long = solve(estimation_prob, Tsit5(), saveat=0.1) # Using higher tolerances here results in exit of julia
 end
 
 # https://docs.sciml.ai/Overview/stable/showcase/optimization_under_uncertainty/
