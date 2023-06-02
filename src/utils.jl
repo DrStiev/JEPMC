@@ -8,8 +8,8 @@ function download_dataset(path::String, url::String)
     return DataFrame(
         CSV.File(
             Downloads.download(url, path * title[length(title)]),
-            delim=",",
-            header=1,
+            delim = ",",
+            header = 1,
         ),
     )
 end
@@ -17,7 +17,8 @@ end
 function dataset_from_location(df::DataFrame, iso_code::String)
     df = filter(:iso_code => ==(iso_code), df)
     df[!, :total_susceptible] = df[!, :population] - df[!, :total_cases]
-    return select(df, [:date]), select(
+    return select(df, [:date]),
+    select(
         df,
         [
             :new_cases_smoothed,
@@ -25,12 +26,13 @@ function dataset_from_location(df::DataFrame, iso_code::String)
             :new_vaccinations_smoothed,
             :new_deaths_smoothed,
         ],
-    ), select(df, [:total_susceptible, :total_cases, :total_deaths, :total_tests]),
+    ),
+    select(df, [:total_susceptible, :total_cases, :total_deaths, :total_tests]),
     select(df, [:reproduction_rate])
 end
 
 function read_dataset(path::String)
-    return DataFrame(CSV.File(path, delim=",", header=1))
+    return DataFrame(CSV.File(path, delim = ",", header = 1))
 end
 end
 
@@ -40,7 +42,7 @@ using Random, Distributions, DataFrames
 using LinearAlgebra: diagind
 using DrWatson: @dict
 
-function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=1337)
+function get_abm_parameters(C::Int, max_travel_rate::Float64, avg = 1000; seed = 1337)
     pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     migration_rate = zeros(C, C)
@@ -66,7 +68,7 @@ function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=133
     return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, Rᵢ = 0.99,)
 end
 
-function get_ode_parameters(C::Int, avg=1000; seed=1337)
+function get_ode_parameters(C::Int, avg = 1000; seed = 1337)
     pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     γ = 14 # infective period
@@ -83,7 +85,7 @@ function get_ode_parameters(C::Int, avg=1000; seed=1337)
     return [S, E, I, R, D], [R₀, 1 / γ, 1 / σ, 1 / ω, δ], tspan
 end
 
-function save_parameters(params, path, title="parameters")
+function save_parameters(params, path, title = "parameters")
     isdir(path) == false && mkpath(path)
     save(path * title * ".jld2", params)
 end
@@ -95,20 +97,20 @@ module SysId
 using OrdinaryDiffEq, DataDrivenDiffEq, ModelingToolkit
 using Random, DataDrivenSparse
 
-function SIR_id(data::Core.AbstractArray, ts::Core.AbstractArray; seed=1337)
+function SIR_id(data::Core.AbstractArray, ts::Core.AbstractArray; seed = 1337)
     prob = ContinuousDataDrivenProblem(float.(data), float.(ts), GaussianKernel())
     println(prob)
 
     @variables t s(t) i(t) r(t)
     u = [s; i; r]
-    Ψ = Basis(polynomial_basis(u, 5), u, iv=t)
+    Ψ = Basis(polynomial_basis(u, 5), u, iv = t)
     println(Ψ)
 
     # use SINDy to inference the system. Could use EDMD but 
     # for noisy data SINDy is stabler and find simpler (sparser)
     # solution. However, large amounts of noise can break SINDy too.
     opt = STLSQ(exp10.(-5:0.1:1))
-    res = solve(prob, Ψ, opt, options=DataDrivenCommonOptions(digits=1))
+    res = solve(prob, Ψ, opt, options = DataDrivenCommonOptions(digits = 1))
     println(get_basis(res))
     system = result(res)
     return equations(system), parameter_map(system)

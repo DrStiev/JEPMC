@@ -9,7 +9,7 @@ include("graph.jl")
 include("controller.jl")
 include("uode.jl")
 
-function save_plot(plot, path="", title="title", format="png")
+function save_plot(plot, path = "", title = "title", format = "png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "_" * string(today()) * "." * format)
 end
@@ -46,19 +46,20 @@ end
 test_parameters()
 
 function plot_current_situation(path::String, iso_code::String)
-    date, day_info, total_count, R₀ = dataset.dataset_from_location(dataset.read_dataset(path), iso_code)
+    date, day_info, total_count, R₀ =
+        dataset.dataset_from_location(dataset.read_dataset(path), iso_code)
     p = plot(
         plot(
             Array(day_info),
-            labels=["Infected" "Tests" "Vaccinations" "Deaths"],
-            title="Detected Dynamics",
+            labels = ["Infected" "Tests" "Vaccinations" "Deaths"],
+            title = "Detected Dynamics",
         ),
         plot(
             Array(total_count),
-            labels=["Susceptible" "Infected" "Deaths" "Tests"],
-            title="Overall Dynamics",
+            labels = ["Susceptible" "Infected" "Deaths" "Tests"],
+            title = "Overall Dynamics",
         ),
-        plot(Array(R₀), labels="R₀", title="Reproduction Rate"),
+        plot(Array(R₀), labels = "R₀", title = "Reproduction Rate"),
     )
     save_plot(p, "img/data_plot/", "cumulative_plot", "pdf")
 end
@@ -69,7 +70,7 @@ plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
 function test_system_identification()
     p = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; p...)
-    data = graph.collect(model; n=30)
+    data = graph.collect(model; n = 30)
 
     d = Array(select(data, [:susceptible_status, :infected_status, :recovered_status]))'
     ts = (1.0:length(data[!, 1]))
@@ -87,22 +88,24 @@ function test_abm()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n=1200, showprogress=true)
+    data = graph.collect(model; n = 1200, showprogress = true)
     graph.save_dataframe(data, "data/abm/", "ABM SEIR NO INTERVENTION")
     df = graph.load_dataset("data/abm/ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
 
     p1, p2, p3 = split_dataset(data)
-    l = @layout [grid(1, 1)
-        grid(1, 2)]
+    l = @layout [
+        grid(1, 1)
+        grid(1, 2)
+    ]
     p = plot(
         plot(
             Array(p1),
-            labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-            title="ABM Dynamics",
+            labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+            title = "ABM Dynamics",
         ),
-        plot(Array(p2), labels=["η" "Happiness"], title="Agents response to η"),
-        plot(Array(p3), labels="R₀", title="Reproduction number"),
-        layout=l,
+        plot(Array(p2), labels = ["η" "Happiness"], title = "Agents response to η"),
+        plot(Array(p3), labels = "R₀", title = "Reproduction number"),
+        layout = l,
     )
     save_plot(p, "img/abm/", "ABM SEIR NO INTERVENTION", "pdf")
 end
@@ -138,8 +141,8 @@ function test_controller()
     end
 
     timeshift = 7
-    for i in 1:trunc(Int, 100 / timeshift)
-        dataₜ = graph.collect(model; n=timeshift - 1)
+    for i = 1:trunc(Int, 100 / timeshift)
+        dataₜ = graph.collect(model; n = timeshift - 1)
         data = vcat(data, dataₜ)
         controller.countermeasures!(model, dataₜ)
         p1, p2, p3, p4, p = split_dataset(data)
@@ -173,7 +176,7 @@ function test_in_test()
         maxM = maximum(migration_rate)
         migration_rate = (migration_rate .* travel_rate) ./ maxM
         migration_rate[diagind(migration_rate)] .= 1.0
-        migration_rate_sum = sum(migration_rate, dims=2)
+        migration_rate_sum = sum(migration_rate, dims = 2)
         for c = 1:C
             migration_rate[c, :] ./= migration_rate_sum[c]
         end
@@ -234,8 +237,8 @@ function test_in_test()
 
     p = plot(
         sol,
-        labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-        title="SEIR Dynamics",
+        labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        title = "SEIR Dynamics",
     )
 end
 

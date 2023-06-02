@@ -24,12 +24,12 @@ function init(;
     ω::Int,  # periodo immunita
     ξ::Float64,  # 1 / vaccinazione per milion per day
     δ::Float64,  # mortality rate
-    seed=1234
+    seed = 1234,
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
     # normalizzo il migration rate
-    migration_rate_sum = sum(migration_rate, dims=2)
+    migration_rate_sum = sum(migration_rate, dims = 2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
@@ -41,7 +41,7 @@ function init(;
     model = StandardABM(
         Person,
         GraphSpace(Agents.Graphs.complete_graph(C));
-        properties=@dict(
+        properties = @dict(
             number_point_of_interest,
             migration_rate,
             new_migration_rate = migration_rate,
@@ -58,12 +58,19 @@ function init(;
             Rᵢ,
             herd_immunity = (R₀ - 1) / R₀,
         ),
-        rng
+        rng,
     )
 
     # aggiungo la mia popolazione al modello
     for city = 1:C, _ = 1:number_point_of_interest[city]
-        add_agent!(city, model, :S, 0.0, UUID("00000000-0000-0000-0000-000000000000"), [UUID("00000000-0000-0000-0000-000000000000")]) # Suscettibile
+        add_agent!(
+            city,
+            model,
+            :S,
+            0.0,
+            UUID("00000000-0000-0000-0000-000000000000"),
+            [UUID("00000000-0000-0000-0000-000000000000")],
+        ) # Suscettibile
     end
     # aggiungo il paziente zero
     for city = 1:C
@@ -98,7 +105,9 @@ slope(x, β) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide.
 
 function balance_η_happiness(model::StandardABM, nar::Vector{Int})
     for n in nar
-        avgH = mean([h.happiness for h in filter(x -> x.pos == n, [a for a in allagents(model)])])
+        avgH = mean([
+            h.happiness for h in filter(x -> x.pos == n, [a for a in allagents(model)])
+        ])
         agents = filter(x -> x.pos == n, [a for a in allagents(model)])
         infects = filter(x -> x.status == :I, agents)
         ratio = length(infects) / length(agents)
@@ -110,14 +119,15 @@ function balance_η_happiness(model::StandardABM, nar::Vector{Int})
     end
 end
 
-function update_η(model::StandardABM, threshold=NaN)
+function update_η(model::StandardABM, threshold = NaN)
     function get_node_status(model::StandardABM, pos::Int)
         agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
         infects = filter(x -> x.status == :I, agents)
         return length(infects) / length(agents)
     end
 
-    threshold = isnan(threshold) ? 1 / trunc(Int, sum(model.number_point_of_interest)) : threshold
+    threshold =
+        isnan(threshold) ? 1 / trunc(Int, sum(model.number_point_of_interest)) : threshold
     graph_status = [get_node_status(model, pos) for pos = 1:model.C]
     node_at_risk = findall(x -> x > threshold, graph_status)
 
@@ -215,9 +225,10 @@ function transmit!(agent, model::StandardABM)
     ncontacts = rand(model.rng, Poisson(model.R₀))
     for i = 1:ncontacts
         contact = model[rand(model.rng, ids_in_position(agent, model))]
-        if (contact.status == :S ||
-            (contact.status == :R && !(agent.variant in contact.infected_by))) &&
-           (rand(model.rng) < model.R₀ / model.γ)
+        if (
+            contact.status == :S ||
+            (contact.status == :R && !(agent.variant in contact.infected_by))
+        ) && (rand(model.rng) < model.R₀ / model.γ)
             contact.status = :E
             contact.variant = agent.variant
         end
@@ -252,7 +263,13 @@ function recover_or_die!(agent, model::StandardABM)
     end
 end
 
-function collect(model::StandardABM; astep=agent_step!, mstep=model_step!, n=100, showprogress=false)
+function collect(
+    model::StandardABM;
+    astep = agent_step!,
+    mstep = model_step!,
+    n = 100,
+    showprogress = false,
+)
 
     function get_observable_data()
         susceptible(x) = count(i == :S for i in x)
@@ -277,17 +294,25 @@ function collect(model::StandardABM; astep=agent_step!, mstep=model_step!, n=100
     end
 
     adata, mdata = get_observable_data()
-    ad, md = run!(model, astep, mstep, n; adata=adata, mdata=mdata, showprogress=showprogress)
+    ad, md = run!(
+        model,
+        astep,
+        mstep,
+        n;
+        adata = adata,
+        mdata = mdata,
+        showprogress = showprogress,
+    )
 
     return hcat(select(ad, Not([:step])), select(md, Not([:step])))
 end
 
-function save_dataframe(data::DataFrame, path::String, title="StandardABM")
+function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
     isdir(path) == false && mkpath(path)
     CSV.write(path * title * "_" * string(today()) * ".csv", data)
 end
 
 function load_dataset(path::String)
-    return DataFrame(CSV.File(path, delim=",", header=1))
+    return DataFrame(CSV.File(path, delim = ",", header = 1))
 end
 end
