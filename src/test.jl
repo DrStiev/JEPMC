@@ -14,6 +14,16 @@ function save_plot(plot, path="", title="title", format="png")
     savefig(plot, path * title * "_" * string(today()) * "." * format)
 end
 
+function split_dataset(data)
+    p1 = select(
+        data,
+        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
+    )
+    p2 = select(data, [:active_countermeasures, :happiness_happiness])
+    p3 = select(data, [:R₀])
+    return p1, p2, p3
+end
+
 function test_dataset(url::String, path::String, iso_code::String)
     dataset.download_dataset(path, url)
     df = dataset.read_dataset("data/OWID/owid-covid-data.csv")
@@ -116,16 +126,6 @@ function test_uode()
 end
 
 test_uode()
-
-function split_dataset(data)
-    p1 = select(
-        data,
-        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
-    )
-    p2 = select(data, [:active_countermeasures, :happiness_happiness])
-    p3 = select(data, [:R₀])
-    return p1, p2, p3
-end
 
 function test_controller()
     # https://link.springer.com/article/10.1007/s40313-023-00993-8

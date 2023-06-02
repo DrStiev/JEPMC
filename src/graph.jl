@@ -5,10 +5,13 @@ using StatsBase: sample, Weights
 using Statistics: mean
 using Distributions
 using CSV, Dates
+using UUIDs
 
 @agent Person GraphAgent begin
     status::Symbol # :S, :E, :I, :R
     happiness::Float64 # [-1, 1]
+    variant::UUID
+    infected_by::Vector{UUID}
 end
 
 function init(;
@@ -60,7 +63,7 @@ function init(;
 
     # aggiungo la mia popolazione al modello
     for city = 1:C, _ = 1:number_point_of_interest[city]
-        add_agent!(city, model, :S, 0.0) # Suscettibile
+        add_agent!(city, model, :S, 0.0, UUID("00000000-0000-0000-0000-000000000000"), [UUID("00000000-0000-0000-0000-000000000000")]) # Suscettibile
     end
     # aggiungo il paziente zero
     for city = 1:C
@@ -68,29 +71,30 @@ function init(;
         for n = 1:Is[city]
             agent = model[inds[n]]
             agent.status = :I # Infetto
+            agent.variant = uuid1(rng) # nome variante
         end
     end
     return model
 end
 
 function model_step!(model::StandardABM)
-    model.step_count += 1
-    if model.step_count % 7 == 0
-        # get info and then apply η
-        NAR = update_η(model)
-        # balance η due to the happiness of the node
-        # in which it is applied
-        balance_η_happiness(model, NAR)
-        # reduce migration rates in and out NAR
-        update_migration_rates!(model, NAR)
-    end
+    # get info and then apply η
+    NAR = update_η(model)
+    # balance η due to the happiness of the node
+    # in which it is applied
+    balance_η_happiness(model, NAR)
+    # reduce migration rates in and out NAR
+    update_migration_rates!(model, NAR)
     # reduce R₀ due to η
     update!(model)
-    # possibilita' di variante
-    variant!(model)
     # vaccino
-    vaccine!(model)
+    # vaccine!(model)
+    # possibilita' di variante
+    voc!(model) # variant of concern
+    model.step_count += 1
 end
+
+slope(x, β) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide.
 
 function balance_η_happiness(model::StandardABM, nar::Vector{Int})
     for n in nar
@@ -99,7 +103,9 @@ function balance_η_happiness(model::StandardABM, nar::Vector{Int})
         infects = filter(x -> x.status == :I, agents)
         ratio = length(infects) / length(agents)
         if -avgH > ratio
-            model.η[n] *= ratio / avgH
+            model.η[n] = model.η[n] * slope(ratio / abs(avgH), 2)
+            # model.η[n] = model.η[n] ≥ 1.0 ? 1.0 : model.η[n]
+            # model.η[n] = isnan(model.η[n]) ? 0.0 : model.η[n]
         end
     end
 end
@@ -110,16 +116,13 @@ function update_η(model::StandardABM, threshold=NaN)
         infects = filter(x -> x.status == :I, agents)
         return length(infects) / length(agents)
     end
-    slope(x, β) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide.
 
     threshold = isnan(threshold) ? 1 / trunc(Int, sum(model.number_point_of_interest)) : threshold
     graph_status = [get_node_status(model, pos) for pos = 1:model.C]
     node_at_risk = findall(x -> x > threshold, graph_status)
 
     for n in node_at_risk
-        model.η[n] = slope(graph_status[n], 3)
-        model.η[n] = model.η[n] ≥ 1.0 ? 1.0 : model.η[n]
-        model.η[n] = isnan(model.η[n]) ? 0.0 : model.η[n]
+        model.η[n] = slope(graph_status[n], 2)
     end
     return node_at_risk
 end
@@ -153,13 +156,14 @@ function vaccine!(model::StandardABM)
 end
 
 # very very simple function
-function variant!(model::StandardABM)
+function voc!(model::StandardABM)
     # https://www.nature.com/articles/s41579-023-00878-2
     # https://onlinelibrary.wiley.com/doi/10.1002/jmv.27331
     # https://virologyj.biomedcentral.com/articles/10.1186/s12985-022-01951-7
     # nuova variante ogni tot tempo? 
     if rand(model.rng) ≤ 8 * 10E-4 # condizione di attivazione
         # https://it.wikipedia.org/wiki/Numero_di_riproduzione_di_base#Variabilit%C3%A0_e_incertezze_del_R0
+        variant = uuid1(model.rng)
         model.R₀ = abs(rand(model.rng, Uniform(3.3, 5.7)))
         model.γ = round(Int, abs(rand(model.rng, Normal(model.γ))))
         model.σ = round(Int, abs(rand(model.rng, Normal(model.σ))))
@@ -170,10 +174,12 @@ function variant!(model::StandardABM)
         new_infects = sample(
             model.rng,
             [a for a in allagents(model)],
-            round(Int, length(allagents(model)) * abs(rand(model.rng, Normal(1E-4, 1E-5)))),
+            1,
+            #round(Int, length(allagents(model)) * abs(rand(model.rng, Normal(1E-4, 1E-5)))),
         )
         for i in new_infects
             i.status = :I
+            i.variant = variant
         end
     end
 end
@@ -202,14 +208,18 @@ function migrate!(agent, model::StandardABM)
 
     end
 end
+
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/abm/abm.md
 function transmit!(agent, model::StandardABM)
     agent.status != :I && return
     ncontacts = rand(model.rng, Poisson(model.R₀))
     for i = 1:ncontacts
         contact = model[rand(model.rng, ids_in_position(agent, model))]
-        if contact.status == :S && (rand(model.rng) < model.R₀ / model.γ)
+        if (contact.status == :S ||
+            (contact.status == :R && !(agent.variant in contact.infected_by))) &&
+           (rand(model.rng) < model.R₀ / model.γ)
             contact.status = :E
+            contact.variant = agent.variant
         end
     end
 end
@@ -237,6 +247,8 @@ function recover_or_die!(agent, model::StandardABM)
         end
         # probabilità di guarigione
         agent.status = :R
+        push!(agent.infected_by, agent.variant)
+        agent.variant = UUID("00000000-0000-0000-0000-000000000000")
     end
 end
 
