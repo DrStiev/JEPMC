@@ -1,53 +1,51 @@
-using BlackBoxOptim, Random, Agents
-using Statistics: mean
+using DataDrivenDiffEq
+using ModelingToolkit
+using OrdinaryDiffEq
+using DataDrivenSparse
+using LinearAlgebra
+using DataFrames
 
 include("utils.jl")
-include("graph.jl")
+include("uode.jl")
+# include("graph.jl")
 
-function cost(x, step)
-    infected_fraction(model) =
-        count(a.status == :I for a in allagents(model)) / nagents(model)
+u, p, t = parameters.get_ode_parameters(20, 3300)
+prob = uode.get_ode_problem(uode.seir!, u, t, p)
+sol = uode.get_ode_solution(prob)
+sol.u
+sol.t
+df = DataFrame(sol)
 
-    res = Float64[]
+# param = parameters.get_abm_parameters(20, 0.01, 3300)
+# model = graph.init(; param...)
+# data = graph.collect(model; n=100, showprogress=true)
+# ddata = float.(Array(select(data, [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead]))')
+# t = (1.0:length(data[!, 1]))
 
-    callback = function (l)
-        push!(res, l)
-        display(res)
-    end
+# funziona sse gli si passa il risultato di una ODE altrimenti no
+# non credo questo possa essere utilizzato effettivamente
+ddprob = ContinuousDataDrivenProblem(sol, sol.t)
+@variables t s(t) e(t) i(t) r(t) d(t)
+u = [s; e; i; r; d]
+basis = Basis(polynomial_basis(u, 5), u, iv = t)
+opt = STLSQ(exp10.(-5:0.1:-1))
+ddsol = solve(ddprob, basis, opt, options = DataDrivenCommonOptions(digits = 1))
+println(get_basis(ddsol))
 
-    for _ = 1:step
-        model = graph.init(; x...)
-        _, mdf = run!(
-            model,
-            graph.agent_step!,
-            graph.model_step!,
-            50;
-            mdata = [infected_fraction],
-            when_model = [50],
-            showprogress = true,
-        )
-        callback(mdf.infected_fraction[1])
-    end
-    return mean(res)
-end
+# BoundsError: attempt to access 6-element Vector{Float64} at index [7]
+ddprob = ContinuousDataDrivenProblem(Array(df), sol.t)
+@variables t s(t) e(t) i(t) r(t) d(t)
+u = [s; e; i; r; d]
+basis = Basis(polynomial_basis(u, 5), u, iv = t)
+opt = STLSQ(exp10.(-5:0.1:-1))
+ddsol = solve(ddprob, basis, opt, options = DataDrivenCommonOptions(digits = 1))
+println(get_basis(ddsol))
 
-x = parameters.get_abm_parameters(20, 0.01, 3300)
-cost(x, 10)
-
-result = bboptimize(
-    cost,
-    SearchRange = [
-        x[:R₀],
-        x[:γ],
-        x[:σ],
-        x[:ξ],
-        x[:ω],
-        x[:migration_rate],
-        x[:δ],
-        x[:number_point_of_interest],
-        x[:Rᵢ],
-        (0.0, 1.0),
-    ],
-    NumDimensions = length(x),
-    MaxTime = 20,
-)
+ddprob = ContinuousDataDrivenProblem(Array(df)', sol.t)
+@variables t s(t) e(t) i(t) r(t) d(t)
+u = [s; e; i; r; d]
+basis = Basis(polynomial_basis(u, 5), u, iv = t)
+opt = STLSQ(exp10.(-5:0.1:-1))
+# ERROR: BoundsError: attempt to access 5-element Vector{SymbolicUtils.BasicSymbolic{Real}} at index [6]
+ddsol = solve(ddprob, basis, opt, options = DataDrivenCommonOptions(digits = 1))
+println(get_basis(ddsol))

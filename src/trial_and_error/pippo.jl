@@ -1,5 +1,12 @@
 # SciML Tools
+
 using OrdinaryDiffEq, ModelingToolkit, DataDrivenDiffEq, SciMLSensitivity, DataDrivenSparse
+# Warning: Error requiring `Zygote` from `Optimization`
+# │   exception =
+# │    LoadError: ArgumentError: Package Optimization does not have Zygote in its dependencies:
+# Warning: Error requiring `ReverseDiff` from `Optimization`
+# │   exception =
+# │    LoadError: ArgumentError: Package Optimization does not have ReverseDiff in its dependencies:
 using Optimization, OptimizationOptimisers, OptimizationOptimJL
 
 # Standard Libraries
@@ -27,7 +34,7 @@ t = solution.t
 
 x̄ = mean(X, dims = 5)
 noise_magnitude = 5e-3
-Xₙ = X .+ (noise_magnitude * x̄) .* randn(rng, eltype(X), size(X))
+Xₙ = X .- (noise_magnitude * x̄) .* randn(rng, eltype(X), size(X))
 
 plot(solution, alpha = 0.75, color = :black, label = ["True Data" nothing])
 scatter!(t, transpose(Xₙ), color = :red, label = ["Noisy Data" nothing])
@@ -83,6 +90,7 @@ adtype = Optimization.AutoZygote()
 optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
 optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
+# ERROR: ArgumentError: The passed automatic differentiation backend choice is not available. Please load the corresponding AD package Zygote.
 res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = 5000)
 println("Training loss after $(length(losses)) iterations: $(losses[end])")
 

@@ -67,6 +67,17 @@ function predict(data::DataFrame, tspan::Tuple; seed = 1337)
         du[4] = û[4]
         du[5] = û[5]
     end
+
+    # Define the hybrid model
+    # function ude_dynamics!(du, u, p, t, p_true)
+    #     û = U(u, p, st)[1] # Network prediction
+    #     du[1] = -p_true[1] * u[1] * p_true[2] * u[3] + û[1]
+    #     du[2] = p_true[1] * u[1] * p_true[2] * u[3] - û[2]
+    #     du[3] = û[2] - p_true[2] * u[3] + û[3]
+    #     du[4] = p_true[2] * u[3] - û[1]
+    #     du[5] = p_true[2] * u[3] * p_true[5]
+    # end
+
     prob_nn = ODEProblem(ude_dynamics!, Xₙ[:, 1], tspan, p)
 
     # let's build a training loop around our UDE
