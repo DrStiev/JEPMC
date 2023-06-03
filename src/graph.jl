@@ -63,11 +63,13 @@ function init(;
 
     # aggiungo la mia popolazione al modello
     for city = 1:C, _ = 1:number_point_of_interest[city]
+        happy = randn(rng)
+        happy = happy > 1.0 ? 1.0 : happy < -1.0 ? -1.0 : happy
         add_agent!(
             city,
             model,
             :S,
-            0.0,
+            happy, # the general happiness of the system will be 0.0
             UUID("00000000-0000-0000-0000-000000000000"),
             [UUID("00000000-0000-0000-0000-000000000000")],
         ) # Suscettibile
@@ -101,38 +103,48 @@ function model_step!(model::StandardABM)
     model.step_count += 1
 end
 
-slope(x, β) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide.
+slope(x::Number, β = 2) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide.
 
 function balance_η_happiness(model::StandardABM, nar::Vector{Int})
     for n in nar
         avgH = mean([
             h.happiness for h in filter(x -> x.pos == n, [a for a in allagents(model)])
         ])
-        agents = filter(x -> x.pos == n, [a for a in allagents(model)])
-        infects = filter(x -> x.status == :I, agents)
-        ratio = length(infects) / length(agents)
-        if -avgH > ratio
-            model.η[n] = model.η[n] * slope(ratio / abs(avgH), 2)
-            # model.η[n] = model.η[n] ≥ 1.0 ? 1.0 : model.η[n]
-            # model.η[n] = isnan(model.η[n]) ? 0.0 : model.η[n]
-        end
+        # this formula is a very strong assumption
+        model.η[n] =
+            avgH + model.η[n] < avgH / 2 ? model.η[n] * slope(ratio / abs(avgH), 2) :
+            model.η[n]
     end
 end
 
-function update_η(model::StandardABM, threshold = NaN)
+function update_η(model::StandardABM, min_infected = 1)
     function get_node_status(model::StandardABM, pos::Int)
         agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
         infects = filter(x -> x.status == :I, agents)
         return length(infects) / length(agents)
     end
 
-    threshold =
-        isnan(threshold) ? 1 / trunc(Int, sum(model.number_point_of_interest)) : threshold
-    graph_status = [get_node_status(model, pos) for pos = 1:model.C]
-    node_at_risk = findall(x -> x > threshold, graph_status)
+    function calculate_node_risk(model::StandardABM)
+        node_at_risk = []
+        for c = 1:model.C
+            node_status = get_node_status(model, c)
+            threshold = min_infected / model.number_point_of_interest[c]
+            if node_status ≥ threshold
+                push!(node_at_risk, c)
+            end
+        end
+        return node_at_risk
+    end
+
+    node_at_risk = calculate_node_risk(model)
 
     for n in node_at_risk
-        model.η[n] = slope(graph_status[n], 2)
+        s = slope(graph_status[n], 2)
+        if model.η[n] == 0.0
+            model.η[n] = s
+        else
+            model.η[n] = model.η[n] > s ? model.η[n] * (1 - s) : s
+        end
     end
     return node_at_risk
 end
@@ -159,7 +171,7 @@ end
 function vaccine!(model::StandardABM)
     if model.ξ == 0 && rand(model.rng) < 1 / 365
         v = model.herd_immunity / 0.99 # efficacia vaccino
-        # voglio arrivare ad avere una herd herd immunity 
+        # voglio arrivare ad avere una herd immunity 
         # entro model.ω tempo
         model.ξ = v / model.ω
     end
@@ -181,12 +193,7 @@ function voc!(model::StandardABM)
         model.δ = abs(rand(model.rng, Normal(model.δ, model.δ / 10)))
         model.herd_immunity = (model.R₀ - 1) / model.R₀
         # new infects
-        new_infects = sample(
-            model.rng,
-            [a for a in allagents(model)],
-            1,
-            #round(Int, length(allagents(model)) * abs(rand(model.rng, Normal(1E-4, 1E-5)))),
-        )
+        new_infects = sample(model.rng, [a for a in allagents(model)], 1)
         for i in new_infects
             i.status = :I
             i.variant = variant
@@ -195,16 +202,18 @@ function voc!(model::StandardABM)
 end
 
 function agent_step!(agent, model::StandardABM)
-    happiness!(model, agent, 0.1 - model.η[agent.pos], abs((0.1 - model.η[agent.pos])) / 10)
+    happiness!(model, agent)
     migrate!(agent, model)
     transmit!(agent, model)
     update!(agent, model)
     recover_or_die!(agent, model)
 end
 
-function happiness!(model::StandardABM, agent, val::Float64, std::Float64)
-    std < 0 || isnan(std) && return
-    agent.happiness += rand(model.rng, Normal(val, std))
+function happiness!(model::StandardABM, agent)
+    agent.happiness += rand(
+        model.rng,
+        Normal(slope(agent.happiness - model.η[agent.pos], 2), model.η[agent.pos]),
+    )
     # mantengo la happiness tra [-1, 1]
     agent.happiness =
         agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
