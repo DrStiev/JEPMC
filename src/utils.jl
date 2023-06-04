@@ -95,24 +95,33 @@ end
 
 module SysId
 using OrdinaryDiffEq, DataDrivenDiffEq, ModelingToolkit
-using Random, DataDrivenSparse
+using Random, DataDrivenSparse, LinearAlgebra, DataFrames
 
-function SIR_id(data::Core.AbstractArray, ts::Core.AbstractArray; seed = 1337)
-    prob = ContinuousDataDrivenProblem(float.(data), float.(ts), GaussianKernel())
-    println(prob)
+function system_identification(data::DataFrame)
+    # handle the input in a correct way to avoid wonky behaviours
+    s = sum(data[!, 1]) # total number of individuals
+    X = DataFrame(float.(Array(data)'), :auto) ./ s # normalize and obtain numerical stability
+    t = float.([i for i = 1:size(X, 2)])
 
-    @variables t s(t) i(t) r(t)
-    u = [s; i; r]
-    Ψ = Basis(polynomial_basis(u, 5), u, iv = t)
-    println(Ψ)
+    # generate the datadriven problem
+    ddprob = ContinuousDataDrivenProblem(Array(X), t)
+
+    # generate the variable and the basis
+    @variables t (u(t))[1:(size(X))[1]]
+    b = []
+    for i = 1:size(X)[1]
+        push!(b, u[i])
+    end
+    basis = Basis(polynomial_basis(b, 5), u, iv = t) # construct a Basis
 
     # use SINDy to inference the system. Could use EDMD but 
     # for noisy data SINDy is stabler and find simpler (sparser)
     # solution. However, large amounts of noise can break SINDy too.
-    opt = STLSQ(exp10.(-5:0.1:1))
-    res = solve(prob, Ψ, opt, options = DataDrivenCommonOptions(digits = 1))
-    println(get_basis(res))
-    system = result(res)
-    return equations(system), parameter_map(system)
+    opt = STLSQ(exp10.(-5:0.1:-1)) # define the optimization algorithm
+    ddsol = solve(ddprob, basis, opt, options = DataDrivenCommonOptions(digits = 1))
+    # return the information about the inferred model and parameters
+    sys = get_basis(ddsol)
+    params = get_parameter_map(sys)
+    return sys, params
 end
 end

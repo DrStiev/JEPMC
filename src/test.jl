@@ -1,7 +1,6 @@
 using Agents, DataFrames, Plots, Distributions, Random, Dates
 using Statistics: mean
 
-using Graphs, GraphPlot
 using Distributed
 
 include("utils.jl")
@@ -66,19 +65,14 @@ end
 
 plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
 
-# not working for fucking reason
 function test_system_identification()
     p = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; p...)
     data = graph.collect(model; n = 30)
 
-    d = Array(select(data, [:susceptible_status, :infected_status, :recovered_status]))'
-    ts = (1.0:length(data[!, 1]))
+    d = select(data, [:susceptible_status, :infected_status, :recovered_status])
 
-    display(d)
-    println("data: $(size(d)), time: $(length(ts))")
-
-    eq, p_map = SysId.SIR_id(d, ts)
+    eq, p_map = SysId.system_identification(d)
     println("equation: $eq\nparameters: $p_map")
 end
 
@@ -118,14 +112,12 @@ function test_uode()
     prob = uode.get_ode_problem(uode.seir!, u, (1.0, 30), p)
     sol = uode.get_ode_solution(prob)
 
-    display(sol)
-
-    # p = plot(
-    #     sol,
-    #     labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-    #     title="SEIR Dynamics NO INTERVENTION",
-    # )
-    # save_plot(p, "img/ode/", "ODE SEIR NO INTERVENTION", "pdf")
+    p = plot(
+        sol,
+        labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        title = "SEIR Dynamics NO INTERVENTION",
+    )
+    save_plot(p, "img/ode/", "ODE SEIR NO INTERVENTION", "pdf")
 end
 
 test_uode()
@@ -154,93 +146,3 @@ function test_controller()
 end
 
 test_controller()
-
-function test_in_test()
-    # creo una matrice di spostamento tra i vari nodi
-    # creo un grafo come Graph(M+M')
-
-    # cero una matrice di migrazione e un insieme
-    # di valori da associare ai nodi di un grafo
-    function get_migration_matrix(travel_rate, C, avg)
-        rng = Xoshiro(1337)
-        pop = randexp(rng, C) * avg
-        number_point_of_interest = map((x) -> round(Int, x), pop)
-        migration_rate = zeros(C, C)
-        for c = 1:C
-            for c2 = 1:C
-                migration_rate[c, c2] =
-                    (number_point_of_interest[c] + number_point_of_interest[c2]) /
-                    number_point_of_interest[c]
-            end
-        end
-        maxM = maximum(migration_rate)
-        migration_rate = (migration_rate .* travel_rate) ./ maxM
-        migration_rate[diagind(migration_rate)] .= 1.0
-        migration_rate_sum = sum(migration_rate, dims = 2)
-        for c = 1:C
-            migration_rate[c, :] ./= migration_rate_sum[c]
-        end
-        return migration_rate, number_point_of_interest
-    end
-
-    C = 20
-    migration_matrix, nodes_population = get_migration_matrix(0.01, C, 3300)
-    1 - (migration_matrix[1, 1] + sum(migration_matrix[1, 2:end]))
-    out = migration_matrix[1, 2:end] .* nodes_population[1]
-    i = migration_matrix[2:end, 1] .* nodes_population[2:end]
-    sum(i) - sum(out)
-    nodes_population
-    pop = sum(nodes_population)
-    # parametri ode relativi all'epidemia
-    p = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007]
-
-    # creo matrice relativa al grafo 
-    posPatientZero = rand(1:C)
-    # N, S, E, I, R, D
-    seirMatrix = zeros(Float64, C, 6)
-    for c = 1:C
-        seirMatrix[c, :] = [nodes_population[c], 1.0, 0.0, 0.0, 0.0, 0.0]
-        if c == posPatientZero
-            seirMatrix[c, :] = [
-                nodes_population[c],
-                (nodes_population[c] - 1) / nodes_population[c],
-                0.0,
-                1 / nodes_population[c],
-                0.0,
-                0.0,
-            ]
-        end
-    end
-    seirMatrix
-
-    # differenza tra individui che entrano nel nodo i e individui che escono dal nodo i 
-    # calcolo semplicistico ← Δ
-    Δ = sum(migration_matrix[:, 1]) - sum(migration_matrix[1, :])
-    t = (0.0, 1.0)
-    push!(p, Δ)
-    prob = uode.get_ode_problem(uode.Fseir!, seirMatrix[1, 2:end], t, p)
-    sol = uode.get_ode_solution(prob)
-    prob = uode.get_ode_problem(uode.Fseir!, sol.u[end], t, p)
-    sol = uode.get_ode_solution(prob)
-
-    # distributed computation to calculate seir
-    addprocs(nprocs())
-    for i = 0.0:1.0:10.0 # step to compute ode
-        t = (i, i + 1.0)
-        @distributed for N = 1:C
-            println("The N of this iteration in $N calculate node $(nodes_population[N])")
-            prob = uode.get_ode_problem(uode.Fseir!, seirMatrix[N, :], t, p)
-            sol = uode.get_ode_solution(prob)
-            seirMatrix[N, 2:end] = sol.u[end]
-        end
-    end
-
-    p = plot(
-        sol,
-        labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-        title = "SEIR Dynamics",
-    )
-end
-
-abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-model = graph.init(; abm_parameters...)

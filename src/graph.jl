@@ -24,12 +24,12 @@ function init(;
     ω::Int,  # periodo immunita
     ξ::Float64,  # 1 / vaccinazione per milion per day
     δ::Float64,  # mortality rate
-    seed=1234
+    seed = 1234,
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
     # normalizzo il migration rate
-    migration_rate_sum = sum(migration_rate, dims=2)
+    migration_rate_sum = sum(migration_rate, dims = 2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
@@ -41,7 +41,7 @@ function init(;
     model = StandardABM(
         Person,
         GraphSpace(Agents.Graphs.complete_graph(C));
-        properties=@dict(
+        properties = @dict(
             number_point_of_interest,
             migration_rate,
             new_migration_rate = migration_rate,
@@ -58,7 +58,7 @@ function init(;
             Rᵢ,
             herd_immunity = (R₀ - 1) / R₀,
         ),
-        rng
+        rng,
     )
 
     # aggiungo la mia popolazione al modello
@@ -103,7 +103,7 @@ function model_step!(model::StandardABM)
     model.step_count += 1
 end
 
-slope(x::Number, β=2) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide.
+# slope(x::Number, β = 2) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide.
 
 function balance_η_happiness(model::StandardABM, nar::Vector{Any})
     for n in nar
@@ -112,12 +112,12 @@ function balance_η_happiness(model::StandardABM, nar::Vector{Any})
         ])
         # this formula is a very strong assumption
         model.η[n] =
-            avgH + model.η[n] < avgH / 2 ? model.η[n] * slope(ratio / abs(avgH), 2) :
-            model.η[n]
+            avgH + model.η[n] < model.η[n] / 2 ?
+            model.η[n] * (1 - tanh(model.η[n] / abs(avgH))) : model.η[n]
     end
 end
 
-function update_η(model::StandardABM, min_infected=1)
+function update_η(model::StandardABM, min_infected = 1)
     function get_node_status(model::StandardABM, pos::Int)
         agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
         infects = filter(x -> x.status == :I, agents)
@@ -139,7 +139,7 @@ function update_η(model::StandardABM, min_infected=1)
     node_at_risk = calculate_node_risk(model)
 
     for n in node_at_risk
-        s = slope(get_node_status(model, n), 2)
+        s = tanh(get_node_status(model, n))
         if model.η[n] == 0.0
             model.η[n] = s
         else
@@ -212,7 +212,7 @@ end
 function happiness!(model::StandardABM, agent)
     agent.happiness += rand(
         model.rng,
-        Normal(slope(agent.happiness - model.η[agent.pos], 2), model.η[agent.pos]),
+        Normal(tanh(agent.happiness - model.η[agent.pos]), model.η[agent.pos]),
     )
     # mantengo la happiness tra [-1, 1]
     agent.happiness =
@@ -274,10 +274,10 @@ end
 
 function collect(
     model::StandardABM;
-    astep=agent_step!,
-    mstep=model_step!,
-    n=100,
-    showprogress=false
+    astep = agent_step!,
+    mstep = model_step!,
+    n = 100,
+    showprogress = false,
 )
 
     function get_observable_data()
@@ -304,24 +304,24 @@ function collect(
 
     adata, mdata = get_observable_data()
     ad, md = run!(
-        model,
-        astep,
-        mstep,
-        n;
-        adata=adata,
-        mdata=mdata,
-        showprogress=showprogress
+        model, # model
+        astep, # agent step function
+        mstep, # model step function
+        n; # number of steps
+        adata = adata, # observable agent data
+        mdata = mdata, # model observable data
+        showprogress = showprogress,
     )
 
     return hcat(select(ad, Not([:step])), select(md, Not([:step])))
 end
 
-function save_dataframe(data::DataFrame, path::String, title="StandardABM")
+function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
     isdir(path) == false && mkpath(path)
     CSV.write(path * title * "_" * string(today()) * ".csv", data)
 end
 
 function load_dataset(path::String)
-    return DataFrame(CSV.File(path, delim=",", header=1))
+    return DataFrame(CSV.File(path, delim = ",", header = 1))
 end
 end
