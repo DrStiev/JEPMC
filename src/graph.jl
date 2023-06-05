@@ -9,7 +9,6 @@ using UUIDs
 
 @agent Person GraphAgent begin
     status::Symbol # :S, :E, :I, :R
-    happiness::Float64 # [-1, 1]
     variant::UUID
     infected_by::Vector{UUID}
 end
@@ -36,6 +35,9 @@ function init(;
     # scelgo il punto di interesse che avrà il paziente zero
     Is = [zeros(Int, length(number_point_of_interest))...]
     Is[rand(rng, 1:length(Is))] = 1
+    happiness = [randn(rng) for i = 1:C]
+    happiness[happiness.<-1.0] .= -1.0
+    happiness[happiness.>1.0] .= 1.0
 
     # creo il modello 
     model = StandardABM(
@@ -57,19 +59,17 @@ function init(;
             η = [zeros(Float64, length(number_point_of_interest))...],
             Rᵢ,
             herd_immunity = (R₀ - 1) / R₀,
+            happiness,
         ),
         rng,
     )
 
     # aggiungo la mia popolazione al modello
     for city = 1:C, _ = 1:number_point_of_interest[city]
-        happy = randn(rng)
-        happy = happy > 1.0 ? 1.0 : happy < -1.0 ? -1.0 : happy
         add_agent!(
             city,
             model,
             :S,
-            happy, # the general happiness of the system will be 0.0
             UUID("00000000-0000-0000-0000-000000000000"),
             [UUID("00000000-0000-0000-0000-000000000000")],
         ) # Suscettibile
@@ -87,6 +87,7 @@ function init(;
 end
 
 function model_step!(model::StandardABM)
+    happiness!(model)
     # get info and then apply η
     NAR = update_η(model)
     # balance η due to the happiness of the node
@@ -103,17 +104,26 @@ function model_step!(model::StandardABM)
     model.step_count += 1
 end
 
-# slope(x::Number, β = 2) = 1 / (1 + (x / (1 - x))^(-β)) # simil sigmoide.
+function happiness!(model::StandardABM)
+    for n = 1:model.C
+        model.happiness[n] += rand(
+            Normal(
+                model.happiness[n] - model.η[n],
+                abs(model.happiness[n] - model.η[n]) / 10,
+            ),
+        )
+    end
+    model.happiness[model.happiness.<-1.0] .= -1.0
+    model.happiness[model.happiness.>1.0] .= 1.0
+end
 
 function balance_η_happiness(model::StandardABM, nar::Vector{Any})
     for n in nar
-        avgH = mean([
-            h.happiness for h in filter(x -> x.pos == n, [a for a in allagents(model)])
-        ])
         # this formula is a very strong assumption
+        avgH = model.happiness[n]
         model.η[n] =
             avgH + model.η[n] < model.η[n] / 2 ?
-            model.η[n] * (1 - tanh(model.η[n] / abs(avgH))) : model.η[n]
+            model.η[n] * (1 - (model.η[n] / abs(avgH))) : model.η[n]
     end
 end
 
@@ -192,31 +202,18 @@ function voc!(model::StandardABM)
         model.ω = round(Int, abs(rand(model.rng, Normal(model.ω, model.ω / 10))))
         model.δ = abs(rand(model.rng, Normal(model.δ, model.δ / 10)))
         model.herd_immunity = (model.R₀ - 1) / model.R₀
-        # new infects
-        new_infects = sample(model.rng, [a for a in allagents(model)], 1)
-        for i in new_infects
-            i.status = :I
-            i.variant = variant
-        end
+        # new infect
+        new_infect = random_agent(model)
+        new_infect.status = :I
+        new_infect.variant = variant
     end
 end
 
 function agent_step!(agent, model::StandardABM)
-    happiness!(model, agent)
     migrate!(agent, model)
     transmit!(agent, model)
     update!(agent, model)
     recover_or_die!(agent, model)
-end
-
-function happiness!(model::StandardABM, agent)
-    agent.happiness += rand(
-        model.rng,
-        Normal(tanh(agent.happiness - model.η[agent.pos]), model.η[agent.pos]),
-    )
-    # mantengo la happiness tra [-1, 1]
-    agent.happiness =
-        agent.happiness > 1.0 ? 1.0 : agent.happiness < -1.0 ? -1.0 : agent.happiness
 end
 
 function migrate!(agent, model::StandardABM)
@@ -224,7 +221,7 @@ function migrate!(agent, model::StandardABM)
     m = sample(1:(model.C), Weights(model.new_migration_rate[pid, :]))
     if m ≠ pid
         move_agent!(agent, m, model)
-
+        
     end
 end
 
@@ -268,7 +265,6 @@ function recover_or_die!(agent, model::StandardABM)
         # probabilità di guarigione
         agent.status = :R
         push!(agent.infected_by, agent.variant)
-        # agent.variant = UUID("00000000-0000-0000-0000-000000000000")
     end
 end
 
@@ -285,20 +281,19 @@ function collect(
         exposed(x) = count(i == :E for i in x)
         infected(x) = count(i == :I for i in x)
         recovered(x) = count(i == :R for i in x)
-        happiness(x) = mean(x)
 
         R₀(model) = model.R₀
         dead(model) = sum(model.number_point_of_interest) - nagents(model)
         active_countermeasures(model) = mean(model.η)
+        happiness(model) = mean(model.happiness)
 
         adata = [
             (:status, susceptible),
             (:status, exposed),
             (:status, infected),
             (:status, recovered),
-            (:happiness, happiness),
         ]
-        mdata = [dead, R₀, active_countermeasures]
+        mdata = [dead, R₀, active_countermeasures, happiness]
         return adata, mdata
     end
 

@@ -18,7 +18,7 @@ function split_dataset(data)
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
     )
-    p2 = select(data, [:active_countermeasures, :happiness_happiness])
+    p2 = select(data, [:active_countermeasures, :happiness])#_happiness])
     p3 = select(data, [:R₀])
     return p1, p2, p3
 end
@@ -68,12 +68,15 @@ plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
 function test_system_identification()
     p = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; p...)
-    data = graph.collect(model; n = 30)
+    data = graph.collect(model; n = 30, showprogress = true)
 
-    d = select(data, [:susceptible_status, :infected_status, :recovered_status])
+    d = select(
+        data,
+        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
+    )
 
-    eq, p_map = SysId.system_identification(d)
-    println("equation: $eq\nparameters: $p_map")
+    eq = SysId.system_identification(d)
+    println("equation: $eq")
 end
 
 test_system_identification()
