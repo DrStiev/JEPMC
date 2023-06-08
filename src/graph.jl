@@ -221,7 +221,7 @@ function migrate!(agent, model::StandardABM)
     m = sample(1:(model.C), Weights(model.new_migration_rate[pid, :]))
     if m ≠ pid
         move_agent!(agent, m, model)
-        
+
     end
 end
 

@@ -1,6 +1,6 @@
 # SciML Tools
 
-# downgrade OrdinaryDiffEq and Optimization to solve include error but 
+# downgrade OrdinaryDiffEq and Optimization to solve include error but
 # still new error arise
 using OrdinaryDiffEq, ModelingToolkit, DataDrivenDiffEq, SciMLSensitivity, DataDrivenSparse
 using Optimization, OptimizationOptimisers, OptimizationOptimJL
@@ -49,10 +49,10 @@ rbf(x) = exp.(-(x .^ 2))
 
 # Multilayer FeedForward
 U = Lux.Chain(
-    Lux.Dense(size(X)[1], 8, rbf),
+    Lux.Dense(size(X, 1), 8, rbf),
     Lux.Dense(8, 8, rbf),
     Lux.Dense(8, 8, rbf),
-    Lux.Dense(8, size(X)[1]),
+    Lux.Dense(8, size(X, 1)),
 )
 # Get the initial parameters and state variables of the model
 p, st = Lux.setup(StableRNG(1234), U)
@@ -105,7 +105,7 @@ adtype = Optimization.AutoZygote()
 optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
 optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
-# seems work but need test (heavy memory consuming need kos) 
+# seems work but need test (heavy memory consuming need kos)
 res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = 2000)
 println("Training loss after $(length(losses)) iterations: $(losses[end])")
 optprob2 = Optimization.OptimizationProblem(optf, res1.u)
@@ -120,10 +120,26 @@ X̂ = predict(p_trained, X[:, 1], ts)
 # Neural network guess
 Ŷ = U(X̂, p_trained, st)[1]
 
+## Analysis of the trained network
+# Plot the data and the approximation
+# Trained on noisy data vs real solution
+pl_trajectory = plot(
+    ts,
+    transpose(X̂),
+    xlabel = "t",
+    ylabel = "x(t), y(t)",
+    color = :red,
+    label = ["UDE Approximation" nothing],
+)
+scatter!(tspan, transpose(X), color = :black, label = ["Measurements" nothing])
+
 # Symbolic regression via sparse regression (SINDy based)
 nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
 λ = exp10.(-3:0.01:3)
 opt = ADMM(λ)
+@variables u[1:size(X, 1)]
+b = polynomial_basis(u, size(X, 1))
+basis = Basis(b, u);
 
 options = DataDrivenCommonOptions(
     maxiters = 10_000,

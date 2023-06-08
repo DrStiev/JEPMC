@@ -121,7 +121,7 @@ function system_identification(
     end
     basis = Basis(polynomial_basis(b, (size(X), 1)), u, iv = t) # construct a Basis
 
-    # use SINDy to inference the system. Could use EDMD but 
+    # use SINDy to inference the system. Could use EDMD but
     # for noisy data SINDy is stabler and find simpler (sparser)
     # solution. However, large amounts of noise can break SINDy too.
     opt = opt(λ) # define the optimization algorithm
@@ -144,5 +144,163 @@ function system_identification(
     sys = get_basis(ddsol)
     #params = get_parameter_map(sys)
     return sys #, params
+end
+end
+
+module udePredict
+# downgrade OrdinaryDiffEq and Optimization to solve include error but
+# still new error arise
+using OrdinaryDiffEq, ModelingToolkit, DataDrivenDiffEq, SciMLSensitivity, DataDrivenSparse
+using Optimization, OptimizationOptimisers, OptimizationOptimJL
+
+# Standard Libraries
+using LinearAlgebra, Statistics
+
+# External Libraries
+using ComponentArrays, Lux, Zygote, StableRNGs, DataFrames
+
+function ude_prediction(
+    data::DataFrame,
+    timeshift::Int;
+    opt = STLSQ,
+    λ = exp10.(-5:0.1:-1),
+    max_iters = 10_000,
+    seed = 1234,
+)
+    X = Array(data)
+    # Normalize the data if not between [0-1]
+    if (any(X .<= 0) || any(X .>= 1))
+        X = X ./ sum(data[1, :])
+    end
+
+    rbf(x) = exp.(-(x .^ 2))
+    s = size(X, 1)
+
+    # Multilayer FeedForward
+    U = Lux.Chain(
+        Lux.Dense(s, s + 3, rbf),
+        Lux.Dense(s + 3, s + 3, rbf),
+        Lux.Dense(s + 3, s + 3, rbf),
+        Lux.Dense(s + 3, s),
+    )
+    # Get the initial parameters and state variables of the model
+    p, st = Lux.setup(StableRNG(1234), U)
+
+    # Define the hybrid model
+    function ude_dynamics!(du, u, p, t)
+        û = U(u, p, st)[1] # network prediction
+        du[1] = û[1]
+        du[2] = û[2]
+        du[3] = û[3]
+        du[4] = û[4]
+        du[5] = û[5]
+    end
+
+    # function ude_dynamics!(du, u, p, t, p_true)
+    #     û = U(u, p, st)[1] # Network prediction
+    #     du[1] = -p_true[1] * u[1] * p_true[2] * u[3] + û[4]
+    #     du[2] = p_true[1] * u[1] * p_true[2] * u[3] - û[2]
+    #     du[3] = û[2] - p_true[2] * u[3] + û[3]
+    #     du[4] = p_true[2] * u[3] - û[4]
+    #     du[5] = p_true[2] * u[3] * p_true[5]
+    # end
+
+    # Closure with the known parameter
+    nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t)#, p_)
+    # Define the problem
+    prob_nn = ODEProblem(nn_dynamics!, X[:, 1], (tspan[1], tspan[end]), p)
+
+    function predict(θ, X = X[:, 1], T = tspan)
+        _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = θ)
+        Array(solve(_prob, Vern7(), saveat = T, abstol = 1e-6, reltol = 1e-6))
+    end
+
+    function loss(θ)
+        X̂ = predict(θ)
+        mean(abs2, X .- X̂)
+    end
+
+    losses = Float64[]
+
+    callback = function (p, l)
+        push!(losses, l)
+        if length(losses) % 50 == 0
+            println("Current loss after $(length(losses)) iterations: $(losses[end])")
+        end
+        return false
+    end
+
+    adtype = Optimization.AutoZygote()
+    optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
+    optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
+
+    # seems work but need test (heavy memory consuming need kos)
+    res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = 2000)
+    optprob2 = Optimization.OptimizationProblem(optf, res1.u)
+    res2 = Optimization.solve(optprob2, Optim.LBFGS(), callback = callback, maxiters = 400)
+
+    # Rename the best candidate
+    p_trained = res2.u
+
+    ts = first(tspan):(mean(diff(tspan))/2):last(tspan)
+    X̂ = predict(p_trained, X[:, 1], ts)
+    # Neural network guess
+    Ŷ = U(X̂, p_trained, st)[1]
+
+    # Symbolic regression via sparse regression (SINDy based)
+    nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
+    opt = opt(λ)
+    @variables u[1:size(X, 1)]
+    b = polynomial_basis(u, size(X, 1))
+    basis = Basis(b, u)
+
+    # I think this create problem but idk why
+    # λ = exp10.(-3:0.01:3)
+    # opt = ADMM(λ)
+
+    options = DataDrivenCommonOptions(
+        maxiters = max_iters,
+        normalize = DataNormalization(ZScoreTransform),
+        selector = bic,
+        digits = 1,
+        data_processing = DataProcessing(
+            split = 0.9,
+            batchsize = 30,
+            shuffle = true,
+            rng = StableRNG(seed),
+        ),
+    )
+
+    nn_res = solve(nn_problem, basis, opt, options = options)
+    nn_eqs = get_basis(nn_res)
+
+    # Define the recovered, hybrid model
+    function recovered_dynamics!(du, u, p, t)
+        û = eqs(u, p) # Recovered equations
+        du[1] = -p_[1] * u[1] * p_[2] * u[3] + û[1]
+        du[2] = p_[1] * u[1] * p_[2] * u[3] - û[2]
+        du[3] = û[2] - p_[2] * u[3] + û[3]
+        du[4] = p_[2] * u[3] - û[1]
+        du[5] = p_[2] * u[3] * p_[5]
+    end
+
+    estimation_prob =
+        ODEProblem(recovered_dynamics!, u, tspan, get_parameter_values(nn_eqs))
+    estimate = solve(estimation_prob, Tsit5())
+
+    function parameter_loss(p)
+        Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
+        sum(abs2, Ŷ .- Y)
+    end
+
+    optf = Optimization.OptimizationFunction((x, p) -> parameter_loss(x), adtype)
+    optprob = Optimization.OptimizationProblem(optf, get_parameter_values(nn_eqs))
+    parameter_res = Optimization.solve(optprob, Optim.LBFGS(), maxiters = 1000)
+
+    # Look at long term prediction
+    t_long = (0.0, float(timeshift))
+    estimation_prob = ODEProblem(recovered_dynamics!, u, t_long, parameter_res)
+    estimate_long = solve(estimation_prob, Tsit5(), saveat = 0.1) # Using higher tolerances here results in exit of julia
+    return estimate_long
 end
 end
