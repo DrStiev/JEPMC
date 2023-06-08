@@ -81,6 +81,53 @@ end
 
 test_system_identification()
 
+function test_prediction()
+    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
+    model = graph.init(; abm_parameters...)
+
+    data = graph.collect(model; n = 150, showprogress = true)
+    ddata = select(
+        data,
+        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
+    )
+    Xₙ = Array(ddata)
+    # Eye control
+    xpred1, ypred1 = udePredict.ude_prediction(ddata[1:45, :], 60)
+    plot(
+        1:60,
+        transpose(xpred1),
+        xlabel = "t",
+        ylabel = "s(t), e(t), i(t), r(t), d(t)",
+        color = :red,
+        label = ["UDE Approximation" nothing],
+    )
+    scatter!(1:150, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
+
+    xpred2, ypred2 = udePredict.ude_prediction(ddata[1:45, :], 90)
+    plot(
+        1:90,
+        transpose(xpred2),
+        xlabel = "t",
+        ylabel = "s(t), e(t), i(t), r(t), d(t)",
+        color = :red,
+        label = ["UDE Approximation" nothing],
+    )
+    scatter!(1:150, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
+
+    xpred3, ypred3 = udePredict.ude_prediction(ddata[1:45, :], 120)
+    plot(
+        1:120,
+        transpose(xpred3),
+        xlabel = "t",
+        ylabel = "s(t), e(t), i(t), r(t), d(t)",
+        color = :red,
+        label = ["UDE Approximation" nothing],
+    )
+    scatter!(1:150, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
+end
+
+test_prediction()
+
 function test_abm()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)

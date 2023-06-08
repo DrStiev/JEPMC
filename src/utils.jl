@@ -159,15 +159,10 @@ using LinearAlgebra, Statistics
 # External Libraries
 using ComponentArrays, Lux, Zygote, StableRNGs, DataFrames
 
-function ude_prediction(
-    data::DataFrame,
-    timeshift::Int;
-    opt = STLSQ,
-    λ = exp10.(-5:0.1:-1),
-    max_iters = 10_000,
-    seed = 1234,
-)
-    X = Array(data)
+function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234)
+    X = Array(data)'
+    tspan = float.([i for i = 1:size(Array(data), 1)])
+    timeshift = float.([i for i = 1:timeshift])
     # Normalize the data if not between [0-1]
     if (any(X .<= 0) || any(X .>= 1))
         X = X ./ sum(data[1, :])
@@ -184,7 +179,7 @@ function ude_prediction(
         Lux.Dense(s + 3, s),
     )
     # Get the initial parameters and state variables of the model
-    p, st = Lux.setup(StableRNG(1234), U)
+    p, st = Lux.setup(StableRNG(seed), U)
 
     # Define the hybrid model
     function ude_dynamics!(du, u, p, t)
@@ -242,10 +237,23 @@ function ude_prediction(
     # Rename the best candidate
     p_trained = res2.u
 
-    ts = first(tspan):(mean(diff(tspan))/2):last(tspan)
+    ts = first(timeshift):(mean(diff(timeshift))/2):last(timeshift)
     X̂ = predict(p_trained, X[:, 1], ts)
     # Neural network guess
     Ŷ = U(X̂, p_trained, st)[1]
+    return X̂, Ŷ
+end
+
+# I'd like to use both but this seems to not work properly
+function symbolic_regression(
+    X̂,
+    Ŷ,
+    timeshift::Int;
+    opt = STLSQ, # ADMM
+    λ = exp10.(-5:0.1:-1), # exp10.(-3:0.01:3)
+    max_iters = 10_000,
+    seed = 1234,
+)
 
     # Symbolic regression via sparse regression (SINDy based)
     nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
@@ -253,10 +261,6 @@ function ude_prediction(
     @variables u[1:size(X, 1)]
     b = polynomial_basis(u, size(X, 1))
     basis = Basis(b, u)
-
-    # I think this create problem but idk why
-    # λ = exp10.(-3:0.01:3)
-    # opt = ADMM(λ)
 
     options = DataDrivenCommonOptions(
         maxiters = max_iters,
@@ -271,6 +275,7 @@ function ude_prediction(
         ),
     )
 
+    # ERROR: DimensionMismatch: arrays could not be broadcast to a common size;
     nn_res = solve(nn_problem, basis, opt, options = options)
     nn_eqs = get_basis(nn_res)
 
