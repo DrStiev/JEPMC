@@ -16,7 +16,7 @@ end
 function init(;
     number_point_of_interest::Vector{Int},
     migration_rate::Array,
-    R₀::Float64, # R₀ 
+    R₀::Float64, # R₀
     Rᵢ::Float64, # # numero "buono" di riproduzione
     γ::Int,  # periodo infettivita'
     σ::Int,  # periodo esposizione
@@ -39,7 +39,7 @@ function init(;
     happiness[happiness.<-1.0] .= -1.0
     happiness[happiness.>1.0] .= 1.0
 
-    # creo il modello 
+    # creo il modello
     model = StandardABM(
         Person,
         GraphSpace(Agents.Graphs.complete_graph(C));
@@ -88,17 +88,19 @@ end
 
 function model_step!(model::StandardABM)
     happiness!(model)
-    # get info and then apply η
-    NAR = update_η(model)
-    # balance η due to the happiness of the node
-    # in which it is applied
-    balance_η_happiness(model, NAR)
-    # reduce migration rates in and out NAR
-    update_migration_rates!(model, NAR)
+    if model.step_count % model.γ == 0
+        # get info and then apply η
+        NAR = update_η(model)
+        # balance η due to the happiness of the node
+        # in which it is applied
+        balance_η_happiness(model, NAR)
+        # reduce migration rates in and out NAR
+        update_migration_rates!(model, NAR)
+    end
     # reduce R₀ due to η
     update!(model)
     # vaccino
-    # vaccine!(model)
+    vaccine!(model)
     # possibilita' di variante
     voc!(model) # variant of concern
     model.step_count += 1
@@ -106,12 +108,7 @@ end
 
 function happiness!(model::StandardABM)
     for n = 1:model.C
-        model.happiness[n] += rand(
-            Normal(
-                model.happiness[n] - model.η[n],
-                abs(model.happiness[n] - model.η[n]) / 10,
-            ),
-        )
+        model.happiness[n] = tanh(model.happiness[n] - model.η[n])
     end
     model.happiness[model.happiness.<-1.0] .= -1.0
     model.happiness[model.happiness.>1.0] .= 1.0
@@ -181,7 +178,7 @@ end
 function vaccine!(model::StandardABM)
     if model.ξ == 0 && rand(model.rng) < 1 / 365
         v = model.herd_immunity / 0.99 # efficacia vaccino
-        # voglio arrivare ad avere una herd immunity 
+        # voglio arrivare ad avere una herd immunity
         # entro model.ω tempo
         model.ξ = v / model.ω
     end
@@ -192,7 +189,7 @@ function voc!(model::StandardABM)
     # https://www.nature.com/articles/s41579-023-00878-2
     # https://onlinelibrary.wiley.com/doi/10.1002/jmv.27331
     # https://virologyj.biomedcentral.com/articles/10.1186/s12985-022-01951-7
-    # nuova variante ogni tot tempo? 
+    # nuova variante ogni tot tempo?
     if rand(model.rng) ≤ 8 * 10E-4 # condizione di attivazione
         # https://it.wikipedia.org/wiki/Numero_di_riproduzione_di_base#Variabilit%C3%A0_e_incertezze_del_R0
         variant = uuid1(model.rng)

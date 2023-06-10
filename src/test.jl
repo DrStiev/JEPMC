@@ -93,37 +93,37 @@ function test_prediction()
     Xₙ = Array(ddata)
     # Eye control
     xpred1, ypred1 = udePredict.ude_prediction(ddata[1:45, :], 60)
-    plot(
+    display(plot(
         1:60,
         transpose(xpred1),
-        xlabel = "t",
-        ylabel = "s(t), e(t), i(t), r(t), d(t)",
-        color = :red,
-        label = ["UDE Approximation" nothing],
-    )
-    scatter!(1:150, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
+        xlabel="t",
+        ylabel="s(t), e(t), i(t), r(t), d(t)",
+        color=:red,
+        label=["UDE Approximation" nothing],
+    ))
+    display(scatter!(1:150, transpose(Xₙ), color=:black, label=["Measurements" nothing]))
 
     xpred2, ypred2 = udePredict.ude_prediction(ddata[1:45, :], 90)
-    plot(
+    display(plot(
         1:90,
         transpose(xpred2),
-        xlabel = "t",
-        ylabel = "s(t), e(t), i(t), r(t), d(t)",
-        color = :red,
-        label = ["UDE Approximation" nothing],
-    )
-    scatter!(1:150, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
+        xlabel="t",
+        ylabel="s(t), e(t), i(t), r(t), d(t)",
+        color=:red,
+        label=["UDE Approximation" nothing],
+    ))
+    display(scatter!(1:150, transpose(Xₙ), color=:black, label=["Measurements" nothing]))
 
     xpred3, ypred3 = udePredict.ude_prediction(ddata[1:45, :], 120)
-    plot(
+    display(plot(
         1:120,
         transpose(xpred3),
-        xlabel = "t",
-        ylabel = "s(t), e(t), i(t), r(t), d(t)",
-        color = :red,
-        label = ["UDE Approximation" nothing],
-    )
-    scatter!(1:150, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
+        xlabel="t",
+        ylabel="s(t), e(t), i(t), r(t), d(t)",
+        color=:red,
+        label=["UDE Approximation" nothing],
+    ))
+    display(scatter!(1:150, transpose(Xₙ), color=:black, label=["Measurements" nothing]))
 end
 
 test_prediction()
