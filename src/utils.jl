@@ -8,8 +8,8 @@ function download_dataset(path::String, url::String)
     return DataFrame(
         CSV.File(
             Downloads.download(url, path * title[length(title)]),
-            delim = ",",
-            header = 1,
+            delim=",",
+            header=1,
         ),
     )
 end
@@ -32,7 +32,7 @@ function dataset_from_location(df::DataFrame, iso_code::String)
 end
 
 function read_dataset(path::String)
-    return DataFrame(CSV.File(path, delim = ",", header = 1))
+    return DataFrame(CSV.File(path, delim=",", header=1))
 end
 end
 
@@ -42,7 +42,7 @@ using Random, Distributions, DataFrames
 using LinearAlgebra: diagind
 using DrWatson: @dict
 
-function get_abm_parameters(C::Int, max_travel_rate::Float64, avg = 1000; seed = 1337)
+function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=1337)
     pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     migration_rate = zeros(C, C)
@@ -68,7 +68,7 @@ function get_abm_parameters(C::Int, max_travel_rate::Float64, avg = 1000; seed =
     return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, Rᵢ = 0.99,)
 end
 
-function get_ode_parameters(C::Int, avg = 1000; seed = 1337)
+function get_ode_parameters(C::Int, avg=1000; seed=1337)
     pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     γ = 14 # infective period
@@ -85,7 +85,7 @@ function get_ode_parameters(C::Int, avg = 1000; seed = 1337)
     return [S, E, I, R, D], [R₀, 1 / γ, 1 / σ, 1 / ω, δ], tspan
 end
 
-function save_parameters(params, path, title = "parameters")
+function save_parameters(params, path, title="parameters")
     isdir(path) == false && mkpath(path)
     save(path * title * ".jld2", params)
 end
@@ -100,13 +100,13 @@ using Random, DataDrivenSparse, LinearAlgebra, DataFrames
 # works but have wonky behaviour
 function system_identification(
     data::DataFrame;
-    opt = STLSQ,
-    λ = exp10.(-5:0.1:-1),
-    max_iters = 100,
-    seed = 1234,
+    opt=STLSQ,
+    λ=exp10.(-5:0.1:-1),
+    max_iters=100,
+    seed=1234
 )
     # handle the input in a correct way to avoid wonky behaviours
-    s = sum(data[!, 1]) # total number of individuals
+    s = sum(data[1, :]) # total number of individuals
     X = DataFrame(float.(Array(data)'), :auto) ./ s # normalize and obtain numerical stability
     t = float.([i for i = 1:size(X, 2)])
 
@@ -119,7 +119,7 @@ function system_identification(
     for i = 1:size(X, 1)
         push!(b, u[i])
     end
-    basis = Basis(polynomial_basis(b, (size(X), 1)), u, iv = t) # construct a Basis
+    basis = Basis(polynomial_basis(b, size(X, 1)), u, iv=t) # construct a Basis
 
     # use SINDy to inference the system. Could use EDMD but
     # for noisy data SINDy is stabler and find simpler (sparser)
@@ -127,23 +127,22 @@ function system_identification(
     opt = opt(λ) # define the optimization algorithm
 
     options = DataDrivenCommonOptions(
-        maxiters = max_iters,
-        normalize = DataNormalization(ZScoreTransform),
-        selector = bic,
-        digits = 1,
-        data_processing = DataProcessing(
-            split = 0.9,
-            batchsize = 30,
-            shuffle = true,
-            rng = Xoshiro(seed),
+        maxiters=max_iters,
+        normalize=DataNormalization(ZScoreTransform),
+        selector=bic,
+        digits=1,
+        data_processing=DataProcessing(
+            split=0.9,
+            batchsize=30,
+            shuffle=true,
+            rng=Xoshiro(seed),
         ),
     )
 
-    ddsol = solve(ddprob, basis, opt, options = options)
+    ddsol = solve(ddprob, basis, opt, options=options)
     # return the information about the inferred model and parameters
     sys = get_basis(ddsol)
-    #params = get_parameter_map(sys)
-    return sys #, params
+    return sys
 end
 end
 
@@ -159,7 +158,7 @@ using LinearAlgebra, Statistics
 # External Libraries
 using ComponentArrays, Lux, Zygote, StableRNGs, DataFrames
 
-function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234)
+function ude_prediction(data::DataFrame, timeshift::Int; seed=1234)
     X = Array(data)'
     tspan = float.([i for i = 1:size(Array(data), 1)])
     timeshift = float.([i for i = 1:timeshift])
@@ -191,23 +190,14 @@ function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234)
         du[5] = û[5]
     end
 
-    # function ude_dynamics!(du, u, p, t, p_true)
-    #     û = U(u, p, st)[1] # Network prediction
-    #     du[1] = -p_true[1] * u[1] * p_true[2] * u[3] + û[4]
-    #     du[2] = p_true[1] * u[1] * p_true[2] * u[3] - û[2]
-    #     du[3] = û[2] - p_true[2] * u[3] + û[3]
-    #     du[4] = p_true[2] * u[3] - û[4]
-    #     du[5] = p_true[2] * u[3] * p_true[5]
-    # end
-
     # Closure with the known parameter
     nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t)#, p_)
     # Define the problem
     prob_nn = ODEProblem(nn_dynamics!, X[:, 1], (tspan[1], tspan[end]), p)
 
-    function predict(θ, X = X[:, 1], T = tspan)
-        _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = θ)
-        Array(solve(_prob, Vern7(), saveat = T, abstol = 1e-6, reltol = 1e-6))
+    function predict(θ, X=X[:, 1], T=tspan)
+        _prob = remake(prob_nn, u0=X, tspan=(T[1], T[end]), p=θ)
+        Array(solve(_prob, Vern7(), saveat=T, abstol=1e-6, reltol=1e-6))
     end
 
     function loss(θ)
@@ -230,9 +220,9 @@ function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234)
     optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
     # seems work but need test (heavy memory consuming need kos)
-    res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = 2000)
+    res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=2000)
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
-    res2 = Optimization.solve(optprob2, Optim.LBFGS(), callback = callback, maxiters = 400)
+    res2 = Optimization.solve(optprob2, Optim.LBFGS(), callback=callback, maxiters=400)
 
     # Rename the best candidate
     p_trained = res2.u
@@ -249,10 +239,10 @@ function symbolic_regression(
     X̂,
     Ŷ,
     timeshift::Int;
-    opt = STLSQ, # ADMM
-    λ = exp10.(-5:0.1:-1), # exp10.(-3:0.01:3)
-    max_iters = 10_000,
-    seed = 1234,
+    opt=ADMM,
+    λ=exp10.(-3:0.01:3),
+    max_iters=10_000,
+    seed=1234
 )
 
     # Symbolic regression via sparse regression (SINDy based)
@@ -263,30 +253,30 @@ function symbolic_regression(
     basis = Basis(b, u)
 
     options = DataDrivenCommonOptions(
-        maxiters = max_iters,
-        normalize = DataNormalization(ZScoreTransform),
-        selector = bic,
-        digits = 1,
-        data_processing = DataProcessing(
-            split = 0.9,
-            batchsize = 30,
-            shuffle = true,
-            rng = StableRNG(seed),
+        maxiters=max_iters,
+        normalize=DataNormalization(ZScoreTransform),
+        selector=bic,
+        digits=1,
+        data_processing=DataProcessing(
+            split=0.9,
+            batchsize=30,
+            shuffle=true,
+            rng=StableRNG(seed),
         ),
     )
 
     # ERROR: DimensionMismatch: arrays could not be broadcast to a common size;
-    nn_res = solve(nn_problem, basis, opt, options = options)
+    nn_res = solve(nn_problem, basis, opt, options=options)
     nn_eqs = get_basis(nn_res)
 
     # Define the recovered, hybrid model
     function recovered_dynamics!(du, u, p, t)
         û = eqs(u, p) # Recovered equations
-        du[1] = -p_[1] * u[1] * p_[2] * u[3] + û[1]
-        du[2] = p_[1] * u[1] * p_[2] * u[3] - û[2]
-        du[3] = û[2] - p_[2] * u[3] + û[3]
-        du[4] = p_[2] * u[3] - û[1]
-        du[5] = p_[2] * u[3] * p_[5]
+        du[1] = û[1]
+        du[2] = û[2]
+        du[3] = û[3]
+        du[4] = û[4]
+        du[5] = û[5]
     end
 
     estimation_prob =
@@ -300,12 +290,12 @@ function symbolic_regression(
 
     optf = Optimization.OptimizationFunction((x, p) -> parameter_loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, get_parameter_values(nn_eqs))
-    parameter_res = Optimization.solve(optprob, Optim.LBFGS(), maxiters = 1000)
+    parameter_res = Optimization.solve(optprob, Optim.LBFGS(), maxiters=1000)
 
     # Look at long term prediction
     t_long = (0.0, float(timeshift))
     estimation_prob = ODEProblem(recovered_dynamics!, u, t_long, parameter_res)
-    estimate_long = solve(estimation_prob, Tsit5(), saveat = 0.1) # Using higher tolerances here results in exit of julia
+    estimate_long = solve(estimation_prob, Tsit5(), saveat=0.1) # Using higher tolerances here results in exit of julia
     return estimate_long
 end
 end
