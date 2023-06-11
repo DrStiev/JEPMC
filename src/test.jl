@@ -6,7 +6,7 @@ include("graph.jl")
 include("controller.jl")
 include("uode.jl")
 
-function save_plot(plot, path="", title="title", format="png")
+function save_plot(plot, path = "", title = "title", format = "png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "_" * string(today()) * "." * format)
 end
@@ -52,16 +52,16 @@ function plot_current_situation(path::String, iso_code::String)
     p = plot(
         plot(
             Array(day_info),
-            labels=["Infected" "Tests" "Vaccinations" "Deaths"],
-            title="Detected Dynamics",
+            labels = ["Infected" "Tests" "Vaccinations" "Deaths"],
+            title = "Detected Dynamics",
         ),
         plot(
             Array(total_count),
-            labels=["Susceptible" "Infected" "Deaths" "Tests"],
-            title="Overall Dynamics",
+            labels = ["Susceptible" "Infected" "Deaths" "Tests"],
+            title = "Overall Dynamics",
         ),
-        plot(Array(R₀), labels="R₀", title="Reproduction Rate"),
-        layout=l,
+        plot(Array(R₀), labels = "R₀", title = "Reproduction Rate"),
+        layout = l,
     )
     save_plot(p, "img/data_plot/", "cumulative_plot", "pdf")
 end
@@ -71,7 +71,7 @@ plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
 function test_system_identification()
     p = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; p...)
-    data = graph.collect(model; n=30, showprogress=true)
+    data = graph.collect(model; n = 30, showprogress = true)
 
     d = select(
         data,
@@ -88,7 +88,7 @@ function test_prediction()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n=150, showprogress=true)
+    data = graph.collect(model; n = 150, showprogress = true)
     ddata = select(
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
@@ -99,36 +99,36 @@ function test_prediction()
     plot(
         1:60,
         transpose(xpred1),
-        xlabel="t",
-        ylabel="s(t), e(t), i(t), r(t), d(t)",
-        color=:red,
-        label=["UDE Approximation" nothing],
+        xlabel = "t",
+        ylabel = "s(t), e(t), i(t), r(t), d(t)",
+        color = :red,
+        label = ["UDE Approximation" nothing],
     )
-    scatter!(1:150, transpose(Xₙ), color=:black, label=["Measurements" nothing])
+    scatter!(1:150, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
     save_plot(p, "img/prediction/", "SHORT TERM", "pdf")
 
     xpred2, ypred2 = udePredict.ude_prediction(ddata[1:45, :], 90)
     plot(
         1:90,
         transpose(xpred2),
-        xlabel="t",
-        ylabel="s(t), e(t), i(t), r(t), d(t)",
-        color=:red,
-        label=["UDE Approximation" nothing],
+        xlabel = "t",
+        ylabel = "s(t), e(t), i(t), r(t), d(t)",
+        color = :red,
+        label = ["UDE Approximation" nothing],
     )
-    scatter!(1:150, transpose(Xₙ), color=:black, label=["Measurements" nothing])
+    scatter!(1:150, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
     save_plot(p, "img/prediction/", "MEDIUM TERM", "pdf")
 
     xpred3, ypred3 = udePredict.ude_prediction(ddata[1:45, :], 120)
     plot(
         1:120,
         transpose(xpred3),
-        xlabel="t",
-        ylabel="s(t), e(t), i(t), r(t), d(t)",
-        color=:red,
-        label=["UDE Approximation" nothing],
+        xlabel = "t",
+        ylabel = "s(t), e(t), i(t), r(t), d(t)",
+        color = :red,
+        label = ["UDE Approximation" nothing],
     )
-    scatter!(1:150, transpose(Xₙ), color=:black, label=["Measurements" nothing])
+    scatter!(1:150, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
     save_plot(p, "img/prediction/", "LONG TERM", "pdf")
 
 end
@@ -139,7 +139,7 @@ function test_abm()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n=1200, showprogress=true)
+    data = graph.collect(model; n = 1200, showprogress = true)
     graph.save_dataframe(data, "data/abm/", "ABM SEIR NO INTERVENTION")
     df = graph.load_dataset("data/abm/ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
 
@@ -151,12 +151,12 @@ function test_abm()
     p = plot(
         plot(
             Array(p1),
-            labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-            title="ABM Dynamics",
+            labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+            title = "ABM Dynamics",
         ),
-        plot(Array(p2), labels=["η" "Happiness"], title="Agents response to η"),
-        plot(Array(p3), labels="R₀", title="Reproduction number"),
-        layout=l,
+        plot(Array(p2), labels = ["η" "Happiness"], title = "Agents response to η"),
+        plot(Array(p3), labels = "R₀", title = "Reproduction number"),
+        layout = l,
     )
     save_plot(p, "img/abm/", "ABM SEIR", "pdf")
 end
@@ -171,8 +171,8 @@ function test_uode()
 
     p = plot(
         sol,
-        labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-        title="SEIR Dynamics NO INTERVENTION",
+        labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        title = "SEIR Dynamics NO INTERVENTION",
     )
     save_plot(p, "img/ode/", "ODE SEIR NO INTERVENTION", "pdf")
 end
@@ -191,7 +191,7 @@ function test_controller()
 
     timeshift = 7
     for i = 1:trunc(Int, 100 / timeshift)
-        dataₜ = graph.collect(model; n=timeshift - 1)
+        dataₜ = graph.collect(model; n = timeshift - 1)
         data = vcat(data, dataₜ)
         controller.countermeasures!(model, dataₜ)
         p1, p2, p3, p4, p = split_dataset(data)
