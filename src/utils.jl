@@ -156,9 +156,9 @@ using Optimization, OptimizationOptimisers, OptimizationOptimJL
 using LinearAlgebra, Statistics
 
 # External Libraries
-using ComponentArrays, Lux, Zygote, StableRNGs, DataFrames
+using ComponentArrays, Lux, Zygote, StableRNGs, DataFrames, Dates, Plots
 
-function ude_prediction(data::DataFrame, timeshift::Int; seed=1234)
+function ude_prediction(data::DataFrame, timeshift::Int; seed=1234, plotLoss=true)
     X = Array(data)'
     tspan = float.([i for i = 1:size(Array(data), 1)])
     timeshift = float.([i for i = 1:timeshift])
@@ -219,10 +219,27 @@ function ude_prediction(data::DataFrame, timeshift::Int; seed=1234)
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
-    # seems work but need test (heavy memory consuming need kos)
-    res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=2000)
+    # ERROR: ArgumentError: The passed automatic differentiation backend choice is not available.
+    # Please load the corresponding AD package pes.AutoZygote.
+    res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=5000)
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
-    res2 = Optimization.solve(optprob2, Optim.LBFGS(), callback=callback, maxiters=400)
+    res2 = Optimization.solve(optprob2, Optim.LBFGS(), callback=callback, maxiters=1000)
+
+    # plot the loss
+    if plotLoss
+        function save_plot(plot, path="", title="title", format="png")
+            isdir(path) == false && mkpath(path)
+            savefig(plot, path * title * "_" * string(today()) * "." * format)
+        end
+
+        # Plot the losses
+        pl_losses = plot(1:5000, losses[1:5000], yaxis=:log10, xaxis=:log10,
+            xlabel="Iterations", ylabel="Loss", label="ADAM", color=:blue)
+        plot!(5001:length(losses), losses[5001:end], yaxis=:log10, xaxis=:log10,
+            xlabel="Iterations", ylabel="Loss", label="LBFGS", color=:red)
+
+        save_plot(p, "img/prediction/loss", "LOSS OVER ITERATION", "pdf")
+    end
 
     # Rename the best candidate
     p_trained = res2.u
