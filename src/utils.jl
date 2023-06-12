@@ -304,7 +304,7 @@ function symbolic_regression(
 
     # Define the recovered, hybrid model
     function recovered_dynamics!(du, u, p, t)
-        û = eqs(u, p) # Recovered equations
+        û = nn_eqs(u, p) # Recovered equations
         du[1] = û[1]
         du[2] = û[2]
         du[3] = û[3]
