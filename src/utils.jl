@@ -312,15 +312,16 @@ function symbolic_regression(
         du[5] = û[5]
     end
 
-    estimation_prob =
-        ODEProblem(recovered_dynamics!, u, tspan, get_parameter_values(nn_eqs))
-    estimate = solve(estimation_prob, Tsit5())
+    # estimation_prob =
+    #     ODEProblem(recovered_dynamics!, u, tspan, get_parameter_values(nn_eqs))
+    # estimate = solve(estimation_prob, Tsit5())
 
     function parameter_loss(p)
         Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
         sum(abs2, Ŷ .- Y)
     end
 
+    adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> parameter_loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, get_parameter_values(nn_eqs))
     parameter_res = Optimization.solve(optprob, Optim.LBFGS(), maxiters = 1000)
