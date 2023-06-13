@@ -82,102 +82,103 @@ function test_system_identification()
     println("equation: $eq")
 end
 
-p = parameters.get_abm_parameters(20, 0.01, 3300)
-model = graph.init(; p...)
-data = graph.collect(model; n=30, showprogress=true)
-
-d = select(
-    data,
-    [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
-)
-
-eq = SysId.system_identification(d)
-println("equation: $eq")
-
-using OrdinaryDiffEq, ModelingToolkit, DataDrivenDiffEq, SciMLSensitivity, DataDrivenSparse
-using Optimization, OptimizationOptimisers, OptimizationOptimJL
-
-# Standard Libraries
-using LinearAlgebra, Statistics
-
-# External Libraries
-using ComponentArrays, Lux, Zygote, StableRNGs, DataFrames, Dates, Plots
-
-get_parameter_values(eq)
-get_parameter_map(eq)
-
 test_system_identification()
 
 function test_prediction()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
+    n = 30
+    sp = 45 # short term prediction
+    mp = 60 # medium term prediction
+    lp = 120 # long term prediction
 
-    data = graph.collect(model; n = 30, showprogress = true)
+    data = graph.collect(model; n = n, showprogress = true)
     ddata = select(
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
     )
     Xₙ = Array(ddata)
     # Eye control
-    xpred1, ypred1 = udePredict.ude_prediction(ddata, 45)
-    p=plot(
-        1:45,
-        transpose(xpred1),
+    pred, ts =
+        udePredict.ude_prediction(ddata, sp; lossTitle = "SHORT TIME PREDICTION LOSS")
+    p = plot(
+        ts,
+        transpose(pred[1]),
         xlabel = "t",
         ylabel = "s(t), e(t), i(t), r(t), d(t)",
         color = :red,
         label = ["UDE Approximation" nothing],
+        legend = :right,
     )
-    scatter!(1:30, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
+    scatter!(
+        1:1.0:n+1,
+        Array(Xₙ ./ sum(Xₙ[1, :])),
+        color = :blue,
+        label = ["Measurements" nothing],
+    )
+    plot!(
+        p,
+        [n + 1 - 0.01, n + 1 + 0.01],
+        [0.0, 1.0],
+        lw = 2,
+        color = :black,
+        label = nothing,
+    )
     save_plot(p, "img/prediction/", "SHORT TERM", "pdf")
 
-    xpred2, ypred2 = udePredict.ude_prediction(ddata, 60)
-    p=plot(
-        1:60,
-        transpose(xpred2),
+    pred, ts =
+        udePredict.ude_prediction(ddata, mp; lossTitle = "MEDIUM TIME PREDICTION LOSS")
+    p = plot(
+        ts,
+        transpose(pred[1]),
         xlabel = "t",
         ylabel = "s(t), e(t), i(t), r(t), d(t)",
         color = :red,
         label = ["UDE Approximation" nothing],
+        legend = :best,
     )
-    scatter!(1:30, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
+    scatter!(
+        1:1.0:n+1,
+        Array(Xₙ ./ sum(Xₙ[1, :])),
+        color = :blue,
+        label = ["Measurements" nothing],
+    )
+    plot!(
+        p,
+        [n + 1 - 0.01, n + 1 + 0.01],
+        [0.0, 1.0],
+        lw = 2,
+        color = :black,
+        label = nothing,
+    )
     save_plot(p, "img/prediction/", "MEDIUM TERM", "pdf")
 
-    xpred3, ypred3 = udePredict.ude_prediction(ddata, 120)
-    p=plot(
-        1:120,
-        transpose(xpred3),
+    pred, ts = udePredict.ude_prediction(ddata, lp; lossTitle = "LONG TIME PREDICTION LOSS")
+    p = plot(
+        ts,
+        transpose(pred[1]),
         xlabel = "t",
         ylabel = "s(t), e(t), i(t), r(t), d(t)",
         color = :red,
         label = ["UDE Approximation" nothing],
+        legend = :best,
     )
-    scatter!(1:30, transpose(Xₙ), color = :black, label = ["Measurements" nothing])
+    scatter!(
+        1:1.0:n+1,
+        Array(Xₙ ./ sum(Xₙ[1, :])),
+        color = :blue,
+        label = ["Measurements" nothing],
+    )
+    plot!(
+        p,
+        [n + 1 - 0.01, n + 1 + 0.01],
+        [0.0, 1.0],
+        lw = 2,
+        color = :black,
+        label = nothing,
+    )
     save_plot(p, "img/prediction/", "LONG TERM", "pdf")
-
 end
-
-abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-model = graph.init(; abm_parameters...)
-
-data = graph.collect(model; n=30, showprogress=true)
-ddata = select(
-    data,
-    [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
-)
-Xₙ = Array(ddata)
-# Eye control
-xpred1, ypred1 = udePredict.ude_prediction(ddata, 45; plotLoss=true)
-p=plot(
-    1:45,
-    transpose(xpred1),
-    xlabel="t",
-    ylabel="s(t), e(t), i(t), r(t), d(t)",
-    color=:red,
-    label=["UDE Approximation" nothing],
-)
-scatter!(1:30, transpose(Xₙ), color=:black, label=["Measurements" nothing])
-save_plot(p, "img/prediction/", "SHORT TERM", "pdf")
 
 test_prediction()
 

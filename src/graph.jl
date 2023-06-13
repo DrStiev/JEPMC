@@ -87,6 +87,7 @@ function init(;
 end
 
 function model_step!(model::StandardABM)
+    # use a better happiness estimation
     happiness!(model)
     if model.step_count % model.γ == 0
         # get info and then apply η

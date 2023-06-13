@@ -158,7 +158,14 @@ using LinearAlgebra, Statistics
 # External Libraries
 using ComponentArrays, Lux, Zygote, StableRNGs, DataFrames, Dates, Plots
 
-function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234, plotLoss = true)
+function ude_prediction(
+    data::DataFrame,
+    timeshift::Int;
+    seed = 1234,
+    plotLoss = false,
+    maxIters = 1000,
+    lossTitle = "loss",
+)
     X = Array(data)'
     tspan = float.([i for i = 1:size(Array(data), 1)])
     timeshift = float.([i for i = 1:timeshift])
@@ -191,7 +198,7 @@ function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234, plotLoss =
     end
 
     # Closure with the known parameter
-    nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t)#, p_)
+    nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t)
     # Define the problem
     prob_nn = ODEProblem(nn_dynamics!, X[:, 1], (tspan[1], tspan[end]), p)
 
@@ -221,9 +228,14 @@ function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234, plotLoss =
 
     # ERROR: ArgumentError: The passed automatic differentiation backend choice is not available.
     # Please load the corresponding AD package pes.AutoZygote.
-    res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = 5000)
+    res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = maxIters)
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
-    res2 = Optimization.solve(optprob2, Optim.LBFGS(), callback = callback, maxiters = 1000)
+    res2 = Optimization.solve(
+        optprob2,
+        Optim.LBFGS(),
+        callback = callback,
+        maxiters = trunc(Int, maxIters / 5),
+    )
 
     # plot the loss
     if plotLoss
@@ -234,8 +246,8 @@ function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234, plotLoss =
 
         # Plot the losses
         pl_losses = plot(
-            1:5000,
-            losses[1:5000],
+            1:maxIters,
+            losses[1:maxIters],
             yaxis = :log10,
             xaxis = :log10,
             xlabel = "Iterations",
@@ -244,8 +256,8 @@ function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234, plotLoss =
             color = :blue,
         )
         plot!(
-            5001:length(losses),
-            losses[5001:end],
+            maxIters+1:length(losses),
+            losses[maxIters+1:end],
             yaxis = :log10,
             xaxis = :log10,
             xlabel = "Iterations",
@@ -254,7 +266,7 @@ function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234, plotLoss =
             color = :red,
         )
 
-        save_plot(p, "img/prediction/loss", "LOSS OVER ITERATION", "pdf")
+        save_plot(pl_losses, "img/prediction/", lossTitle, "pdf")
     end
 
     # Rename the best candidate
@@ -264,7 +276,8 @@ function ude_prediction(data::DataFrame, timeshift::Int; seed = 1234, plotLoss =
     X̂ = predict(p_trained, X[:, 1], ts)
     # Neural network guess
     Ŷ = U(X̂, p_trained, st)[1]
-    return X̂, Ŷ
+    # prediction over time
+    return (X̂, Ŷ), ts
 end
 
 # I'd like to use both but this seems to not work properly
@@ -277,12 +290,12 @@ function symbolic_regression(
     max_iters = 10_000,
     seed = 1234,
 )
-
+    u = X̂[:, 1]
     # Symbolic regression via sparse regression (SINDy based)
     nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
     opt = opt(λ)
-    @variables u[1:size(X, 1)]
-    b = polynomial_basis(u, size(X, 1))
+    @variables u[1:size(X̂, 1)]
+    b = polynomial_basis(u, size(X̂, 1))
     basis = Basis(b, u)
 
     options = DataDrivenCommonOptions(
@@ -324,7 +337,7 @@ function symbolic_regression(
     adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> parameter_loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, get_parameter_values(nn_eqs))
-    parameter_res = Optimization.solve(optprob, Optim.LBFGS(), maxiters = 1000)
+    parameter_res = Optimization.solve(optprob, Optim.LBFGS(), maxiters = max_iters)
 
     # Look at long term prediction
     t_long = (0.0, float(timeshift))
