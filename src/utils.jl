@@ -234,7 +234,7 @@ function ude_prediction(
         optprob2,
         Optim.LBFGS(),
         callback = callback,
-        maxiters = trunc(Int, maxIters / 5),
+        maxiters = maxIters,
     )
 
     # plot the loss
@@ -278,6 +278,8 @@ function ude_prediction(
     Ŷ = U(X̂, p_trained, st)[1]
     # prediction over time
     return (X̂, Ŷ), ts
+    # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
+    # return symbolic_regression(X̂, Ŷ, timeshift), (X̂, Ŷ), ts
 end
 
 # I'd like to use both but this seems to not work properly
@@ -325,9 +327,9 @@ function symbolic_regression(
         du[5] = û[5]
     end
 
-    # estimation_prob =
-    #     ODEProblem(recovered_dynamics!, u, tspan, get_parameter_values(nn_eqs))
-    # estimate = solve(estimation_prob, Tsit5())
+    estimation_prob =
+        ODEProblem(recovered_dynamics!, u, tspan, get_parameter_values(nn_eqs))
+    estimate = solve(estimation_prob, Tsit5())
 
     function parameter_loss(p)
         Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
@@ -342,7 +344,9 @@ function symbolic_regression(
     # Look at long term prediction
     t_long = (0.0, float(timeshift))
     estimation_prob = ODEProblem(recovered_dynamics!, u, t_long, parameter_res)
-    estimate_long = solve(estimation_prob, Tsit5(), saveat = 0.1) # Using higher tolerances here results in exit of julia
+    display(estimation_prob)
+    # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
+    estimate_long = solve(estimation_prob, Vern7(), saveat = 0.1) # Using higher tolerances here results in exit of julia
     return estimate_long
 end
 end

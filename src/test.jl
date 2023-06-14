@@ -6,6 +6,8 @@ include("graph.jl")
 include("controller.jl")
 include("uode.jl")
 
+gr()
+
 function save_plot(plot, path = "", title = "title", format = "png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "_" * string(today()) * "." * format)
@@ -89,10 +91,8 @@ function test_prediction()
     model = graph.init(; abm_parameters...)
     n = 30
     sp = 45 # short term prediction
-    mp = 60 # medium term prediction
-    lp = 120 # long term prediction
 
-    data = graph.collect(model; n = n, showprogress = true)
+    data = graph.collect(model; n = n * 2, showprogress = true)
     ddata = select(
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
@@ -100,7 +100,7 @@ function test_prediction()
     Xₙ = Array(ddata)
     # Eye control
     pred, ts =
-        udePredict.ude_prediction(ddata, sp; lossTitle = "SHORT TIME PREDICTION LOSS")
+        udePredict.ude_prediction(ddata[1:n, :], sp; lossTitle = "LOSS", plotLoss = true)
     p = plot(
         ts,
         transpose(pred[1]),
@@ -108,76 +108,21 @@ function test_prediction()
         ylabel = "s(t), e(t), i(t), r(t), d(t)",
         color = :red,
         label = ["UDE Approximation" nothing],
-        legend = :right,
+        legend = :best,
     )
     scatter!(
-        1:1.0:n+1,
+        1:1.0:(n*2)+1,
         Array(Xₙ ./ sum(Xₙ[1, :])),
         color = :blue,
         label = ["Measurements" nothing],
     )
-    plot!(
-        p,
-        [n + 1 - 0.01, n + 1 + 0.01],
-        [0.0, 1.0],
-        lw = 2,
-        color = :black,
-        label = nothing,
-    )
+    plot!(p, [n + 0.99, n + 1.01], [0.0, 1.0], lw = 2, color = :black, label = nothing)
+    annotate!([(
+        float(n),
+        1.0,
+        text("End of Training Data", 10, :center, :top, :black, "Helvetica"),
+    )])
     save_plot(p, "img/prediction/", "SHORT TERM", "pdf")
-
-    pred, ts =
-        udePredict.ude_prediction(ddata, mp; lossTitle = "MEDIUM TIME PREDICTION LOSS")
-    p = plot(
-        ts,
-        transpose(pred[1]),
-        xlabel = "t",
-        ylabel = "s(t), e(t), i(t), r(t), d(t)",
-        color = :red,
-        label = ["UDE Approximation" nothing],
-        legend = :best,
-    )
-    scatter!(
-        1:1.0:n+1,
-        Array(Xₙ ./ sum(Xₙ[1, :])),
-        color = :blue,
-        label = ["Measurements" nothing],
-    )
-    plot!(
-        p,
-        [n + 1 - 0.01, n + 1 + 0.01],
-        [0.0, 1.0],
-        lw = 2,
-        color = :black,
-        label = nothing,
-    )
-    save_plot(p, "img/prediction/", "MEDIUM TERM", "pdf")
-
-    pred, ts = udePredict.ude_prediction(ddata, lp; lossTitle = "LONG TIME PREDICTION LOSS")
-    p = plot(
-        ts,
-        transpose(pred[1]),
-        xlabel = "t",
-        ylabel = "s(t), e(t), i(t), r(t), d(t)",
-        color = :red,
-        label = ["UDE Approximation" nothing],
-        legend = :best,
-    )
-    scatter!(
-        1:1.0:n+1,
-        Array(Xₙ ./ sum(Xₙ[1, :])),
-        color = :blue,
-        label = ["Measurements" nothing],
-    )
-    plot!(
-        p,
-        [n + 1 - 0.01, n + 1 + 0.01],
-        [0.0, 1.0],
-        lw = 2,
-        color = :black,
-        label = nothing,
-    )
-    save_plot(p, "img/prediction/", "LONG TERM", "pdf")
 end
 
 test_prediction()
@@ -213,7 +158,7 @@ test_abm()
 function test_uode()
     # must be between [0-1] for numerical stability
     u, p, t = parameters.get_ode_parameters(20, 3300)
-    prob = uode.get_ode_problem(uode.seir!, u, (1.0, 30), p)
+    prob = uode.get_ode_problem(uode.seir!, u, (1.0, 1200.0), p)
     sol = uode.get_ode_solution(prob)
 
     p = plot(
@@ -225,28 +170,3 @@ function test_uode()
 end
 
 test_uode()
-
-function test_controller()
-    # https://link.springer.com/article/10.1007/s40313-023-00993-8
-    p = parameters.get_abm_parameters(20, 0.01, 3300)
-    model = graph.init(; p...)
-    data = DataFrame()
-
-    callback = function (plt)
-        display(plt)
-    end
-
-    timeshift = 7
-    for i = 1:trunc(Int, 100 / timeshift)
-        dataₜ = graph.collect(model; n = timeshift - 1)
-        data = vcat(data, dataₜ)
-        controller.countermeasures!(model, dataₜ)
-        p1, p2, p3, p4, p = split_dataset(data)
-        callback(p)
-    end
-
-    # p1, p2, p3, p4, p = split_dataset(data)
-    # controller.predict(p1, (0.0, length(p1[!, 1])))
-end
-
-test_controller()

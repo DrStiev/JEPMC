@@ -7,6 +7,8 @@ using Distributions
 using CSV, Dates
 using UUIDs
 
+include("controller.jl")
+
 @agent Person GraphAgent begin
     status::Symbol # :S, :E, :I, :R
     variant::UUID
@@ -89,12 +91,13 @@ end
 function model_step!(model::StandardABM)
     # use a better happiness estimation
     happiness!(model)
-    if model.step_count % model.γ == 0
+    if any(model.η .> 0.0)
+        # if model.step_count % model.γ == 0
         # get info and then apply η
-        NAR = update_η(model)
+        NAR = update_η!(model)
         # balance η due to the happiness of the node
         # in which it is applied
-        balance_η_happiness(model, NAR)
+        balance_η_happiness!(model, NAR)
         # reduce migration rates in and out NAR
         update_migration_rates!(model, NAR)
     end
@@ -115,7 +118,7 @@ function happiness!(model::StandardABM)
     model.happiness[model.happiness.>1.0] .= 1.0
 end
 
-function balance_η_happiness(model::StandardABM, nar::Vector{Any})
+function balance_η_happiness!(model::StandardABM, nar::Vector{Any})
     for n in nar
         # this formula is a very strong assumption
         avgH = model.happiness[n]
@@ -125,7 +128,7 @@ function balance_η_happiness(model::StandardABM, nar::Vector{Any})
     end
 end
 
-function update_η(model::StandardABM, min_infected = 1)
+function update_η!(model::StandardABM, min_infected = 1)
     function get_node_status(model::StandardABM, pos::Int)
         agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
         infects = filter(x -> x.status == :I, agents)
@@ -178,7 +181,7 @@ end
 
 function vaccine!(model::StandardABM)
     if model.ξ == 0 && rand(model.rng) < 1 / 365
-        v = model.herd_immunity / 0.99 # efficacia vaccino
+        v = ((model.R₀ - 1) / model.R₀) / 0.99 # efficacia vaccino
         # voglio arrivare ad avere una herd immunity
         # entro model.ω tempo
         model.ξ = v / model.ω
@@ -199,7 +202,7 @@ function voc!(model::StandardABM)
         model.σ = round(Int, abs(rand(model.rng, Normal(model.σ))))
         model.ω = round(Int, abs(rand(model.rng, Normal(model.ω, model.ω / 10))))
         model.δ = abs(rand(model.rng, Normal(model.δ, model.δ / 10)))
-        model.herd_immunity = (model.R₀ - 1) / model.R₀
+        # model.herd_immunity = (model.R₀ - 1) / model.R₀
         # new infect
         new_infect = random_agent(model)
         new_infect.status = :I
@@ -242,6 +245,7 @@ end
 function update!(agent, model::StandardABM)
     # possibilita di vaccinazione
     if agent.status == :S && (rand(model.rng) < model.ξ)
+        # gestire vaccinazione e VOC
         agent.status = :R
         # fine periodo di latenza
     elseif agent.status == :E && (rand(model.rng) < 1 / model.σ)
@@ -264,6 +268,83 @@ function recover_or_die!(agent, model::StandardABM)
         agent.status = :R
         push!(agent.infected_by, agent.variant)
     end
+end
+
+function collect_controller(
+    model::StandardABM;
+    astep = agent_step!,
+    mstep = model_step!,
+    n = 100,
+    showprogress = false,
+    tshift = 0,
+    maxiter = 1000,
+    initial_training_data = n,
+)
+
+    function get_observable_data()
+        susceptible(x) = count(i == :S for i in x)
+        exposed(x) = count(i == :E for i in x)
+        infected(x) = count(i == :I for i in x)
+        recovered(x) = count(i == :R for i in x)
+
+        R₀(model) = model.R₀
+        dead(model) = sum(model.number_point_of_interest) - nagents(model)
+        active_countermeasures(model) = mean(model.η)
+        happiness(model) = mean(model.happiness)
+
+        adata = [
+            (:status, susceptible),
+            (:status, exposed),
+            (:status, infected),
+            (:status, recovered),
+        ]
+        mdata = [dead, R₀, active_countermeasures, happiness]
+        return adata, mdata
+    end
+
+    adata, mdata = get_observable_data()
+    training_data = initial_training_data
+    i = 0
+    res = DataFrame()
+    while true
+        if i ≥ n
+            break
+            return res
+        end
+        # run the model to have a solid base of training data
+        ad, md = run!(
+            model, # model
+            astep, # agent step function
+            mstep, # model step function
+            training_data - i; # number of steps
+            adata = adata, # observable agent data
+            mdata = mdata, # model observable data
+            showprogress = showprogress, # show progress
+        )
+        res =
+            vcat(res[1:end-1, :], hcat(select(ad, Not([:step])), select(md, Not([:step]))))
+        i = training_data
+        if i == training_data # might be useless
+            # longterm_est, (predX, guessY), ts = controller.predict(
+            (predX, guessY), ts = controller.predict(
+                select(
+                    res,
+                    [
+                        :susceptible_status,
+                        :exposed_status,
+                        :infected_status,
+                        :recovered_status,
+                        :dead,
+                    ],
+                ),
+                tshift;
+                maxiter,
+            )
+            controller.countermeasures!(model, predX, tshift, mean(diff(ts)))
+            training_data += tshift
+        end
+    end
+    # return hcat(select(ad, Not([:step])), select(md, Not([:step])))
 end
 
 function collect(
@@ -303,9 +384,8 @@ function collect(
         n; # number of steps
         adata = adata, # observable agent data
         mdata = mdata, # model observable data
-        showprogress = showprogress,
+        showprogress = showprogress, # show progress
     )
-
     return hcat(select(ad, Not([:step])), select(md, Not([:step])))
 end
 
