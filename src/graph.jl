@@ -25,12 +25,12 @@ function init(;
     ω::Int,  # periodo immunita
     ξ::Float64,  # 1 / vaccinazione per milion per day
     δ::Float64,  # mortality rate
-    seed = 1234,
+    seed=1234
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
     # normalizzo il migration rate
-    migration_rate_sum = sum(migration_rate, dims = 2)
+    migration_rate_sum = sum(migration_rate, dims=2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
@@ -45,7 +45,7 @@ function init(;
     model = StandardABM(
         Person,
         GraphSpace(Agents.Graphs.complete_graph(C));
-        properties = @dict(
+        properties=@dict(
             number_point_of_interest,
             migration_rate,
             new_migration_rate = migration_rate,
@@ -62,7 +62,7 @@ function init(;
             Rᵢ,
             happiness,
         ),
-        rng,
+        rng
     )
 
     # aggiungo la mia popolazione al modello
@@ -232,13 +232,13 @@ function call_controller(
     model::StandardABM,
     adata::Core.AbstractArray,
     mdata::Core.AbstractArray;
-    astep = agent_step!,
-    mstep = model_step!,
-    n = 100,
-    showprogress = false,
-    tshift = 0,
-    maxiters = 1000,
-    initial_training_data = n,
+    astep=agent_step!,
+    mstep=model_step!,
+    n=100,
+    showprogress=false,
+    tshift=0,
+    maxiters=1000,
+    initial_training_data=n
 )
     training_data = initial_training_data
     i = 0
@@ -254,9 +254,9 @@ function call_controller(
             astep, # agent step function
             mstep, # model step function
             training_data - i; # number of steps
-            adata = adata, # observable agent data
-            mdata = mdata, # model observable data
-            showprogress = showprogress, # show progress
+            adata=adata, # observable agent data
+            mdata=mdata, # model observable data
+            showprogress=showprogress # show progress
         )
         res =
             vcat(res[1:end-1, :], hcat(select(ad, Not([:step])), select(md, Not([:step]))))
@@ -274,22 +274,22 @@ function call_controller(
                 ],
             ),
             tshift;
-            maxiters,
+            maxiters
         )
-        controller.countermeasures!(model, predX, tshift, mean(diff(ts)))
+        controller.countermeasures!(model, predX, tshift / mean(diff(ts)))
         training_data += tshift
     end
 end
 
 function collect(
     model::StandardABM;
-    astep = agent_step!,
-    mstep = model_step!,
-    n = 100,
-    showprogress = false,
-    tshift = 0,
-    maxiters = 1000,
-    initial_training_data = n,
+    astep=agent_step!,
+    mstep=model_step!,
+    n=100,
+    showprogress=false,
+    tshift=0,
+    maxiters=1000,
+    initial_training_data=n
 )
 
     adata, mdata = get_observable_data()
@@ -298,13 +298,13 @@ function collect(
             model,
             adata,
             mdata;
-            astep = astep,
-            mstep = mstep,
-            n = n,
-            showprogress = showprogress,
-            tshift = tshift,
-            maxiters = maxiters,
-            initial_training_data = initial_training_data,
+            astep=astep,
+            mstep=mstep,
+            n=n,
+            showprogress=showprogress,
+            tshift=tshift,
+            maxiters=maxiters,
+            initial_training_data=initial_training_data
         )
     else
         ad, md = run!(
@@ -312,21 +312,21 @@ function collect(
             astep, # agent step function
             mstep, # model step function
             n; # number of steps
-            adata = adata, # observable agent data
-            mdata = mdata, # model observable data
-            showprogress = showprogress, # show progress
+            adata=adata, # observable agent data
+            mdata=mdata, # model observable data
+            showprogress=showprogress # show progress
         )
         return hcat(select(ad, Not([:step])), select(md, Not([:step])))
     end
 
 end
 
-function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
+function save_dataframe(data::DataFrame, path::String, title="StandardABM")
     isdir(path) == false && mkpath(path)
     CSV.write(path * title * "_" * string(today()) * ".csv", data)
 end
 
 function load_dataset(path::String)
-    return DataFrame(CSV.File(path, delim = ",", header = 1))
+    return DataFrame(CSV.File(path, delim=",", header=1))
 end
 end
