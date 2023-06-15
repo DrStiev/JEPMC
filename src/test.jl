@@ -4,7 +4,7 @@ using Statistics: mean
 include("utils.jl")
 include("graph.jl")
 include("controller.jl")
-include("uode.jl")
+include("ode.jl")
 
 gr()
 
@@ -18,7 +18,7 @@ function split_dataset(data)
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
     )
-    p2 = select(data, [:active_countermeasures, :happiness])#_happiness])
+    p2 = select(data, [:active_countermeasures, :happiness])
     p3 = select(data, [:R₀])
     return p1, p2, p3
 end
@@ -81,7 +81,7 @@ function test_system_identification()
     )
 
     eq = SysId.system_identification(d)
-    println("equation: $eq")
+    parameters.save_parameters(eq, "data/parameters/", "system identification")
 end
 
 test_system_identification()
@@ -99,8 +99,13 @@ function test_prediction()
     )
     Xₙ = Array(ddata)
     # Eye control
-    pred, ts =
-        udePredict.ude_prediction(ddata[1:n, :], sp; lossTitle = "LOSS", plotLoss = true)
+    pred, ts = udePredict.ude_prediction(
+        ddata[1:n, :],
+        sp;
+        lossTitle = "LOSS",
+        plotLoss = true,
+        maxiters = 1000,
+    )
     p = plot(
         ts,
         transpose(pred[1]),
@@ -108,7 +113,6 @@ function test_prediction()
         ylabel = "s(t), e(t), i(t), r(t), d(t)",
         color = :red,
         label = ["UDE Approximation" nothing],
-        legend = :best,
     )
     scatter!(
         1:1.0:(n*2)+1,
@@ -122,10 +126,34 @@ function test_prediction()
         1.0,
         text("End of Training Data", 10, :center, :top, :black, "Helvetica"),
     )])
-    save_plot(p, "img/prediction/", "SHORT TERM", "pdf")
+    save_plot(p, "img/prediction/", "NN SHORT TERM", "pdf")
+    println(pred)
+    parameters.save_parameters(pred, "data/parameters/", "prediction")
+
+    # test symbolic regression
+    long_time_estimation =
+        udePredict.symbolic_regression(pred[1], pred[2], n * 2; maxiters = 1000)
+    println(long_time_estimation)
+    plot(
+        long_time_estimation,
+        xlabel = "t",
+        ylabel = "s(t), e(t), i(t), r(t), d(t)",
+        color = :red,
+        label = ["UDE Approximation" nothing],
+    )
+    plot!(
+        1:1.0:(n*2)+1,
+        Array(Xₙ ./ sum(Xₙ[1, :])),
+        color = :blue,
+        label = ["Measurements" nothing],
+    )
+    save_plot(p, "img/prediction/", "NN AND SYNDY SHORT TERM", "pdf")
 end
 
 test_prediction()
+
+abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
+model = graph.init(; abm_parameters...)
 
 function test_abm()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
@@ -155,11 +183,11 @@ end
 
 test_abm()
 
-function test_uode()
+function test_ode()
     # must be between [0-1] for numerical stability
     u, p, t = parameters.get_ode_parameters(20, 3300)
-    prob = uode.get_ode_problem(uode.seir!, u, (1.0, 1200.0), p)
-    sol = uode.get_ode_solution(prob)
+    prob = ode.get_ode_problem(uode.seir!, u, (1.0, 1200.0), p)
+    sol = ode.get_ode_solution(prob)
 
     p = plot(
         sol,
@@ -169,4 +197,4 @@ function test_uode()
     save_plot(p, "img/ode/", "ODE SEIR NO INTERVENTION", "pdf")
 end
 
-test_uode()
+test_ode()

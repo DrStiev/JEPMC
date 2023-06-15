@@ -60,7 +60,6 @@ function init(;
             δ,
             η = [zeros(Float64, length(number_point_of_interest))...],
             Rᵢ,
-            herd_immunity = (R₀ - 1) / R₀,
             happiness,
         ),
         rng,
@@ -89,18 +88,7 @@ function init(;
 end
 
 function model_step!(model::StandardABM)
-    # use a better happiness estimation
     happiness!(model)
-    if any(model.η .> 0.0)
-        # if model.step_count % model.γ == 0
-        # get info and then apply η
-        NAR = update_η!(model)
-        # balance η due to the happiness of the node
-        # in which it is applied
-        balance_η_happiness!(model, NAR)
-        # reduce migration rates in and out NAR
-        update_migration_rates!(model, NAR)
-    end
     # reduce R₀ due to η
     update!(model)
     # vaccino
@@ -110,67 +98,17 @@ function model_step!(model::StandardABM)
     model.step_count += 1
 end
 
+# need to use a better happiness estimation
 function happiness!(model::StandardABM)
     for n = 1:model.C
-        model.happiness[n] = tanh(model.happiness[n] - model.η[n])
-    end
-    model.happiness[model.happiness.<-1.0] .= -1.0
-    model.happiness[model.happiness.>1.0] .= 1.0
-end
-
-function balance_η_happiness!(model::StandardABM, nar::Vector{Any})
-    for n in nar
-        # this formula is a very strong assumption
-        avgH = model.happiness[n]
-        model.η[n] =
-            avgH + model.η[n] < model.η[n] / 2 ?
-            model.η[n] * (1 - (model.η[n] / abs(avgH))) : model.η[n]
-    end
-end
-
-function update_η!(model::StandardABM, min_infected = 1)
-    function get_node_status(model::StandardABM, pos::Int)
-        agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
+        agents = filter(x -> x.pos == n, [a for a in allagents(model)])
+        dead = length(agents) / model.number_point_of_interest[n]
         infects = filter(x -> x.status == :I, agents)
-        return length(infects) / length(agents)
+        infects = length(infects) / length(agents)
+        # very bad estimator for happiness
+        model.happiness[n] =
+            tanh(model.happiness[n] - model.η[n] - tanh(dead + infects) / length(agents))
     end
-
-    function calculate_node_risk(model::StandardABM)
-        node_at_risk = []
-        for c = 1:model.C
-            node_status = get_node_status(model, c)
-            threshold = min_infected / model.number_point_of_interest[c]
-            if node_status ≥ threshold
-                push!(node_at_risk, c)
-            end
-        end
-        return node_at_risk
-    end
-
-    node_at_risk = calculate_node_risk(model)
-
-    for n in node_at_risk
-        s = tanh(get_node_status(model, n))
-        if model.η[n] == 0.0
-            model.η[n] = s
-        else
-            model.η[n] = model.η[n] > s ? model.η[n] * (1 - s) : s
-        end
-    end
-    return node_at_risk
-end
-
-function update_migration_rates!(model::StandardABM, nodes::Vector{Any})
-    model.new_migration_rate = model.migration_rate
-    for c = 1:model.C
-        if c ∈ nodes
-            model.new_migration_rate[c, :] -= model.migration_rate[c, :] * model.η[c]
-            model.new_migration_rate[:, c] -= model.migration_rate[:, c] * model.η[c]
-            model.new_migration_rate[c, c] += model.migration_rate[c, c] * model.η[c]
-        end
-    end
-    model.new_migration_rate[model.new_migration_rate.<0.0] .= 0.0
-    model.new_migration_rate[model.new_migration_rate.>1.0] .= 1.0
 end
 
 function update!(model::StandardABM)
@@ -181,7 +119,8 @@ end
 
 function vaccine!(model::StandardABM)
     if model.ξ == 0 && rand(model.rng) < 1 / 365
-        v = ((model.R₀ - 1) / model.R₀) / 0.99 # efficacia vaccino
+        # heard immunity over vaccine effectiveness
+        v = ((model.R₀ - 1) / model.R₀) / 0.99
         # voglio arrivare ad avere una herd immunity
         # entro model.ω tempo
         model.ξ = v / model.ω
@@ -202,7 +141,6 @@ function voc!(model::StandardABM)
         model.σ = round(Int, abs(rand(model.rng, Normal(model.σ))))
         model.ω = round(Int, abs(rand(model.rng, Normal(model.ω, model.ω / 10))))
         model.δ = abs(rand(model.rng, Normal(model.δ, model.δ / 10)))
-        # model.herd_immunity = (model.R₀ - 1) / model.R₀
         # new infect
         new_infect = random_agent(model)
         new_infect.status = :I
@@ -222,7 +160,6 @@ function migrate!(agent, model::StandardABM)
     m = sample(1:(model.C), Weights(model.new_migration_rate[pid, :]))
     if m ≠ pid
         move_agent!(agent, m, model)
-
     end
 end
 
@@ -270,39 +207,39 @@ function recover_or_die!(agent, model::StandardABM)
     end
 end
 
-function collect_controller(
-    model::StandardABM;
+function get_observable_data()
+    susceptible(x) = count(i == :S for i in x)
+    exposed(x) = count(i == :E for i in x)
+    infected(x) = count(i == :I for i in x)
+    recovered(x) = count(i == :R for i in x)
+
+    R₀(model) = model.R₀
+    dead(model) = sum(model.number_point_of_interest) - nagents(model)
+    active_countermeasures(model) = mean(model.η)
+    happiness(model) = mean(model.happiness)
+
+    adata = [
+        (:status, susceptible),
+        (:status, exposed),
+        (:status, infected),
+        (:status, recovered),
+    ]
+    mdata = [dead, R₀, active_countermeasures, happiness]
+    return adata, mdata
+end
+
+function call_controller(
+    model::StandardABM,
+    adata::Core.AbstractArray,
+    mdata::Core.AbstractArray;
     astep = agent_step!,
     mstep = model_step!,
     n = 100,
     showprogress = false,
     tshift = 0,
-    maxiter = 1000,
+    maxiters = 1000,
     initial_training_data = n,
 )
-
-    function get_observable_data()
-        susceptible(x) = count(i == :S for i in x)
-        exposed(x) = count(i == :E for i in x)
-        infected(x) = count(i == :I for i in x)
-        recovered(x) = count(i == :R for i in x)
-
-        R₀(model) = model.R₀
-        dead(model) = sum(model.number_point_of_interest) - nagents(model)
-        active_countermeasures(model) = mean(model.η)
-        happiness(model) = mean(model.happiness)
-
-        adata = [
-            (:status, susceptible),
-            (:status, exposed),
-            (:status, infected),
-            (:status, recovered),
-        ]
-        mdata = [dead, R₀, active_countermeasures, happiness]
-        return adata, mdata
-    end
-
-    adata, mdata = get_observable_data()
     training_data = initial_training_data
     i = 0
     res = DataFrame()
@@ -324,27 +261,24 @@ function collect_controller(
         res =
             vcat(res[1:end-1, :], hcat(select(ad, Not([:step])), select(md, Not([:step]))))
         i = training_data
-        if i == training_data # might be useless
-            # longterm_est, (predX, guessY), ts = controller.predict(
-            (predX, guessY), ts = controller.predict(
-                select(
-                    res,
-                    [
-                        :susceptible_status,
-                        :exposed_status,
-                        :infected_status,
-                        :recovered_status,
-                        :dead,
-                    ],
-                ),
-                tshift;
-                maxiter,
-            )
-            controller.countermeasures!(model, predX, tshift, mean(diff(ts)))
-            training_data += tshift
-        end
+        # longterm_est, (predX, guessY), ts = controller.predict(
+        (predX, guessY), ts = controller.predict(
+            select(
+                res,
+                [
+                    :susceptible_status,
+                    :exposed_status,
+                    :infected_status,
+                    :recovered_status,
+                    :dead,
+                ],
+            ),
+            tshift;
+            maxiters,
+        )
+        controller.countermeasures!(model, predX, tshift, mean(diff(ts)))
+        training_data += tshift
     end
-    # return hcat(select(ad, Not([:step])), select(md, Not([:step])))
 end
 
 function collect(
@@ -353,40 +287,38 @@ function collect(
     mstep = model_step!,
     n = 100,
     showprogress = false,
+    tshift = 0,
+    maxiters = 1000,
+    initial_training_data = n,
 )
 
-    function get_observable_data()
-        susceptible(x) = count(i == :S for i in x)
-        exposed(x) = count(i == :E for i in x)
-        infected(x) = count(i == :I for i in x)
-        recovered(x) = count(i == :R for i in x)
-
-        R₀(model) = model.R₀
-        dead(model) = sum(model.number_point_of_interest) - nagents(model)
-        active_countermeasures(model) = mean(model.η)
-        happiness(model) = mean(model.happiness)
-
-        adata = [
-            (:status, susceptible),
-            (:status, exposed),
-            (:status, infected),
-            (:status, recovered),
-        ]
-        mdata = [dead, R₀, active_countermeasures, happiness]
-        return adata, mdata
+    adata, mdata = get_observable_data()
+    if tshift > 0
+        return call_controller(
+            model,
+            adata,
+            mdata;
+            astep = astep,
+            mstep = mstep,
+            n = n,
+            showprogress = showprogress,
+            tshift = tshift,
+            maxiters = maxiters,
+            initial_training_data = initial_training_data,
+        )
+    else
+        ad, md = run!(
+            model, # model
+            astep, # agent step function
+            mstep, # model step function
+            n; # number of steps
+            adata = adata, # observable agent data
+            mdata = mdata, # model observable data
+            showprogress = showprogress, # show progress
+        )
+        return hcat(select(ad, Not([:step])), select(md, Not([:step])))
     end
 
-    adata, mdata = get_observable_data()
-    ad, md = run!(
-        model, # model
-        astep, # agent step function
-        mstep, # model step function
-        n; # number of steps
-        adata = adata, # observable agent data
-        mdata = mdata, # model observable data
-        showprogress = showprogress, # show progress
-    )
-    return hcat(select(ad, Not([:step])), select(md, Not([:step])))
 end
 
 function save_dataframe(data::DataFrame, path::String, title = "StandardABM")

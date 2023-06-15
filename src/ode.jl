@@ -1,4 +1,4 @@
-module uode
+module ode
 using OrdinaryDiffEq
 
 function seir!(du, u, p, t)

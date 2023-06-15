@@ -139,6 +139,8 @@ function system_identification(
         ),
     )
 
+    # ERROR: DimensionMismatch: arrays could not be broadcast to a common size;
+    # got a dimension with lengths 5 and 4
     ddsol = solve(ddprob, basis, opt, options = options)
     # return the information about the inferred model and parameters
     sys = get_basis(ddsol)
@@ -163,7 +165,7 @@ function ude_prediction(
     timeshift::Int;
     seed = 1234,
     plotLoss = false,
-    maxIters = 1000,
+    maxiters = 5000,
     lossTitle = "loss",
 )
     X = Array(data)'
@@ -228,13 +230,13 @@ function ude_prediction(
 
     # ERROR: ArgumentError: The passed automatic differentiation backend choice is not available.
     # Please load the corresponding AD package pes.AutoZygote.
-    res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = maxIters)
+    res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = maxiters)
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     res2 = Optimization.solve(
         optprob2,
         Optim.LBFGS(),
         callback = callback,
-        maxiters = maxIters,
+        maxiters = round(Int, maxiters / 5),
     )
 
     # plot the loss
@@ -246,8 +248,8 @@ function ude_prediction(
 
         # Plot the losses
         pl_losses = plot(
-            1:maxIters,
-            losses[1:maxIters],
+            1:maxiters,
+            losses[1:maxiters],
             yaxis = :log10,
             xaxis = :log10,
             xlabel = "Iterations",
@@ -256,8 +258,8 @@ function ude_prediction(
             color = :blue,
         )
         plot!(
-            maxIters+1:length(losses),
-            losses[maxIters+1:end],
+            maxiters+1:length(losses),
+            losses[maxiters+1:end],
             yaxis = :log10,
             xaxis = :log10,
             xlabel = "Iterations",
@@ -289,7 +291,7 @@ function symbolic_regression(
     timeshift::Int;
     opt = ADMM,
     λ = exp10.(-3:0.01:3),
-    max_iters = 10_000,
+    maxiters = 10_000,
     seed = 1234,
 )
     u = X̂[:, 1]
@@ -301,7 +303,7 @@ function symbolic_regression(
     basis = Basis(b, u)
 
     options = DataDrivenCommonOptions(
-        maxiters = max_iters,
+        maxiters = maxiters,
         normalize = DataNormalization(ZScoreTransform),
         selector = bic,
         digits = 1,
