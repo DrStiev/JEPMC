@@ -90,16 +90,16 @@ function test_prediction()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
     n = 30
-    sp = 45 # short term prediction
+    sp = n*2 # short term prediction
 
-    data = graph.collect(model; n=n * 2, showprogress=true)
+    data = graph.collect(model; n=sp, showprogress=true)
     ddata = select(
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
     )
     Xₙ = Array(ddata)
     # Eye control
-    pred, ts = udePredict.ude_prediction(
+    pred = udePredict.ude_prediction(
         ddata[1:n, :],
         sp;
         lossTitle="LOSS",
@@ -107,7 +107,7 @@ function test_prediction()
         maxiters=1000
     )
     p = plot(
-        ts,
+        1:1.0:sp+1,
         transpose(pred[1]),
         xlabel="t",
         ylabel="s(t), e(t), i(t), r(t), d(t)",
@@ -115,7 +115,7 @@ function test_prediction()
         label=["UDE Approximation" nothing],
     )
     scatter!(
-        1:1.0:(n*2)+1,
+        1:1.0:sp+1,
         Array(Xₙ ./ sum(Xₙ[1, :])),
         color=:blue,
         label=["Measurements" nothing],
@@ -132,7 +132,7 @@ function test_prediction()
 
     # test symbolic regression
     long_time_estimation =
-        udePredict.symbolic_regression(pred[1], pred[2], n * 2; maxiters=1000)
+        udePredict.symbolic_regression(pred[1], pred[2], sp; maxiters=1000)
     println(long_time_estimation)
     plot(
         long_time_estimation,
@@ -142,7 +142,7 @@ function test_prediction()
         label=["UDE Approximation" nothing],
     )
     plot!(
-        1:1.0:(n*2)+1,
+        1:1.0:sp+1,
         Array(Xₙ ./ sum(Xₙ[1, :])),
         color=:blue,
         label=["Measurements" nothing],
@@ -151,6 +151,9 @@ function test_prediction()
 end
 
 test_prediction()
+
+abm_parameters = parameters.get_abm_parameters(5, 0.01, 100)
+model = graph.init(; abm_parameters...)
 
 function test_abm()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)

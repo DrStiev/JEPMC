@@ -43,24 +43,24 @@ function init(;
 
     # creo il modello
     model = StandardABM(
-        Person,
-        GraphSpace(Agents.Graphs.complete_graph(C));
+        Person, #agent
+        GraphSpace(Agents.Graphs.complete_graph(C)); # space
         properties=@dict(
-            number_point_of_interest,
-            migration_rate,
-            new_migration_rate = migration_rate,
-            step_count = 0,
-            R₀,
-            ξ,
-            Is,
-            C,
-            γ,
-            σ,
-            ω,
-            δ,
+            number_point_of_interest, # vector
+            migration_rate, # matrix
+            new_migration_rate = migration_rate, # matrix
+            step_count = 0, # counter
+            R₀, # float
+            ξ, # float ∈ [0,1]
+            Is, # vector
+            C, # integer
+            γ, # integer
+            σ, # integer
+            ω, # integer
+            δ, # float ∈ [0,1]
             η = [zeros(Float64, length(number_point_of_interest))...],
-            Rᵢ,
-            happiness,
+            Rᵢ, # float
+            happiness, # vector
         ),
         rng
     )
@@ -101,13 +101,13 @@ end
 # need to use a better happiness estimation
 function happiness!(model::StandardABM)
     for n = 1:model.C
-        agents = filter(x -> x.pos == n, [a for a in allagents(model)])
-        dead = length(agents) / model.number_point_of_interest[n]
-        infects = filter(x -> x.status == :I, agents)
-        infects = length(infects) / length(agents)
+        # agents = filter(x -> x.pos == n, [a for a in allagents(model)])
+        # dead = length(agents) / model.number_point_of_interest[n]
+        # infects = filter(x -> x.status == :I, agents)
+        # infects = length(infects) / length(agents)
         # very bad estimator for happiness
         model.happiness[n] =
-            tanh(model.happiness[n] - model.η[n] - tanh(dead + infects) / length(agents))
+            tanh(model.happiness[n] - model.η[n]) #- tanh(dead + infects) / length(agents))
     end
 end
 
@@ -262,7 +262,7 @@ function call_controller(
             vcat(res[1:end-1, :], hcat(select(ad, Not([:step])), select(md, Not([:step]))))
         i = training_data
         # longterm_est, (predX, guessY), ts = controller.predict(
-        (predX, guessY), ts = controller.predict(
+        (predX, guessY) = controller.predict(
             select(
                 res,
                 [
@@ -276,7 +276,7 @@ function call_controller(
             tshift;
             maxiters
         )
-        controller.countermeasures!(model, predX, tshift / mean(diff(ts)))
+        controller.countermeasures!(model, predX, tshift)
         training_data += tshift
     end
 end

@@ -274,12 +274,12 @@ function ude_prediction(
     # Rename the best candidate
     p_trained = res2.u
 
-    ts = first(timeshift):(mean(diff(timeshift))/2):last(timeshift)
+    ts = first(timeshift):(mean(diff(timeshift))):last(timeshift)
     X̂ = predict(p_trained, X[:, 1], ts)
     # Neural network guess
     Ŷ = U(X̂, p_trained, st)[1]
     # prediction over time
-    return (X̂, Ŷ), ts
+    return (X̂, Ŷ)
     # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
     # return symbolic_regression(X̂, Ŷ, timeshift), (X̂, Ŷ), ts
 end
@@ -295,7 +295,7 @@ function symbolic_regression(
     seed=1234
 )
 
-    tspan = float.([i for i = 1:timeshift])
+    tspan = (1.0, float(timeshift)) #float.([i for i = 1:timeshift])
     u = X̂[:, 1]
     # Symbolic regression via sparse regression (SINDy based)
     nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
@@ -333,7 +333,8 @@ function symbolic_regression(
 
     estimation_prob =
         ODEProblem(recovered_dynamics!, u, tspan, get_parameter_values(nn_eqs))
-    estimate = solve(estimation_prob, Tsit5())
+    # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
+        estimate = solve(estimation_prob, Tsit5())
 
     function parameter_loss(p)
         Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
@@ -346,8 +347,7 @@ function symbolic_regression(
     parameter_res = Optimization.solve(optprob, Optim.LBFGS(), maxiters=max_iters)
 
     # Look at long term prediction
-    t_long = (1.0, float(timeshift))
-    estimation_prob = ODEProblem(recovered_dynamics!, u, t_long, parameter_res)
+    estimation_prob = ODEProblem(recovered_dynamics!, u, tspan, parameter_res)
     display(estimation_prob)
     # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
     estimate_long = solve(estimation_prob, Vern7(), saveat=0.1) # Using higher tolerances here results in exit of julia
