@@ -127,8 +127,7 @@ function test_prediction()
         text("End of Training Data", 10, :center, :top, :black, "Helvetica"),
     )])
     save_plot(p, "img/prediction/", "NN SHORT TERM", "pdf")
-    # println(pred)
-    # parameters.save_parameters(pred, "data/parameters/", "prediction")
+    # display(pred)
 
     # test symbolic regression
     long_time_estimation =
@@ -148,6 +147,7 @@ function test_prediction()
         label=["Measurements" nothing],
     )
     save_plot(p, "img/prediction/", "NN AND SYNDY SHORT TERM", "pdf")
+    # display(long_time_estimation)
 end
 
 test_prediction()

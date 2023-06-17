@@ -13,7 +13,7 @@ include("utils.jl")
 function countermeasures!(
     model::StandardABM,
     prediction::Matrix{Float64},
-    step::Float64;
+    step::Int;
     mininfects=1
 )
 
@@ -48,7 +48,8 @@ function countermeasures!(
     end
 
     # ERROR: BoundsError: attempt to access 5×27 Matrix{Float64} at index [1:5, -1.0:1.0:27.0]
-    rate = slope(prediction[:, end-step:end])
+    # display(prediction)
+    rate = slope(prediction[:, (end-step)+1:end])
     # apply countermeasures and update the model
     for i = 1:length(model.η)
         if get_node_status(model, i) > 0.0

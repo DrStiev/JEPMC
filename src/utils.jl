@@ -230,13 +230,14 @@ function ude_prediction(
 
     # ERROR: ArgumentError: The passed automatic differentiation backend choice is not available.
     # Please load the corresponding AD package pes.AutoZygote.
-    res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=maxiters)
+    res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=maxiters, verbose=false)
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     res2 = Optimization.solve(
         optprob2,
         Optim.LBFGS(),
         callback=callback,
         maxiters=round(Int, maxiters / 5),
+        verbose=false,
     )
 
     # plot the loss
@@ -333,8 +334,9 @@ function symbolic_regression(
 
     estimation_prob =
         ODEProblem(recovered_dynamics!, u, tspan, get_parameter_values(nn_eqs))
+    display(estimation_prob)
     # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
-        estimate = solve(estimation_prob, Tsit5())
+    estimate = solve(estimation_prob, Tsit5())
 
     function parameter_loss(p)
         Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))

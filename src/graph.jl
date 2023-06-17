@@ -51,6 +51,7 @@ function init(;
             new_migration_rate = migration_rate, # matrix
             step_count = 0, # counter
             R₀, # float
+            R₀ᵢ = R₀,
             ξ, # float ∈ [0,1]
             Is, # vector
             C, # integer
@@ -61,6 +62,8 @@ function init(;
             η = [zeros(Float64, length(number_point_of_interest))...],
             Rᵢ, # float
             happiness, # vector
+            all_variants = [],
+            vaccine_coverage = [],
         ),
         rng
     )
@@ -82,6 +85,7 @@ function init(;
             agent = model[inds[n]]
             agent.status = :I # Infetto
             agent.variant = uuid1(rng) # nome variante
+            push!(model.all_variants, agent.variant)
         end
     end
     return model
@@ -91,10 +95,11 @@ function model_step!(model::StandardABM)
     happiness!(model)
     # reduce R₀ due to η
     update!(model)
-    # vaccino
+    # search for a vaccine
+    # TODO: migliorare!
     vaccine!(model)
-    # possibilita' di variante
-    voc!(model) # variant of concern
+    # new variant of concearn
+    voc!(model)
     model.step_count += 1
 end
 
@@ -118,29 +123,29 @@ function update!(model::StandardABM)
 end
 
 function vaccine!(model::StandardABM)
-    if model.ξ == 0 && rand(model.rng) < 1 / 365
+    # poco realistico ma funzionale
+    # aggiornamento vaccino / nuovo vaccino
+    if rand(model.rng) < 1 / 365
         # heard immunity over vaccine effectiveness
-        v = ((model.R₀ - 1) / model.R₀) / 0.99
+        v = (1 - (1 / model.R₀ᵢ)) / 0.83
         # voglio arrivare ad avere una herd immunity
         # entro model.ω tempo
         model.ξ = v / model.ω
+        model.vaccine_coverage = model.all_variants
     end
 end
 
 # very very simple function
 function voc!(model::StandardABM)
-    # https://www.nature.com/articles/s41579-023-00878-2
-    # https://onlinelibrary.wiley.com/doi/10.1002/jmv.27331
-    # https://virologyj.biomedcentral.com/articles/10.1186/s12985-022-01951-7
-    # nuova variante ogni tot tempo?
     if rand(model.rng) ≤ 8 * 10E-4 # condizione di attivazione
-        # https://it.wikipedia.org/wiki/Numero_di_riproduzione_di_base#Variabilit%C3%A0_e_incertezze_del_R0
         variant = uuid1(model.rng)
         model.R₀ = abs(rand(model.rng, Uniform(3.3, 5.7)))
         model.γ = round(Int, abs(rand(model.rng, Normal(model.γ))))
         model.σ = round(Int, abs(rand(model.rng, Normal(model.σ))))
         model.ω = round(Int, abs(rand(model.rng, Normal(model.ω, model.ω / 10))))
         model.δ = abs(rand(model.rng, Normal(model.δ, model.δ / 10)))
+        model.R₀ᵢ = model.R₀
+        push!(model.all_variants, variant)
         # new infect
         new_infect = random_agent(model)
         new_infect.status = :I
@@ -152,7 +157,6 @@ function agent_step!(agent, model::StandardABM)
     migrate!(agent, model)
     transmit!(agent, model)
     update!(agent, model)
-    recover_or_die!(agent, model)
 end
 
 function migrate!(agent, model::StandardABM)
@@ -182,20 +186,13 @@ end
 function update!(agent, model::StandardABM)
     # possibilita di vaccinazione
     if agent.status == :S && (rand(model.rng) < model.ξ)
-        # gestire vaccinazione e VOC
         agent.status = :R
+        agent.infected_by = unique([agent.infected_by; model.vaccine_coverage])
         # fine periodo di latenza
     elseif agent.status == :E && (rand(model.rng) < 1 / model.σ)
         agent.status = :I
-        # perdita immunita'
-    elseif agent.status == :R && (rand(model.rng) < 1 / model.ω)
-        agent.status = :S
-    end
-end
-
-function recover_or_die!(agent, model::StandardABM)
-    # fine malattia
-    if agent.status == :I && (rand(model.rng) < 1 / model.γ)
+        # fine malattia
+    elseif agent.status == :I && (rand(model.rng) < 1 / model.γ)
         # probabilità di morte
         if rand(model.rng) < model.δ
             remove_agent!(agent, model)
@@ -204,6 +201,9 @@ function recover_or_die!(agent, model::StandardABM)
         # probabilità di guarigione
         agent.status = :R
         push!(agent.infected_by, agent.variant)
+        # perdita immunita'
+    elseif agent.status == :R && (rand(model.rng) < 1 / model.ω)
+        agent.status = :S
     end
 end
 
@@ -261,6 +261,8 @@ function call_controller(
         res =
             vcat(res[1:end-1, :], hcat(select(ad, Not([:step])), select(md, Not([:step]))))
         i = training_data
+        # display(res)
+        # display(i)
         # longterm_est, (predX, guessY), ts = controller.predict(
         (predX, guessY) = controller.predict(
             select(
