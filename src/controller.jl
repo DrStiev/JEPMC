@@ -14,7 +14,7 @@ function countermeasures!(
     model::StandardABM,
     prediction::Matrix{Float64},
     step::Int;
-    mininfects=1
+    mininfects = 1,
 )
 
     # control over row 3 and 5 for status :I and :D
@@ -74,7 +74,7 @@ function countermeasures!(
 end
 
 # https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
-predict(data::DataFrame, tspan::Int; seed=1337, maxiters=5000) =
-    udePredict.ude_prediction(data, tspan; seed=seed, maxiters=maxiters)
+predict(data::DataFrame, tspan::Int; seed = 1337, maxiters = 5000) =
+    udePredict.ude_prediction(data, tspan; seed = seed, maxiters = maxiters)
 
 end
