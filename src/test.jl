@@ -3,7 +3,7 @@ using Statistics: mean
 
 include("utils.jl")
 include("graph.jl")
-include("controller.jl")
+# include("controller.jl")
 include("ode.jl")
 
 gr()
@@ -73,6 +73,7 @@ plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
 function test_system_identification()
     p = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; p...)
+    # con n > 30 non va! SingularException
     data = graph.collect(model; n = 30, showprogress = true)
 
     d = select(
@@ -81,6 +82,7 @@ function test_system_identification()
     )
 
     eq = SysId.system_identification(d)
+    display(eq)
     # parameters.save_parameters(eq, "data/parameters/", "system identification")
 end
 
@@ -104,10 +106,9 @@ function test_prediction()
         sp;
         lossTitle = "LOSS",
         plotLoss = true,
-        maxiters = 1000,
+        maxiters = 5000,
     )
     p = plot(
-        1:1.0:sp+1,
         transpose(pred[1]),
         xlabel = "t",
         ylabel = "s(t), e(t), i(t), r(t), d(t)",
@@ -115,7 +116,6 @@ function test_prediction()
         label = ["UDE Approximation" nothing],
     )
     scatter!(
-        1:1.0:sp+1,
         Array(Xₙ ./ sum(Xₙ[1, :])),
         color = :blue,
         label = ["Measurements" nothing],
@@ -127,11 +127,11 @@ function test_prediction()
         text("End of Training Data", 10, :center, :top, :black, "Helvetica"),
     )])
     save_plot(p, "img/prediction/", "NN SHORT TERM", "pdf")
-    # display(pred)
+    display(pred)
 
     # test symbolic regression
     long_time_estimation =
-        udePredict.symbolic_regression(pred[1], pred[2], sp; maxiters = 1000)
+        udePredict.symbolic_regression(pred[1], pred[2], sp; maxiters = 10_000)
     println(long_time_estimation)
     plot(
         long_time_estimation,
@@ -141,19 +141,15 @@ function test_prediction()
         label = ["UDE Approximation" nothing],
     )
     plot!(
-        1:1.0:sp+1,
         Array(Xₙ ./ sum(Xₙ[1, :])),
         color = :blue,
         label = ["Measurements" nothing],
     )
     save_plot(p, "img/prediction/", "NN AND SYNDY SHORT TERM", "pdf")
-    # display(long_time_estimation)
+    display(long_time_estimation)
 end
 
 test_prediction()
-
-abm_parameters = parameters.get_abm_parameters(5, 0.01, 100)
-model = graph.init(; abm_parameters...)
 
 function test_abm()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
@@ -161,7 +157,7 @@ function test_abm()
 
     data = graph.collect(model; n = 1200, showprogress = true)
     graph.save_dataframe(data, "data/abm/", "ABM SEIR NO INTERVENTION")
-    df = graph.load_dataset("data/abm/ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
+    # df = graph.load_dataset("data/abm/ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
 
     p1, p2, p3 = split_dataset(data)
     l = @layout [
@@ -191,9 +187,9 @@ function test_controller()
         model;
         n = 1200,
         showprogress = true,
-        tshift = 14,
+        tshift = 30,
         initial_training_data = 30,
-        maxiters = 1000,
+        maxiters = 5000,
     )
     graph.save_dataframe(data, "data/abm/", "ABM SEIR WITH INTERVENTION")
     df = graph.load_dataset(

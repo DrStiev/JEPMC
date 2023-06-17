@@ -236,7 +236,7 @@ function call_controller(
     n = 100,
     showprogress = false,
     tshift = 0,
-    maxiters = 1000,
+    maxiters = 5000,
     initial_training_data = n,
 )
     training_data = initial_training_data
@@ -289,7 +289,7 @@ function collect(
     n = 100,
     showprogress = false,
     tshift = 0,
-    maxiters = 1000,
+    maxiters = 5000,
     initial_training_data = n,
 )
 

@@ -47,8 +47,6 @@ function countermeasures!(
         model.new_migration_rate[model.new_migration_rate.>1.0] .= 1.0
     end
 
-    # ERROR: BoundsError: attempt to access 5×27 Matrix{Float64} at index [1:5, -1.0:1.0:27.0]
-    # display(prediction)
     rate = slope(prediction[:, (end-step)+1:end])
     # apply countermeasures and update the model
     for i = 1:length(model.η)
