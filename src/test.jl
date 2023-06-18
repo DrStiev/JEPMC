@@ -73,7 +73,6 @@ plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
 function test_system_identification()
     p = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; p...)
-    # con n > 30 non va! SingularException
     data = graph.collect(model; n = 30, showprogress = true)
 
     d = select(
@@ -93,7 +92,6 @@ function test_prediction()
     model = graph.init(; abm_parameters...)
     n = 30
     sp = n * 2 # short term prediction
-
     data = graph.collect(model; n = sp, showprogress = true)
     ddata = select(
         data,
@@ -111,14 +109,12 @@ function test_prediction()
     p = plot(
         transpose(pred[1]),
         xlabel = "t",
-        ylabel = "s(t), e(t), i(t), r(t), d(t)",
-        color = :red,
-        label = ["UDE Approximation" nothing],
+        label = ["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+        title = "NN Approximation",
     )
     scatter!(
         Array(Xₙ ./ sum(Xₙ[1, :])),
-        color = :blue,
-        label = ["Measurements" nothing],
+        label = ["True S" "True E" "True I" "True R" "True D"],
     )
     plot!(p, [n - 0.01, n + 0.01], [0.0, 1.0], lw = 2, color = :black, label = nothing)
     annotate!([(
@@ -126,7 +122,7 @@ function test_prediction()
         1.0,
         text("End of Training Data", 10, :center, :top, :black, "Helvetica"),
     )])
-    save_plot(p, "img/prediction/", "NN SHORT TERM", "pdf")
+    save_plot(p, "img/prediction/", "NN PREDICTION", "pdf")
     display(pred)
 
     # test symbolic regression
@@ -136,16 +132,14 @@ function test_prediction()
     plot(
         long_time_estimation,
         xlabel = "t",
-        ylabel = "s(t), e(t), i(t), r(t), d(t)",
-        color = :red,
-        label = ["UDE Approximation" nothing],
+        label = ["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+        title = "NN + SINDy Approximation",
     )
     plot!(
         Array(Xₙ ./ sum(Xₙ[1, :])),
-        color = :blue,
-        label = ["Measurements" nothing],
+        label = ["True S" "True E" "True I" "True R" "True D"],
     )
-    save_plot(p, "img/prediction/", "NN AND SYNDY SHORT TERM", "pdf")
+    save_plot(p, "img/prediction/", "NN AND SYNDY PREDICTION", "pdf")
     display(long_time_estimation)
 end
 
@@ -219,7 +213,7 @@ test_controller()
 function test_ode()
     # must be between [0-1] for numerical stability
     u, p, t = parameters.get_ode_parameters(20, 3300)
-    prob = ode.get_ode_problem(uode.seir!, u, (1.0, 1200.0), p)
+    prob = ode.get_ode_problem(ode.seir!, u, t, p)
     sol = ode.get_ode_solution(prob)
 
     p = plot(
