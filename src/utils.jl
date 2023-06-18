@@ -328,19 +328,23 @@ function symbolic_regression(
             rng = StableRNG(seed),
         ),
     )
+    # display(basis)
+    # display(X̂)
+    # display(Ŷ)
 
     # ERROR: DimensionMismatch: arrays could not be broadcast to a common size;
     nn_res = solve(nn_problem, basis, opt, options = options)
     nn_eqs = get_basis(nn_res)
-    display(nn_res)
-    display(nn_eqs)
-    display(get_parameter_map(nn_eqs))
+    # display(nn_res)
+    # display(nn_eqs)
+    # display(get_parameter_map(nn_eqs))
 
     # Define the recovered, hybrid model
     function recovered_dynamics!(du, u, p, t)
         û = nn_eqs(u, p) # Recovered equations
+        # display(û)
         du[1] = û[1]
-        du[2] = û[2]
+        du[2] = û[2] # ERROR: BoundsError: attempt to access 1-element Vector{Float64} at index [2]
         du[3] = û[3]
         du[4] = û[4]
         du[5] = û[5]
@@ -348,9 +352,10 @@ function symbolic_regression(
 
     estimation_prob =
         ODEProblem(recovered_dynamics!, u0, tspan, get_parameter_values(nn_eqs))
-    display(estimation_prob)
+    # display(estimation_prob)
     # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
     estimate = solve(estimation_prob, Tsit5(; thread = OrdinaryDiffEq.True()))
+    # display(estimate)
 
     function parameter_loss(p)
         Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
@@ -365,7 +370,7 @@ function symbolic_regression(
 
     # Look at long term prediction
     estimation_prob = ODEProblem(recovered_dynamics!, u0, tspan, parameter_res)
-    display(estimation_prob)
+    # display(estimation_prob)
     # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
     estimate_long =
         solve(estimation_prob, Tsit5(; thread = OrdinaryDiffEq.True()), saveat = 0.1) # Using higher tolerances here results in exit of julia

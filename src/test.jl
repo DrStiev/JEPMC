@@ -101,7 +101,7 @@ function test_prediction()
     # Eye control
     pred = udePredict.ude_prediction(
         ddata[1:n, :],
-        sp;
+        round(Int, n*1.5);
         lossTitle = "LOSS",
         plotLoss = true,
         maxiters = 5000,
@@ -123,13 +123,10 @@ function test_prediction()
         text("End of Training Data", 10, :center, :top, :black, "Helvetica"),
     )])
     save_plot(p, "img/prediction/", "NN PREDICTION", "pdf")
-    display(pred)
-
     # test symbolic regression
     long_time_estimation =
         udePredict.symbolic_regression(pred[1], pred[2], sp; maxiters = 10_000)
-    println(long_time_estimation)
-    plot(
+    p = plot(
         long_time_estimation,
         xlabel = "t",
         label = ["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
@@ -140,7 +137,6 @@ function test_prediction()
         label = ["True S" "True E" "True I" "True R" "True D"],
     )
     save_plot(p, "img/prediction/", "NN AND SYNDY PREDICTION", "pdf")
-    display(long_time_estimation)
 end
 
 test_prediction()
