@@ -1,7 +1,9 @@
 module controller
 
-using Agents, DataFrames
+using Agents, DataFrames, Random, Distributions
 using Statistics: mean
+
+# https://github.com/epirecipes/sir-julia
 
 include("utils.jl")
 # parametri su cui il controllore può agire:
@@ -9,13 +11,26 @@ include("utils.jl")
 # Rᵢ → objective value for R₀
 # ξ → vaccination rate
 
-# https://github.com/epirecipes/sir-julia
-function countermeasures!(
-    model::StandardABM,
-    prediction::Matrix{Float64},
-    step::Int;
-    mininfects = 1,
-)
+function controller_vaccine!(model::StandardABM, avg_effectiveness::Float64)
+    # poco realistico ma funzionale
+    # aggiornamento vaccino / nuovo vaccino
+    if rand(model.rng) < 1 / 365
+        # heard immunity over vaccine effectiveness
+        v =
+            (1 - (1 / model.R₀ᵢ)) /
+            rand(model.rng, Normal(avg_effectiveness, avg_effectiveness / 10))
+        # voglio arrivare ad avere una herd immunity
+        # entro model.ω tempo
+        model.ξ = v / model.ω
+        model.vaccine_coverage = model.all_variants
+    end
+end
+
+function controller_η!(model::StandardABM, data::Matrix{Int}, step::Int; mininfects=1)
+
+    # funzione si occupa di applicare delle contromisure
+    # al modello in base alla sua situazione corrente rispetto
+    # a quella di N passi precedenti.
 
     # control over row 3 and 5 for status :I and :D
     # return the slope of a tanh (- if - and + if +)
@@ -34,45 +49,63 @@ function countermeasures!(
         end
     end
 
-    function update_migration_rates!(model::StandardABM, node::Int, restriction::Float64)
+    function apply_lockdown!(model::StandardABM, node::Int, restriction::Float64)
         # update the migration matrix
         model.new_migration_rate = model.migration_rate
         # apply a sort of lockdown
         model.new_migration_rate[node, :] -= model.migration_rate[node, :] * restriction
         model.new_migration_rate[:, node] -= model.migration_rate[:, node] * restriction
         model.new_migration_rate[node, node] +=
-            model.migration_rate[node, node] * restriction
+            (1 - model.migration_rate[node, node]) * restriction
         # normalize the matrix between 0 and 1
         model.new_migration_rate[model.new_migration_rate.<0.0] .= 0.0
         model.new_migration_rate[model.new_migration_rate.>1.0] .= 1.0
     end
 
-    rate = slope(prediction[:, (end-step)+1:end])
-    # apply countermeasures and update the model
-    for i = 1:length(model.η)
-        if get_node_status(model, i) > 0.0
-            # applico le contromisure solamente se il nodo ha un status > 0
-            if rate > 0.0
-                model.η[i] = rate ≥ model.η[i] ? rate : model.η[i]
-                # apply lockdown only if rate is too high
-                # not too sure about this
-                if rate > 0.1
-                    update_migration_rates!(model, i, rate)
+    function countermeasures!(model::StandardABM, data::Matrix{Int}, step::Int)
+        rate = slope(data[:, (end-step)+1:end])
+        # apply countermeasures and update the model
+        for i = 1:length(model.η)
+            if get_node_status(model, i) > 0.0
+                # applico le contromisure solamente se il nodo ha un status > 0
+                if rate > 0.0
+                    model.η[i] = rate ≥ model.η[i] ? rate : model.η[i]
+                    # apply lockdown only if rate is too high
+                    # not too sure about this
+                    if rate > 0.2
+                        apply_lockdown!(model, i, rate)
+                    end
+                else
+                    model.η[i] *= (1.0 + rate)
                 end
-                # balance the countermeasures with a simple formula
-                h = model.happiness[i]
-                model.η[i] =
-                    h + model.η[i] < model.η[i] / 2 ?
-                    model.η[i] * (1 - (model.η[i] / abs(h))) : model.η[i]
-            elseif rate < 0.0
-                model.η[i] *= (1.0 + rate)
             end
         end
     end
 end
 
+function controller_happiness!(model::StandardABM)
+    for i = 1:length(model.η)
+        # balance the countermeasures with a simple formula
+        h = model.happiness[i]
+        model.η[i] =
+            h + model.η[i] < model.η[i] / 2 ? model.η[i] * (1 - (model.η[i] / abs(h))) :
+            model.η[i]
+    end
+end
+
+function controller_voc()
+    # prova a predire quando uscira' la nuova variante
+    # idea molto ambiziosa
+end
+
 # https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
-predict(data::DataFrame, tspan::Int; seed = 1337, maxiters = 5000) =
-    udePredict.ude_prediction(data, tspan; seed = seed, maxiters = maxiters)
+predict(model::StandardABM, data::DataFrame, tspan::Int; seed=1337, maxiters=5000) =
+    udePredict.ude_prediction(
+        data,
+        [model.R₀, 1 / model.γ, 1 / model.σ, 1 / model.ω, model.δ, model.η, model.ξ],
+        tspan;
+        seed=seed,
+        maxiters=maxiters
+    )
 
 end

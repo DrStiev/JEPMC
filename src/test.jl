@@ -8,7 +8,7 @@ include("ode.jl")
 
 gr()
 
-function save_plot(plot, path = "", title = "title", format = "png")
+function save_plot(plot, path="", title="title", format="png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "_" * string(today()) * "." * format)
 end
@@ -54,16 +54,16 @@ function plot_current_situation(path::String, iso_code::String)
     p = plot(
         plot(
             Array(day_info),
-            labels = ["Infected" "Tests" "Vaccinations" "Deaths"],
-            title = "Detected Dynamics",
+            labels=["Infected" "Tests" "Vaccinations" "Deaths"],
+            title="Detected Dynamics",
         ),
         plot(
             Array(total_count),
-            labels = ["Susceptible" "Infected" "Deaths" "Tests"],
-            title = "Overall Dynamics",
+            labels=["Susceptible" "Infected" "Deaths" "Tests"],
+            title="Overall Dynamics",
         ),
-        plot(Array(R₀), labels = "R₀", title = "Reproduction Rate"),
-        layout = l,
+        plot(Array(R₀), labels="R₀", title="Reproduction Rate"),
+        layout=l,
     )
     save_plot(p, "img/data_plot/", "cumulative_plot", "pdf")
 end
@@ -73,14 +73,14 @@ plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
 function test_system_identification()
     p = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; p...)
-    data = graph.collect(model; n = 30, showprogress = true)
+    data = graph.collect(model; n=30, showprogress=true)
 
     d = select(
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
     )
 
-    eq = SysId.system_identification(d)
+    eq = SysId.system_identification(d; title="System Identification", saveplot=true)
     display(eq)
     # parameters.save_parameters(eq, "data/parameters/", "system identification")
 end
@@ -90,52 +90,52 @@ test_system_identification()
 function test_prediction()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
-    n = 30
-    sp = n * 2 # short term prediction
-    data = graph.collect(model; n = sp, showprogress = true)
+    n = 40
+    sp = n * 3 # short term prediction
+    data = graph.collect(model; n=sp, showprogress=true)
     ddata = select(
         data,
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
     )
     Xₙ = Array(ddata)
+    p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
     # Eye control
     pred = udePredict.ude_prediction(
         ddata[1:n, :],
-        round(Int, n*1.5);
-        lossTitle = "LOSS",
-        plotLoss = true,
-        maxiters = 5000,
+        p_true,
+        round(Int, n * 1.5);
+        lossTitle="LOSS",
+        plotLoss=true,
+        maxiters=1000
     )
     p = plot(
         transpose(pred[1]),
-        xlabel = "t",
-        label = ["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-        title = "NN Approximation",
+        xlabel="t",
+        label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+        title="NN Approximation",
     )
     scatter!(
         Array(Xₙ ./ sum(Xₙ[1, :])),
-        label = ["True S" "True E" "True I" "True R" "True D"],
+        label=["True S" "True E" "True I" "True R" "True D"],
     )
-    plot!(p, [n - 0.01, n + 0.01], [0.0, 1.0], lw = 2, color = :black, label = nothing)
-    annotate!([(
-        float(n),
-        1.0,
-        text("End of Training Data", 10, :center, :top, :black, "Helvetica"),
-    )])
+    plot!(p, [n - 0.01, n + 0.01], [0.0, 1.0], lw=2, color=:black, label=nothing)
+    annotate!([(n / 3, 1.0, text("Training Data", 10, :center, :top, :black, "Helvetica"))])
     save_plot(p, "img/prediction/", "NN PREDICTION", "pdf")
     # test symbolic regression
     long_time_estimation =
-        udePredict.symbolic_regression(pred[1], pred[2], sp; maxiters = 10_000)
+        udePredict.symbolic_regression(pred[1], pred[2], p_true, sp; maxiters=10_000)
     p = plot(
         long_time_estimation,
-        xlabel = "t",
-        label = ["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-        title = "NN + SINDy Approximation",
+        xlabel="t",
+        label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+        title="NN + SINDy Approximation",
     )
-    plot!(
+    scatter!(
         Array(Xₙ ./ sum(Xₙ[1, :])),
-        label = ["True S" "True E" "True I" "True R" "True D"],
+        label=["True S" "True E" "True I" "True R" "True D"],
     )
+    plot!(p, [n - 0.01, n + 0.01], [0.0, 1.0], lw=2, color=:black, label=nothing)
+    annotate!([(n / 3, 1.0, text("Training Data", 10, :center, :top, :black, "Helvetica"))])
     save_plot(p, "img/prediction/", "NN AND SYNDY PREDICTION", "pdf")
 end
 
@@ -145,7 +145,7 @@ function test_abm()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n = 1200, showprogress = true)
+    data = graph.collect(model; n=1200, showprogress=true)
     graph.save_dataframe(data, "data/abm/", "ABM SEIR NO INTERVENTION")
     # df = graph.load_dataset("data/abm/ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
 
@@ -157,12 +157,12 @@ function test_abm()
     p = plot(
         plot(
             Array(p1),
-            labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-            title = "ABM Dynamics",
+            labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+            title="ABM Dynamics",
         ),
-        plot(Array(p2), labels = ["η" "Happiness"], title = "Agents response to η"),
-        plot(Array(p3), labels = "R₀", title = "Reproduction number"),
-        layout = l,
+        plot(Array(p2), labels=["η" "Happiness"], title="Agents response to η"),
+        plot(Array(p3), labels="R₀", title="Reproduction number"),
+        layout=l,
     )
     save_plot(p, "img/abm/", "ABM SEIR NO INTERVENTION", "pdf")
 end
@@ -175,11 +175,11 @@ function test_controller()
 
     data = graph.collect(
         model;
-        n = 1200,
-        showprogress = true,
-        tshift = 30,
-        initial_training_data = 30,
-        maxiters = 5000,
+        n=1200,
+        showprogress=true,
+        tshift=30,
+        initial_training_data=30,
+        maxiters=1000
     )
     graph.save_dataframe(data, "data/abm/", "ABM SEIR WITH INTERVENTION")
     df = graph.load_dataset(
@@ -194,12 +194,12 @@ function test_controller()
     p = plot(
         plot(
             Array(p1),
-            labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-            title = "ABM Dynamics",
+            labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+            title="ABM Dynamics",
         ),
-        plot(Array(p2), labels = ["η" "Happiness"], title = "Agents response to η"),
-        plot(Array(p3), labels = "R₀", title = "Reproduction number"),
-        layout = l,
+        plot(Array(p2), labels=["η" "Happiness"], title="Agents response to η"),
+        plot(Array(p3), labels="R₀", title="Reproduction number"),
+        layout=l,
     )
     save_plot(p, "img/abm/", "ABM SEIR WITH INTERVENTION", "pdf")
 end
@@ -214,8 +214,8 @@ function test_ode()
 
     p = plot(
         sol,
-        labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-        title = "SEIR Dynamics NO INTERVENTION",
+        labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        title="SEIR Dynamics NO INTERVENTION",
     )
     save_plot(p, "img/ode/", "ODE SEIR NO INTERVENTION", "pdf")
 end

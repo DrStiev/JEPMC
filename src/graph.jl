@@ -25,12 +25,12 @@ function init(;
     ω::Int,  # periodo immunita
     ξ::Float64,  # 1 / vaccinazione per milion per day
     δ::Float64,  # mortality rate
-    seed = 1234,
+    seed=1234
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
     # normalizzo il migration rate
-    migration_rate_sum = sum(migration_rate, dims = 2)
+    migration_rate_sum = sum(migration_rate, dims=2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
@@ -45,7 +45,7 @@ function init(;
     model = StandardABM(
         Person, #agent
         GraphSpace(Agents.Graphs.complete_graph(C)); # space
-        properties = @dict(
+        properties=@dict(
             number_point_of_interest, # vector
             migration_rate, # matrix
             new_migration_rate = migration_rate, # matrix
@@ -65,7 +65,7 @@ function init(;
             all_variants = [],
             vaccine_coverage = [],
         ),
-        rng,
+        rng
     )
 
     # aggiungo la mia popolazione al modello
@@ -92,13 +92,12 @@ function init(;
 end
 
 function model_step!(model::StandardABM)
+    # senza intervento esterno si crea un equilibrio
+    # dinamico che apparentemente e' errato ma non lo e'
     happiness!(model)
     # reduce R₀ due to η
     update!(model)
-    # search for a vaccine
-    # TODO: migliorare!
-    vaccine!(model)
-    # new variant of concearn
+    # new variant of concern
     voc!(model)
     model.step_count += 1
 end
@@ -106,12 +105,14 @@ end
 # need to use a better happiness estimation
 function happiness!(model::StandardABM)
     for n = 1:model.C
-        # agents = filter(x -> x.pos == n, [a for a in allagents(model)])
-        # dead = length(agents) / model.number_point_of_interest[n]
-        # infects = filter(x -> x.status == :I, agents)
-        # infects = length(infects) / length(agents)
+        agents = filter(x -> x.pos == n, [a for a in allagents(model)])
+        dead = length(agents) / model.number_point_of_interest[n]
+        infects = filter(x -> x.status == :I, agents)
+        infects = length(infects) / length(agents)
         # very bad estimator for happiness
-        model.happiness[n] = tanh(model.happiness[n] - model.η[n]) #- tanh(dead + infects) / length(agents))
+        model.happiness[n] = tanh(model.happiness[n] - model.η[n] +
+                                  rand(model.rng, Normal(0.1, 0.01)) -
+                                  tanh(dead + infects) / length(agents))
     end
 end
 
@@ -121,28 +122,15 @@ function update!(model::StandardABM)
     end
 end
 
-function vaccine!(model::StandardABM)
-    # poco realistico ma funzionale
-    # aggiornamento vaccino / nuovo vaccino
-    if rand(model.rng) < 1 / 365
-        # heard immunity over vaccine effectiveness
-        v = (1 - (1 / model.R₀ᵢ)) / 0.83
-        # voglio arrivare ad avere una herd immunity
-        # entro model.ω tempo
-        model.ξ = v / model.ω
-        model.vaccine_coverage = model.all_variants
-    end
-end
-
 # very very simple function
 function voc!(model::StandardABM)
     if rand(model.rng) ≤ 8 * 10E-4 # condizione di attivazione
         variant = uuid1(model.rng)
-        model.R₀ = abs(rand(model.rng, Uniform(3.3, 5.7)))
-        model.γ = round(Int, abs(rand(model.rng, Normal(model.γ))))
-        model.σ = round(Int, abs(rand(model.rng, Normal(model.σ))))
-        model.ω = round(Int, abs(rand(model.rng, Normal(model.ω, model.ω / 10))))
-        model.δ = abs(rand(model.rng, Normal(model.δ, model.δ / 10)))
+        model.R₀ = rand(model.rng, Uniform(3.3, 5.7))
+        model.γ = round(Int, rand(model.rng, Normal(model.γ, model.γ / 5)))
+        model.σ = round(Int, rand(model.rng, Normal(model.σ)))
+        model.ω = round(Int, rand(model.rng, Normal(model.ω, model.ω / 10)))
+        model.δ = rand(model.rng, Normal(model.δ, model.δ / 10))
         model.R₀ᵢ = model.R₀
         push!(model.all_variants, variant)
         # new infect
@@ -231,13 +219,13 @@ function call_controller(
     model::StandardABM,
     adata::Core.AbstractArray,
     mdata::Core.AbstractArray;
-    astep = agent_step!,
-    mstep = model_step!,
-    n = 100,
-    showprogress = false,
-    tshift = 0,
-    maxiters = 5000,
-    initial_training_data = n,
+    astep=agent_step!,
+    mstep=model_step!,
+    n=100,
+    showprogress=false,
+    tshift=30,
+    maxiters=5000,
+    initial_training_data=n
 )
     training_data = initial_training_data
     i = 0
@@ -253,17 +241,17 @@ function call_controller(
             astep, # agent step function
             mstep, # model step function
             training_data - i; # number of steps
-            adata = adata, # observable agent data
-            mdata = mdata, # model observable data
-            showprogress = showprogress, # show progress
+            adata=adata, # observable agent data
+            mdata=mdata, # model observable data
+            showprogress=showprogress # show progress
         )
         res =
             vcat(res[1:end-1, :], hcat(select(ad, Not([:step])), select(md, Not([:step]))))
-        i = training_data
         # display(res)
         # display(i)
         # longterm_est, (predX, guessY), ts = controller.predict(
         (predX, guessY) = controller.predict(
+            model,
             select(
                 res,
                 [
@@ -273,24 +261,28 @@ function call_controller(
                     :recovered_status,
                     :dead,
                 ],
-            ),
+            )[i:end, :],
             tshift;
-            maxiters,
+            maxiters
         )
-        controller.countermeasures!(model, predX, tshift)
+        # controller.countermeasures!(model, predX, tshift)
+        controller.controller_vaccine!(model, 0.83)
+        controller.controller_η!(model, predX, tshift)
+        controller.controller_happiness!(model)
+        i = training_data
         training_data += tshift
     end
 end
 
 function collect(
     model::StandardABM;
-    astep = agent_step!,
-    mstep = model_step!,
-    n = 100,
-    showprogress = false,
-    tshift = 0,
-    maxiters = 5000,
-    initial_training_data = n,
+    astep=agent_step!,
+    mstep=model_step!,
+    n=100,
+    showprogress=false,
+    tshift=0,
+    maxiters=5000,
+    initial_training_data=n
 )
 
     adata, mdata = get_observable_data()
@@ -299,13 +291,13 @@ function collect(
             model,
             adata,
             mdata;
-            astep = astep,
-            mstep = mstep,
-            n = n,
-            showprogress = showprogress,
-            tshift = tshift,
-            maxiters = maxiters,
-            initial_training_data = initial_training_data,
+            astep=astep,
+            mstep=mstep,
+            n=n,
+            showprogress=showprogress,
+            tshift=tshift,
+            maxiters=maxiters,
+            initial_training_data=initial_training_data
         )
     else
         ad, md = run!(
@@ -313,21 +305,21 @@ function collect(
             astep, # agent step function
             mstep, # model step function
             n; # number of steps
-            adata = adata, # observable agent data
-            mdata = mdata, # model observable data
-            showprogress = showprogress, # show progress
+            adata=adata, # observable agent data
+            mdata=mdata, # model observable data
+            showprogress=showprogress # show progress
         )
         return hcat(select(ad, Not([:step])), select(md, Not([:step])))
     end
 
 end
 
-function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
+function save_dataframe(data::DataFrame, path::String, title="StandardABM")
     isdir(path) == false && mkpath(path)
     CSV.write(path * title * "_" * string(today()) * ".csv", data)
 end
 
 function load_dataset(path::String)
-    return DataFrame(CSV.File(path, delim = ",", header = 1))
+    return DataFrame(CSV.File(path, delim=",", header=1))
 end
 end
