@@ -109,10 +109,11 @@ function happiness!(model::StandardABM)
         dead = length(agents) / model.number_point_of_interest[n]
         infects = filter(x -> x.status == :I, agents)
         infects = length(infects) / length(agents)
-        # very bad estimator for happiness
-        model.happiness[n] = tanh(model.happiness[n] - model.η[n] +
-                                  rand(model.rng, Normal(0.1, 0.01)) -
-                                  tanh(dead + infects) / length(agents))
+        recovered = filter(x -> x.status == :R, agents)
+        recovered = length(recovered) / length(agents)
+        # very rough estimator for happiness
+        model.happiness[n] = tanh(model.happiness[n] - model.η[n]) +
+                             tanh(recovered - (dead + infects)) / 10
     end
 end
 
