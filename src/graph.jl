@@ -113,7 +113,7 @@ function happiness!(model::StandardABM)
         recovered = length(recovered) / length(agents)
         # very rough estimator for happiness
         model.happiness[n] = tanh(model.happiness[n] - model.η[n]) +
-                             tanh(recovered - (dead + infects)) / 10
+                             tanh(recovered - (dead + infects)) / 2
     end
 end
 
