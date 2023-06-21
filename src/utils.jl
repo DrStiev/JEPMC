@@ -209,11 +209,11 @@ function ude_prediction(
         û = U(u, p, st)[1] # network prediction
         S, E, I, R, D = u
         R₀, γ, σ, ω, δ, η, ξ = p_true
-        du[1] = ((-R₀ * γ * (1 - η) * S * I) + (ω * R) - (S * ξ)) * û[1] # dS
-        du[2] = ((R₀ * γ * (1 - η) * S * I) - (σ * E)) * û[2] # dE
+        du[1] = ((-R₀ * γ * (1 - η) * S * I / (S+E+I+R)) + (ω * R)) * û[1] # dS
+        du[2] = ((R₀ * γ * (1 - η) * S * I / (S+E+I+R)) - (σ * E)) * û[2] # dE
         du[3] = ((σ * E) - (γ * I) - (δ * I)) * û[3] # dI
-        du[4] = (((1 - δ) * γ * I - ω * R) + (S * ξ)) * û[4] # dR
-        du[5] = ((δ * I * γ)) * û[5] # dD
+        du[4] = (((1 - δ) * γ * I) - (ω * R)) * û[4] # dR
+        du[5] = (δ * I * γ) * û[5] # dD
     end
 
     # Closure with the known parameter
@@ -253,14 +253,14 @@ function ude_prediction(
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
-    iterations = round(Int, maxiters / 2)
+    iterations = round(Int, maxiters*4/5)
     res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=iterations)
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     res2 = Optimization.solve(
         optprob2,
         Optim.LBFGS(),
         callback=callback,
-        maxiters=iterations,
+        maxiters=maxiters-iterations,
     )
 
     # plot the loss
@@ -347,11 +347,11 @@ function symbolic_regression(
         û = nn_eqs(u, p) # network prediction
         S, E, I, R, D = u
         R₀, γ, σ, ω, δ, η, ξ = p_true
-        du[1] = ((-R₀ * γ * (1 - η) * S * I) + (ω * R) - (S * ξ)) * û[1] # dS
-        du[2] = ((R₀ * γ * (1 - η) * S * I) - (σ * E)) * û[2] # dE
+        du[1] = ((-R₀ * γ * (1 - η) * S * I / (S+E+I+R)) + (ω * R)) * û[1] # dS
+        du[2] = ((R₀ * γ * (1 - η) * S * I / (S+E+I+R)) - (σ * E)) * û[2] # dE
         du[3] = ((σ * E) - (γ * I) - (δ * I)) * û[3] # dI
-        du[4] = (((1 - δ) * γ * I - ω * R) + (S * ξ)) * û[4] # dR
-        du[5] = ((δ * I * γ)) * û[5] # dD
+        du[4] = (((1 - δ) * γ * I) - (ω * R)) * û[4] # dR
+        du[5] = (δ * I * γ) * û[5] # dD
     end
 
     dynamics!(du, u, p, t) = recovered_dynamics!(du, u, p, t, p_true)
