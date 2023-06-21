@@ -24,6 +24,19 @@ function controller_vaccine!(model::StandardABM, avg_effectiveness::Float64; tim
         model.ξ = v / model.ω
         model.vaccine_coverage = model.all_variants
     end
+    # TODO: usando un uuid1 i valori che cambiano sono sempre e soli i primi 8
+    # questo a "codificare" una variante di uno specifico virus. se la variante
+    # non è troppo distante da quelle inserite nella copertura vaccinale si è 
+    # resistenti anche a quella. ognuna delle 8 posizioni può assumere un 
+    # valore hex in [0-f]. posso calcolare una edit distance custom
+    # definendo come pesare la differenza tra due valori. Questa differenza
+    # viene poi pesata per la tolleranza insita del vaccino.
+    # s1 = xxxxxxxx-..., s2 = xxxxxxxx-... sum(abs(x1i-x2i)) 
+    # diff in [0-128]. se diff <= abstol allora si è coperti. 
+    # abstol è dato dal tempo di sviluppo del vaccino (+ tempo + abstol) 
+    # * effectiveness. abstol = tanh(model.step/time*avg_effectiveness)
+    # max_diff = round(Int, abstol*128)
+    
 end
 
 function controller_η!(model::StandardABM, data::Matrix{Int}, step::Int; mininfects=1)
