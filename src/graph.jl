@@ -68,14 +68,15 @@ function init(;
         rng
     )
 
+    variant = uuid1(model.rng)
     # aggiungo la mia popolazione al modello
     for city = 1:C, _ = 1:number_point_of_interest[city]
         add_agent!(
             city,
             model,
             :S,
-            UUID("00000000-0000-0000-0000-000000000000"),
-            [UUID("00000000-0000-0000-0000-000000000000")],
+            variant,
+            [variant],
         ) # Suscettibile
     end
     # aggiungo il paziente zero
