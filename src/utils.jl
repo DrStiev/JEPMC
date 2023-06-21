@@ -94,10 +94,11 @@ load_parameters(path) = load(path)
 end
 
 module SysId
-using OrdinaryDiffEq, DataDrivenDiffEq, ModelingToolkit
+using OrdinaryDiffEq, DataDrivenDiffEq, ModelingToolkit, Dates
 using Random, DataDrivenSparse, LinearAlgebra, DataFrames, Plots
 
 # works but have wonky behaviour
+# sometimes raise DimensionMismatch: arrays could not be broadcast to a common size;
 function system_identification(
     data::DataFrame;
     # opt=ADMM,
@@ -151,6 +152,11 @@ function system_identification(
     # sys = structural_simplify(sys)
     # display(sys)
     if saveplot
+        function save_plot(plot, path="", title="title", format="png")
+            isdir(path) == false && mkpath(path)
+            savefig(plot, path * title * "_" * string(today()) * "." * format)
+        end
+
         p = plot(plot(ddprob), plot(ddsol))
         save_plot(p, "img/system_identification/", title, "pdf")
     end
@@ -298,10 +304,8 @@ function ude_prediction(
     Ŷ = U(X̂, p_trained, st)[1]
     # prediction over time
     return (X̂, Ŷ)
-    # return symbolic_regression(X̂, Ŷ, p_true, timeshift), (X̂, Ŷ)
 end
 
-# I'd like to use both but this seems to not work properly
 function symbolic_regression(
     X̂,
     Ŷ,
