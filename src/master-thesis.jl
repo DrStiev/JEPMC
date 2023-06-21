@@ -1,6 +1,6 @@
 using Pkg, JuliaFormatter, UpdateJulia
 Pkg.activate(".")
-format(".")
+# format(".")
 # update_julia() # to update julia version
 
 Pkg.status()

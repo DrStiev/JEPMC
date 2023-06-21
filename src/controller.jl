@@ -11,10 +11,10 @@ include("utils.jl")
 # Rᵢ → objective value for R₀
 # ξ → vaccination rate
 
-function controller_vaccine!(model::StandardABM, avg_effectiveness::Float64)
+function controller_vaccine!(model::StandardABM, avg_effectiveness::Float64; time=365)
     # poco realistico ma funzionale
-    # aggiornamento vaccino / nuovo vaccino
-    if rand(model.rng) < 1 / 365
+    # aggiornamento vaccino oppure nuovo vaccino
+    if rand(model.rng) < 1 / time
         # heard immunity over vaccine effectiveness
         v =
             (1 - (1 / model.R₀ᵢ)) /
@@ -97,15 +97,4 @@ function controller_voc()
     # prova a predire quando uscira' la nuova variante
     # idea molto ambiziosa
 end
-
-# https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
-predict(model::StandardABM, data::DataFrame, tspan::Int; seed=1337, maxiters=5000) =
-    udePredict.ude_prediction(
-        data,
-        [model.R₀, 1 / model.γ, 1 / model.σ, 1 / model.ω, model.δ, model.η, model.ξ],
-        tspan;
-        seed=seed,
-        maxiters=maxiters
-    )
-
 end

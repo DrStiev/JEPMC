@@ -1,10 +1,10 @@
-using Agents, DataFrames, Plots, Distributions, Random, Dates
+using Agents, DataFrames, Plots, Distributions, Random, Dates, Distributed
 using Statistics: mean
 
-include("utils.jl")
-include("graph.jl")
-# include("controller.jl")
-include("ode.jl")
+@everywhere include("utils.jl")
+@everywhere include("graph.jl")
+# @everywhere include("controller.jl")
+@everywhere include("ode.jl")
 
 gr()
 
@@ -80,9 +80,8 @@ function test_system_identification()
         [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
     )
 
-    eq = SysId.system_identification(d; title="System Identification", saveplot=true)
+    eq = SysId.system_identification(d; title="SYSTEM IDENTIFICATION", saveplot=true)
     display(eq)
-    # parameters.save_parameters(eq, "data/parameters/", "system identification")
 end
 
 test_system_identification()
@@ -108,35 +107,37 @@ function test_prediction()
         plotLoss=true,
         maxiters=1000
     )
-    p = plot(
+    p = scatter(
+        Array(Xₙ ./ sum(Xₙ[1, :])),
+        label=["True S" "True E" "True I" "True R" "True D"],
+    )
+    plot!(
         transpose(pred[1]),
         xlabel="t",
         label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
         title="NN Approximation",
     )
-    scatter!(
-        Array(Xₙ ./ sum(Xₙ[1, :])),
-        label=["True S" "True E" "True I" "True R" "True D"],
-    )
     plot!(p, [n - 0.01, n + 0.01], [0.0, 1.0], lw=2, color=:black, label=nothing)
-    annotate!([(n / 3, 1.0, text("Training Data", 10, :center, :top, :black, "Helvetica"))])
-    save_plot(p, "img/prediction/", "NN PREDICTION", "pdf")
+    annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
     # test symbolic regression
     long_time_estimation =
         udePredict.symbolic_regression(pred[1], pred[2], p_true, sp; maxiters=10_000)
-    p = plot(
+
+    p1 = scatter(
+        Array(Xₙ ./ sum(Xₙ[1, :])),
+        label=["True S" "True E" "True I" "True R" "True D"],
+    )
+    plot!(
         long_time_estimation,
         xlabel="t",
         label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
         title="NN + SINDy Approximation",
     )
-    scatter!(
-        Array(Xₙ ./ sum(Xₙ[1, :])),
-        label=["True S" "True E" "True I" "True R" "True D"],
-    )
-    plot!(p, [n - 0.01, n + 0.01], [0.0, 1.0], lw=2, color=:black, label=nothing)
-    annotate!([(n / 3, 1.0, text("Training Data", 10, :center, :top, :black, "Helvetica"))])
-    save_plot(p, "img/prediction/", "NN AND SYNDY PREDICTION", "pdf")
+    plot!(p1, [n - 0.01, n + 0.01], [0.0, 1.0], lw=2, color=:black, label=nothing)
+    annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
+
+    pt = plot(plot(p), plot(p1))
+    save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
 end
 
 test_prediction()
@@ -169,42 +170,112 @@ end
 
 test_abm()
 
-function test_controller()
+function test_ensemble()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-    model = graph.init(; abm_parameters...)
-
-    data = graph.collect(
-        model;
-        n=1200,
-        showprogress=true,
-        tshift=30,
-        initial_training_data=30,
-        maxiters=1000
+    models = [graph.init(; seed=i, abm_parameters...) for i in rand(UInt64, 10)]
+    data = graph.ensemble_collect(models; n=1200, showprogress=true, parallel=true)
+    graph.save_dataframe(data, "data/abm/", "ENSEMBLE ABM SEIR NO INTERVENTION")
+    ens_data = dataset.read_dataset("data/abm/ENSEMBLE ABM SEIR NO INTERVENTION_2023-06-21.csv")
+    d = [filter(:ensemble_1 => ==(i), ens_data) for i in unique(ens_data[!, :ensemble_1])]
+    res_seir = DataFrame(
+        [
+            [], [], [], [], [], [], [], [], [], [], [], [], [], [], []
+        ],
+        [
+            "lb_s", "avg_s", "ub_s",
+            "lb_e", "avg_e", "ub_e",
+            "lb_i", "avg_i", "ub_i",
+            "lb_r", "avg_r", "ub_r",
+            "lb_d", "avg_d", "ub_d"
+        ]
     )
-    graph.save_dataframe(data, "data/abm/", "ABM SEIR WITH INTERVENTION")
-    df = graph.load_dataset(
-        "data/abm/ABM SEIR WITH INTERVENTION_" * string(today()) * ".csv",
+    res_hη = DataFrame(
+        [
+            [], [], [], [], [], []
+        ],
+        [
+            "lb_h", "avg_h", "ub_h", "lb_η", "avg_η", "ub_η"
+        ]
     )
+    res_r0 = DataFrame(
+        [
+            [], [], []
+        ],
+        [
+            "lb_R0", "avg_R0", "ub_R0"
+        ]
+    )
+    for i = 1:length(d[1][:, 1])
+        s = [d[j][i, :susceptible_status] for j = 1:length(d)]
+        e = [d[j][i, :exposed_status] for j = 1:length(d)]
+        is = [d[j][i, :infected_status] for j = 1:length(d)]
+        r = [d[j][i, :recovered_status] for j = 1:length(d)]
+        dd = [d[j][i, :dead] for j = 1:length(d)]
 
-    p1, p2, p3 = split_dataset(data)
+        ms = mean(s)
+        me = mean(e)
+        mi = mean(is)
+        mr = mean(r)
+        md = mean(dd)
+        push!(
+            res_seir,
+            [
+                ms - minimum(s), ms, maximum(s) - ms,
+                me - minimum(e), me, maximum(e) - me,
+                mi - minimum(is), mi, maximum(is) - mi,
+                mr - minimum(r), mr, maximum(r) - mr,
+                md - minimum(dd), md, maximum(dd) - md
+            ]
+        )
+
+        h = [d[j][i, :happiness] for j = 1:length(d)]
+        η = [d[j][i, :active_countermeasures] for j = 1:length(d)]
+        mh = mean(h)
+        mη = mean(η)
+        push!(
+            res_hη,
+            [
+                mh - minimum(h), mean(h), maximum(h) - mh,
+                mη - minimum(η), mean(η), maximum(η) - mη
+            ]
+        )
+
+        r0 = [d[j][i, :R₀] for j = 1:length(d)]
+        mr0 = mean(r0)
+        push!(
+            res_r0,
+            [
+                mr0 - minimum(r0), mean(r0), maximum(r0) - mr0
+            ]
+        )
+    end
+
+    res_seir
+    res_hη
+    res_r0
+
+    p1 = plot(res_seir[!, :avg_s], ribbon=(res_seir[!, :lb_s], res_seir[!, :ub_s]), labels="Susceptible",
+        title="ABM Dynamics")
+    plot!(res_seir[!, :avg_e], ribbon=(res_seir[!, :lb_e], res_seir[!, :ub_e]), labels="Exposed")
+    plot!(res_seir[!, :avg_i], ribbon=(res_seir[!, :lb_i], res_seir[!, :ub_i]), labels="Infected")
+    plot!(res_seir[!, :avg_r], ribbon=(res_seir[!, :lb_r], res_seir[!, :ub_r]), labels="Recovered")
+    plot!(res_seir[!, :avg_d], ribbon=(res_seir[!, :lb_d], res_seir[!, :ub_d]), labels="Dead")
+
+    p2 = plot(res_hη[!, :avg_h], ribbon=(res_hη[!, :lb_h], res_hη[!, :ub_h]), labels="happiness", title="Agents response to η")
+    plot!(res_hη[!, :avg_η], ribbon=(res_hη[!, :lb_η], res_hη[!, :ub_η]), labels="η")
+
+    p3 = plot(res_r0[!, :avg_R0], ribbon=(res_r0[!, :lb_R0], res_r0[!, :ub_R0]), labels="R₀", title="Reproduction number")
+
     l = @layout [
         grid(1, 1)
         grid(1, 2)
     ]
-    p = plot(
-        plot(
-            Array(p1),
-            labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-            title="ABM Dynamics",
-        ),
-        plot(Array(p2), labels=["η" "Happiness"], title="Agents response to η"),
-        plot(Array(p3), labels="R₀", title="Reproduction number"),
-        layout=l,
-    )
-    save_plot(p, "img/abm/", "ABM SEIR WITH INTERVENTION", "pdf")
+    p = plot(p1, p2, p3, layout=l)
+    save_plot(p, "img/ensemble/", "ENSEMBLE SEIR NO INTERVENTION", "pdf")
 end
 
-test_controller()
+test_ensemble()
+
 
 function test_ode()
     # must be between [0-1] for numerical stability

@@ -215,103 +215,53 @@ function get_observable_data()
     return adata, mdata
 end
 
-function call_controller(
-    model::StandardABM,
-    adata::Core.AbstractArray,
-    mdata::Core.AbstractArray;
-    astep=agent_step!,
-    mstep=model_step!,
-    n=100,
-    showprogress=false,
-    tshift=30,
-    maxiters=5000,
-    initial_training_data=n
-)
-    training_data = initial_training_data
-    i = 0
-    res = DataFrame()
-    while true
-        if i ≥ n
-            break
-            return res
-        end
-        # run the model to have a solid base of training data
-        ad, md = run!(
-            model, # model
-            astep, # agent step function
-            mstep, # model step function
-            training_data - i; # number of steps
-            adata=adata, # observable agent data
-            mdata=mdata, # model observable data
-            showprogress=showprogress # show progress
-        )
-        res =
-            vcat(res[1:end-1, :], hcat(select(ad, Not([:step])), select(md, Not([:step]))))
-        # display(res)
-        # display(i)
-        # longterm_est, (predX, guessY), ts = controller.predict(
-        (predX, guessY) = controller.predict(
-            model,
-            select(
-                res,
-                [
-                    :susceptible_status,
-                    :exposed_status,
-                    :infected_status,
-                    :recovered_status,
-                    :dead,
-                ],
-            )[i:end, :],
-            tshift;
-            maxiters
-        )
-        # controller.countermeasures!(model, predX, tshift)
-        controller.controller_vaccine!(model, 0.83)
-        controller.controller_η!(model, predX, tshift)
-        controller.controller_happiness!(model)
-        i = training_data
-        training_data += tshift
-    end
-end
-
 function collect(
     model::StandardABM;
     astep=agent_step!,
     mstep=model_step!,
     n=100,
+    showprogress=false
+)
+    adata, mdata = get_observable_data()
+
+    ad, md = run!(
+        model, # model
+        astep, # agent step function
+        mstep, # model step function
+        n; # number of steps
+        adata=adata, # observable agent data
+        mdata=mdata, # model observable data
+        showprogress=showprogress # show progress
+    )
+    AgentsIO.save_checkpoint("data/abm/checkpoint_" * string(today()) * ".jld2", model)
+    # AgentsIO.load_checkpoint("data/abm/checkpoint_"*string(today())*".jld2")
+    return hcat(select(ad, Not([:step])), select(md, Not([:step])))
+end
+
+function ensemble_collect(
+    models;
+    astep=agent_step!,
+    mstep=model_step!,
+    n=100,
     showprogress=false,
-    tshift=0,
-    maxiters=5000,
-    initial_training_data=n
+    parallel=false
 )
 
+    # TODO: capire come plottare questi grafici
     adata, mdata = get_observable_data()
-    if tshift > 0
-        return call_controller(
-            model,
-            adata,
-            mdata;
-            astep=astep,
-            mstep=mstep,
-            n=n,
-            showprogress=showprogress,
-            tshift=tshift,
-            maxiters=maxiters,
-            initial_training_data=initial_training_data
-        )
-    else
-        ad, md = run!(
-            model, # model
-            astep, # agent step function
-            mstep, # model step function
-            n; # number of steps
-            adata=adata, # observable agent data
-            mdata=mdata, # model observable data
-            showprogress=showprogress # show progress
-        )
-        return hcat(select(ad, Not([:step])), select(md, Not([:step])))
-    end
 
+    ad, md = ensemblerun!(
+        models, # models
+        astep, # agent step function
+        mstep, # model step function
+        n; # number of steps
+        adata=adata, # observable agent data
+        mdata=mdata, # model observable data
+        showprogress=showprogress, # show progress
+        parallel=parallel # allow parallelism
+    )
+
+    return hcat(select(ad, Not([:step, :ensemble])), select(md, Not([:step])), makeunique=true)
 end
 
 function save_dataframe(data::DataFrame, path::String, title="StandardABM")
