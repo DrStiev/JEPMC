@@ -2,7 +2,6 @@ module dataset
 using CSV, DataFrames, Downloads
 
 function download_dataset(path::String, url::String)
-    # https://github.com/owid/covid-19-data/tree/master/public/data/
     title = split(url, "/")
     isdir(path) == false && mkpath(path)
     return DataFrame(
@@ -57,11 +56,10 @@ function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=133
     migration_rate = (migration_rate .* max_travel_rate) ./ maxM
     migration_rate[diagind(migration_rate)] .= 1.0
 
-    γ = 14 # infective period
-    σ = 5 # exposed period
-    ω = 280 # immunity period
-    ξ = 0.0 # vaccine ratio
-    # https://www.nature.com/articles/s41467-021-22944-0
+    γ = 14
+    σ = 5
+    ω = 280
+    ξ = 0.0
     δ = 0.007
     R₀ = 3.54
 
@@ -71,9 +69,9 @@ end
 function get_ode_parameters(C::Int, avg=1000; seed=1337)
     pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
-    γ = 14 # infective period
-    σ = 5 # exposed period
-    ω = 280 # immunity period
+    γ = 14
+    σ = 5
+    ω = 280
     δ = 0.007
     R₀ = 3.54
     S = (sum(number_point_of_interest) - 1) / sum(number_point_of_interest)
@@ -97,39 +95,29 @@ module SysId
 using OrdinaryDiffEq, DataDrivenDiffEq, ModelingToolkit, Dates
 using Random, DataDrivenSparse, LinearAlgebra, DataFrames, Plots
 
-# works but have wonky behaviour
-# sometimes raise DimensionMismatch: arrays could not be broadcast to a common size;
 function system_identification(
     data::DataFrame;
-    # opt=ADMM,
-    # λ=exp10.(-3:0.01:3),
-    opt=STLSQ,
-    λ=exp10.(-5:0.1:-1),
+    opt=ADMM,
+    λ=exp10.(-3:0.01:3),
+    # opt=STLSQ,
+    # λ=exp10.(-5:0.1:-1),
     maxiters=10_000,
     seed=1234,
-    saveplot=false,
-    title="title"
+    saveplot=false
 )
-    # handle the input in a correct way to avoid wonky behaviours
-    s = sum(data[1, :]) # total number of individuals
-    X = DataFrame(float.(Array(data)'), :auto) ./ s # normalize and obtain numerical stability
+    s = sum(data[1, :])
+    X = DataFrame(float.(Array(data)'), :auto) ./ s
     t = float.([i for i = 1:size(X, 2)])
 
-    # generate the datadriven problem
     ddprob = ContinuousDataDrivenProblem(Array(X), t)
 
-    # generate the variable and the basis
     @variables t (u(t))[1:(size(X, 1))]
     b = []
     for i = 1:size(X, 1)
         push!(b, u[i])
     end
-    basis = Basis(polynomial_basis(b, size(X, 1)), u, iv=t) # construct a Basis
-
-    # use SINDy to inference the system. Could use EDMD but
-    # for noisy data SINDy is stabler and find simpler (sparser)
-    # solution. However, large amounts of noise can break SINDy too.
-    opt = opt(λ) # define the optimization algorithm
+    basis = Basis(polynomial_basis(b, size(X, 1)), u, iv=t)
+    opt = opt(λ)
 
     options = DataDrivenCommonOptions(
         maxiters=maxiters,
@@ -144,35 +132,20 @@ function system_identification(
         ),
     )
 
-    # ERROR: DimensionMismatch: arrays could not be broadcast to a common size;
-    # ERROR:LinearAlgebra.SingularException if data has more than 30 rows
     ddsol = solve(ddprob, basis, opt, options=options, verbose=false)
-    # return the information about the inferred model and parameters
     sys = get_basis(ddsol)
-    # sys = structural_simplify(sys)
-    # display(sys)
     if saveplot
-        function save_plot(plot, path="", title="title", format="png")
-            isdir(path) == false && mkpath(path)
-            savefig(plot, path * title * "_" * string(today()) * "." * format)
-        end
-
-        p = plot(plot(ddprob), plot(ddsol))
-        save_plot(p, "img/system_identification/", title, "pdf")
+        return sys, (ddprob, ddsol)
+    else
+        return sys
     end
-    return sys
 end
 end
 
 module udePredict
-
 using OrdinaryDiffEq, ModelingToolkit, DataDrivenDiffEq, SciMLSensitivity, DataDrivenSparse
 using Optimization, OptimizationOptimisers, OptimizationOptimJL, CUDA
-
-# Standard Libraries
 using LinearAlgebra, Statistics
-
-# External Libraries
 using ComponentArrays, Lux, Zygote, StableRNGs, DataFrames, Dates, Plots
 
 function ude_prediction(
@@ -188,37 +161,32 @@ function ude_prediction(
     X = Array(data)'
     tspan = float.([i for i = 1:size(Array(data), 1)])
     timeshift = float.([i for i = 1:timeshift])
-    # Normalize the data if not between [0-1]
     if (any(X .<= 0) || any(X .>= 1))
         X = X ./ sum(data[1, :])
     end
 
     s = size(X, 1)
 
-    # Multilayer FeedForward
     U = Lux.Chain(
         Lux.Dense(s, s^2, activation_function),
         Lux.Dense(s^2, s^2, activation_function),
         Lux.Dense(s^2, s^2, activation_function),
         Lux.Dense(s^2, s),
     )
-    # Get the initial parameters and state variables of the model
     p, st = Lux.setup(StableRNG(seed), U)
 
     function ude_dynamics!(du, u, p, t, p_true)
-        û = U(u, p, st)[1] # network prediction
+        û = U(u, p, st)[1]
         S, E, I, R, D = u
         R₀, γ, σ, ω, δ, η, ξ = p_true
-        du[1] = ((-R₀ * γ * (1 - η) * S * I / (S+E+I+R)) + (ω * R)) * û[1] # dS
-        du[2] = ((R₀ * γ * (1 - η) * S * I / (S+E+I+R)) - (σ * E)) * û[2] # dE
+        du[1] = ((-R₀ * γ * (1 - η) * S * I / (S + E + I + R)) + (ω * R)) * û[1] # dS
+        du[2] = ((R₀ * γ * (1 - η) * S * I / (S + E + I + R)) - (σ * E)) * û[2] # dE
         du[3] = ((σ * E) - (γ * I) - (δ * I)) * û[3] # dI
         du[4] = (((1 - δ) * γ * I) - (ω * R)) * û[4] # dR
         du[5] = (δ * I * γ) * û[5] # dD
     end
 
-    # Closure with the known parameter
     nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p_true)
-    # Define the problem
     prob_nn = ODEProblem(nn_dynamics!, X[:, 1], (tspan[1], tspan[end]), p)
 
     function predict(θ, X=X[:, 1], T=tspan)
@@ -253,24 +221,22 @@ function ude_prediction(
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
-    iterations = round(Int, maxiters*4/5)
+    iterations = round(Int, maxiters * 4 / 5)
     res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=iterations)
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     res2 = Optimization.solve(
         optprob2,
         Optim.LBFGS(),
         callback=callback,
-        maxiters=maxiters-iterations,
+        maxiters=maxiters - iterations,
     )
 
-    # plot the loss
     if plotLoss
         function save_plot(plot, path="", title="title", format="png")
             isdir(path) == false && mkpath(path)
             savefig(plot, path * title * "_" * string(today()) * "." * format)
         end
 
-        # Plot the losses
         pl_losses = plot(
             1:iterations,
             losses[1:iterations],
@@ -295,14 +261,11 @@ function ude_prediction(
         save_plot(pl_losses, "img/prediction/", lossTitle, "pdf")
     end
 
-    # Rename the best candidate
     p_trained = res2.u
 
     ts = first(timeshift):(mean(diff(timeshift))):last(timeshift)
     X̂ = predict(p_trained, X[:, 1], ts)
-    # Neural network guess
     Ŷ = U(X̂, p_trained, st)[1]
-    # prediction over time
     return (X̂, Ŷ)
 end
 
@@ -319,7 +282,6 @@ function symbolic_regression(
 
     tspan = (1.0, float(timeshift))
     u0 = X̂[:, 1]
-    # Symbolic regression via sparse regression (SINDy based)
     nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
     opt = opt(λ)
     @variables u[1:size(X̂, 1)]
@@ -339,16 +301,15 @@ function symbolic_regression(
         ),
     )
 
-    # ERROR: DimensionMismatch: arrays could not be broadcast to a common size;
     nn_res = solve(nn_problem, basis, opt, options=options)
     nn_eqs = get_basis(nn_res)
 
     function recovered_dynamics!(du, u, p, t, p_true)
-        û = nn_eqs(u, p) # network prediction
+        û = nn_eqs(u, p)
         S, E, I, R, D = u
         R₀, γ, σ, ω, δ, η, ξ = p_true
-        du[1] = ((-R₀ * γ * (1 - η) * S * I / (S+E+I+R)) + (ω * R)) * û[1] # dS
-        du[2] = ((R₀ * γ * (1 - η) * S * I / (S+E+I+R)) - (σ * E)) * û[2] # dE
+        du[1] = ((-R₀ * γ * (1 - η) * S * I / (S + E + I + R)) + (ω * R)) * û[1] # dS
+        du[2] = ((R₀ * γ * (1 - η) * S * I / (S + E + I + R)) - (σ * E)) * û[2] # dE
         du[3] = ((σ * E) - (γ * I) - (δ * I)) * û[3] # dI
         du[4] = (((1 - δ) * γ * I) - (ω * R)) * û[4] # dR
         du[5] = (δ * I * γ) * û[5] # dD
@@ -357,7 +318,6 @@ function symbolic_regression(
     dynamics!(du, u, p, t) = recovered_dynamics!(du, u, p, t, p_true)
     estimation_prob =
         ODEProblem(dynamics!, u0, tspan, get_parameter_values(nn_eqs))
-    # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
     estimate = solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=1.0)
 
     function parameter_loss(p)
@@ -385,9 +345,7 @@ function symbolic_regression(
             maxiters=trunc(Int, maxiters / 10)
         )
 
-    # Look at long term prediction
     estimation_prob = ODEProblem(dynamics!, u0, tspan, parameter_res)
-    # ERROR: TypeError: non-boolean (Symbolics.Num) used in boolean context
     estimate_long =
         solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=1.0) # Using higher tolerances here results in exit of julia
     return estimate_long

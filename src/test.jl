@@ -83,7 +83,9 @@ function test_system_identification()
                 [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
             )
 
-            eq = SysId.system_identification(d; title="SYSTEM IDENTIFICATION", saveplot=true)
+            eq, (prob, sol) = SysId.system_identification(d; saveplot=true)
+            p = plot(plot(prob), plot(sol))
+            save_plot(p, "img/system_identification/", "SYSTEM IDENTIFICATION", "pdf")
             println("successful iterazion: $i")
             break
         catch
@@ -268,10 +270,6 @@ function test_ensemble()
             ]
         )
     end
-
-    res_seir
-    res_hη
-    res_r0
 
     p1 = plot(res_seir[!, :avg_s], ribbon=(res_seir[!, :lb_s], res_seir[!, :ub_s]), labels="Susceptible",
         title="ABM Dynamics")

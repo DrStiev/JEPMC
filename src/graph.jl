@@ -10,7 +10,7 @@ using UUIDs
 @everywhere include("controller.jl")
 
 @agent Person GraphAgent begin
-    status::Symbol # :S, :E, :I, :R
+    status::Symbol 
     variant::UUID
     infected_by::Vector{UUID}
     variant_tolerance::Int
@@ -19,50 +19,47 @@ end
 function init(;
     number_point_of_interest::Vector{Int},
     migration_rate::Array,
-    R₀::Float64, # R₀
-    Rᵢ::Float64, # # numero "buono" di riproduzione
-    γ::Int,  # periodo infettivita'
-    σ::Int,  # periodo esposizione
-    ω::Int,  # periodo immunita
-    ξ::Float64,  # 1 / vaccinazione per milion per day
-    δ::Float64,  # mortality rate
+    R₀::Float64,
+    Rᵢ::Float64,
+    γ::Int,
+    σ::Int,
+    ω::Int,
+    ξ::Float64,
+    δ::Float64,
     seed=1234
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
-    # normalizzo il migration rate
     migration_rate_sum = sum(migration_rate, dims=2)
     for c = 1:C
         migration_rate[c, :] ./= migration_rate_sum[c]
     end
-    # scelgo il punto di interesse che avrà il paziente zero
     Is = [zeros(Int, length(number_point_of_interest))...]
     Is[rand(rng, 1:length(Is))] = 1
     happiness = [randn(rng) for i = 1:C]
     happiness[happiness.<-1.0] .= -1.0
     happiness[happiness.>1.0] .= 1.0
 
-    # creo il modello
     model = StandardABM(
-        Person, #agent
-        GraphSpace(Agents.Graphs.complete_graph(C)); # space
+        Person,
+        GraphSpace(Agents.Graphs.complete_graph(C));
         properties=@dict(
-            number_point_of_interest, # vector
-            migration_rate, # matrix
-            new_migration_rate = migration_rate, # matrix
-            step_count = 0, # counter
-            R₀, # float
+            number_point_of_interest,
+            migration_rate,
+            new_migration_rate = migration_rate,
+            step_count = 0,
+            R₀,
             R₀ᵢ = R₀,
-            ξ, # float ∈ [0,1]
-            Is, # vector
-            C, # integer
-            γ, # integer
-            σ, # integer
-            ω, # integer
-            δ, # float ∈ [0,1]
+            ξ,
+            Is,
+            C,
+            γ,
+            σ,
+            ω,
+            δ,
             η = [zeros(Float64, length(number_point_of_interest))...],
-            Rᵢ, # float
-            happiness, # vector
+            Rᵢ,
+            happiness,
             all_variants = [],
             vaccine_coverage = [],
             variant_tolerance = 0,
@@ -71,7 +68,6 @@ function init(;
     )
 
     variant = uuid1(model.rng)
-    # aggiungo la mia popolazione al modello
     for city = 1:C, _ = 1:number_point_of_interest[city]
         add_agent!(
             city,
@@ -80,15 +76,14 @@ function init(;
             variant,
             [variant],
             0,
-        ) # Suscettibile
+        )
     end
-    # aggiungo il paziente zero
     for city = 1:C
         inds = ids_in_position(city, model)
         for n = 1:Is[city]
             agent = model[inds[n]]
-            agent.status = :I # Infetto
-            agent.variant = uuid1(rng) # nome variante
+            agent.status = :I
+            agent.variant = uuid1(rng)
             push!(model.all_variants, agent.variant)
         end
     end
@@ -96,17 +91,13 @@ function init(;
 end
 
 function model_step!(model::StandardABM)
-    # senza intervento esterno si crea un equilibrio
-    # dinamico che apparentemente e' errato ma non lo e'
     happiness!(model)
-    # reduce R₀ due to η
     update!(model)
-    # new variant of concern
     voc!(model)
+    controller.controller_vaccine!(model, 0.83; time=365)
     model.step_count += 1
 end
 
-# need to use a better happiness estimation
 function happiness!(model::StandardABM)
     for n = 1:model.C
         agents = filter(x -> x.pos == n, [a for a in allagents(model)])
@@ -115,9 +106,12 @@ function happiness!(model::StandardABM)
         infects = length(infects) / length(agents)
         recovered = filter(x -> x.status == :R, agents)
         recovered = length(recovered) / length(agents)
-        # very rough estimator for happiness
+
         model.happiness[n] = tanh(model.happiness[n] - model.η[n]) +
                              tanh(recovered - (dead + infects)) / 2
+        if model.step % model.γ == 0
+            controller.controller_happiness!(model)
+        end
         model.happiness[n] = model.happiness[n] > 1.0 ? 1.0 : model.happiness[n] < -1.0 ? -1.0 : model.happiness[n]
     end
 end
@@ -128,9 +122,8 @@ function update!(model::StandardABM)
     end
 end
 
-# very very simple function
 function voc!(model::StandardABM)
-    if rand(model.rng) ≤ 8 * 10E-4 # condizione di attivazione
+    if rand(model.rng) ≤ 8 * 10E-4
         variant = uuid1(model.rng)
         model.R₀ = rand(model.rng, Uniform(3.3, 5.7))
         model.γ = round(Int, rand(model.rng, Normal(model.γ, model.γ / 5)))
@@ -139,7 +132,7 @@ function voc!(model::StandardABM)
         model.δ = rand(model.rng, Normal(model.δ, model.δ / 10))
         model.R₀ᵢ = model.R₀
         push!(model.all_variants, variant)
-        # new infect
+
         new_infect = random_agent(model)
         new_infect.status = :I
         new_infect.variant = variant
@@ -157,7 +150,7 @@ function coverage(s1::UUID, ss2::Vector{UUID}, maxdiff::Int)
     new_ss2 = string.(ss2)
     for j = 1:length(new_ss2)
         dist = 0
-        for i = 1:8 #length(new_s1)
+        for i = 1:8
             @inbounds dist += abs(new_s1[i] - new_ss2[j][i])
         end
         if dist > maxdiff
@@ -175,7 +168,6 @@ function migrate!(agent, model::StandardABM)
     end
 end
 
-# https://github.com/epirecipes/sir-julia/blob/master/markdown/abm/abm.md
 function transmit!(agent, model::StandardABM)
     agent.status != :I && return
     ncontacts = rand(model.rng, Poisson(model.R₀))
@@ -193,25 +185,19 @@ function transmit!(agent, model::StandardABM)
 end
 
 function update!(agent, model::StandardABM)
-    # possibilita di vaccinazione
     if agent.status == :S && (rand(model.rng) < model.ξ)
         agent.status = :R
         agent.infected_by = unique([agent.infected_by; model.vaccine_coverage])
         agent.variant_tolerance = model.variant_tolerance
-        # fine periodo di latenza
     elseif agent.status == :E && (rand(model.rng) < 1 / model.σ)
         agent.status = :I
-        # fine malattia
     elseif agent.status == :I && (rand(model.rng) < 1 / model.γ)
-        # probabilità di morte
         if rand(model.rng) < model.δ
             remove_agent!(agent, model)
             return
         end
-        # probabilità di guarigione
         agent.status = :R
         push!(agent.infected_by, agent.variant)
-        # perdita immunita'
     elseif agent.status == :R && (rand(model.rng) < 1 / model.ω)
         agent.status = :S
     end
@@ -248,13 +234,13 @@ function collect(
     adata, mdata = get_observable_data()
 
     ad, md = run!(
-        model, # model
-        astep, # agent step function
-        mstep, # model step function
-        n; # number of steps
-        adata=adata, # observable agent data
-        mdata=mdata, # model observable data
-        showprogress=showprogress # show progress
+        model,
+        astep,
+        mstep,
+        n;
+        adata=adata,
+        mdata=mdata,
+        showprogress=showprogress
     )
     AgentsIO.save_checkpoint("data/abm/checkpoint_" * string(today()) * ".jld2", model)
     # AgentsIO.load_checkpoint("data/abm/checkpoint_"*string(today())*".jld2")
@@ -273,14 +259,14 @@ function ensemble_collect(
     adata, mdata = get_observable_data()
 
     ad, md = ensemblerun!(
-        models, # models
-        astep, # agent step function
-        mstep, # model step function
-        n; # number of steps
-        adata=adata, # observable agent data
-        mdata=mdata, # model observable data
-        showprogress=showprogress, # show progress
-        parallel=parallel # allow parallelism
+        models,
+        astep,
+        mstep,
+        n;
+        adata=adata,
+        mdata=mdata,
+        showprogress=showprogress,
+        parallel=parallel
     )
     return hcat(select(ad, Not([:step, :ensemble])), select(md, Not([:step])), makeunique=true)
 end
