@@ -2,8 +2,8 @@ using Agents, DataFrames, Plots, Distributions, Random, Dates, Distributed
 using Statistics: mean
 
 @everywhere include("utils.jl")
+@everywhere include("controller.jl")
 @everywhere include("graph.jl")
-# @everywhere include("controller.jl")
 @everywhere include("ode.jl")
 
 gr()
@@ -71,73 +71,92 @@ end
 plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
 
 function test_system_identification()
-    p = parameters.get_abm_parameters(20, 0.01, 3300)
-    model = graph.init(; p...)
-    data = graph.collect(model; n=30, showprogress=true)
+    i = 1
+    while true
+        try
+            p = parameters.get_abm_parameters(20, 0.01, 3300)
+            model = graph.init(; p...)
+            data = graph.collect(model; n=30, showprogress=true)
 
-    d = select(
-        data,
-        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
-    )
+            d = select(
+                data,
+                [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
+            )
 
-    eq = SysId.system_identification(d; title="SYSTEM IDENTIFICATION", saveplot=true)
-    display(eq)
+            eq = SysId.system_identification(d; title="SYSTEM IDENTIFICATION", saveplot=true)
+            println("successful iterazion: $i")
+            break
+        catch
+            println("failed iteration: $i")
+            i += 1
+        end
+    end
 end
 
 test_system_identification()
 
 function test_prediction()
-    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-    model = graph.init(; abm_parameters...)
-    n = 40
-    sp = n * 3 # short term prediction
-    data = graph.collect(model; n=sp, showprogress=true)
-    ddata = select(
-        data,
-        [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
-    )
-    Xₙ = Array(ddata)
-    p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
-    # Eye control
-    pred = udePredict.ude_prediction(
-        ddata[1:n, :],
-        p_true,
-        round(Int, n * 1.5);
-        lossTitle="LOSS",
-        plotLoss=true,
-        maxiters=1000
-    )
-    p = scatter(
-        Array(Xₙ ./ sum(Xₙ[1, :])),
-        label=["True S" "True E" "True I" "True R" "True D"],
-    )
-    plot!(
-        transpose(pred[1]),
-        xlabel="t",
-        label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-        title="NN Approximation",
-    )
-    plot!(p, [n - 0.01, n + 0.01], [0.0, 1.0], lw=2, color=:black, label=nothing)
-    annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
-    # test symbolic regression
-    long_time_estimation =
-        udePredict.symbolic_regression(pred[1], pred[2], p_true, sp; maxiters=10_000)
+    i = 1
+    while true
+        try
+            abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
+            model = graph.init(; abm_parameters...)
+            n = 50
+            sp = n * 3 # short term prediction
+            data = graph.collect(model; n=sp, showprogress=true)
+            ddata = select(
+                data,
+                [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
+            )
+            Xₙ = Array(ddata)
+            p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
+            # Eye control
+            pred = udePredict.ude_prediction(
+                ddata[1:n, :],
+                p_true,
+                round(Int, n * 1.5);
+                lossTitle="LOSS",
+                plotLoss=true,
+                maxiters=2000
+            )
+            p = scatter(
+                Array(Xₙ ./ sum(Xₙ[1, :])),
+                label=["True S" "True E" "True I" "True R" "True D"],
+            )
+            plot!(
+                transpose(pred[1]),
+                xlabel="t",
+                label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+                title="NN Approximation",
+            )
+            plot!(p, [n - 0.01, n + 0.01], [0.0, 1.0], lw=2, color=:black, label=nothing)
+            annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
+            # test symbolic regression
+            long_time_estimation =
+                udePredict.symbolic_regression(pred[1], pred[2], p_true, sp; maxiters=10_000)
 
-    p1 = scatter(
-        Array(Xₙ ./ sum(Xₙ[1, :])),
-        label=["True S" "True E" "True I" "True R" "True D"],
-    )
-    plot!(
-        long_time_estimation,
-        xlabel="t",
-        label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-        title="NN + SINDy Approximation",
-    )
-    plot!(p1, [n - 0.01, n + 0.01], [0.0, 1.0], lw=2, color=:black, label=nothing)
-    annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
+            p1 = scatter(
+                Array(Xₙ ./ sum(Xₙ[1, :])),
+                label=["True S" "True E" "True I" "True R" "True D"],
+            )
+            plot!(
+                long_time_estimation,
+                xlabel="t",
+                label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+                title="NN + SINDy Approximation",
+            )
+            plot!(p1, [n - 0.01, n + 0.01], [0.0, 1.0], lw=2, color=:black, label=nothing)
+            annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
 
-    pt = plot(plot(p), plot(p1))
-    save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
+            pt = plot(plot(p), plot(p1))
+            save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
+            println("successful iterazion: $i")
+            break
+        catch
+            println("failed iteration: $i")
+            i += 1
+        end
+    end
 end
 
 test_prediction()
@@ -172,11 +191,11 @@ test_abm()
 
 function test_ensemble()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-    models = [graph.init(; seed=i, abm_parameters...) for i in rand(UInt64, 10)]
+    models = [graph.init(; seed=i, abm_parameters...) for i in rand(UInt64, 100)]
     data = graph.ensemble_collect(models; n=1200, showprogress=true, parallel=true)
     graph.save_dataframe(data, "data/abm/", "ENSEMBLE ABM SEIR NO INTERVENTION")
-    ens_data = dataset.read_dataset("data/abm/ENSEMBLE ABM SEIR NO INTERVENTION_2023-06-21.csv")
-    d = [filter(:ensemble_1 => ==(i), ens_data) for i in unique(ens_data[!, :ensemble_1])]
+    ens_data = dataset.read_dataset("data/abm/ENSEMBLE ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
+    d = [filter(:ensemble => ==(i), ens_data) for i in unique(ens_data[!, :ensemble])]
     res_seir = DataFrame(
         [
             [], [], [], [], [], [], [], [], [], [], [], [], [], [], []
@@ -275,7 +294,6 @@ function test_ensemble()
 end
 
 test_ensemble()
-
 
 function test_ode()
     # must be between [0-1] for numerical stability

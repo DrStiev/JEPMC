@@ -3,16 +3,17 @@ using Agents, Random, DataFrames
 using DrWatson: @dict
 using StatsBase: sample, Weights
 using Statistics: mean
-using Distributions
+using Distributions, Distributed
 using CSV, Dates
 using UUIDs
 
-include("controller.jl")
+@everywhere include("controller.jl")
 
 @agent Person GraphAgent begin
     status::Symbol # :S, :E, :I, :R
     variant::UUID
     infected_by::Vector{UUID}
+    variant_tolerance::Int
 end
 
 function init(;
@@ -64,6 +65,7 @@ function init(;
             happiness, # vector
             all_variants = [],
             vaccine_coverage = [],
+            variant_tolerance = 0,
         ),
         rng
     )
@@ -77,6 +79,7 @@ function init(;
             :S,
             variant,
             [variant],
+            0,
         ) # Suscettibile
     end
     # aggiungo il paziente zero
@@ -115,6 +118,7 @@ function happiness!(model::StandardABM)
         # very rough estimator for happiness
         model.happiness[n] = tanh(model.happiness[n] - model.η[n]) +
                              tanh(recovered - (dead + infects)) / 2
+        model.happiness[n] = model.happiness[n] > 1.0 ? 1.0 : model.happiness[n] < -1.0 ? -1.0 : model.happiness[n]
     end
 end
 
@@ -148,6 +152,21 @@ function agent_step!(agent, model::StandardABM)
     update!(agent, model)
 end
 
+function coverage(s1::UUID, ss2::Vector{UUID}, maxdiff::Int)
+    new_s1 = string(s1)
+    new_ss2 = string.(ss2)
+    for j = 1:length(new_ss2)
+        dist = 0
+        for i = 1:8 #length(new_s1)
+            @inbounds dist += abs(new_s1[i] - new_ss2[j][i])
+        end
+        if dist > maxdiff
+            return false
+        end
+    end
+    return true
+end
+
 function migrate!(agent, model::StandardABM)
     pid = agent.pos
     m = sample(1:(model.C), Weights(model.new_migration_rate[pid, :]))
@@ -164,7 +183,8 @@ function transmit!(agent, model::StandardABM)
         contact = model[rand(model.rng, ids_in_position(agent, model))]
         if (
             contact.status == :S ||
-            (contact.status == :R && !(agent.variant ∈ contact.infected_by))
+            (contact.status == :R && !(agent.variant ∈ contact.infected_by) &&
+             !coverage(agent.variant, contact.infected_by, contact.variant_tolerance))
         ) && (rand(model.rng) < model.R₀ / model.γ)
             contact.status = :E
             contact.variant = agent.variant
@@ -177,6 +197,7 @@ function update!(agent, model::StandardABM)
     if agent.status == :S && (rand(model.rng) < model.ξ)
         agent.status = :R
         agent.infected_by = unique([agent.infected_by; model.vaccine_coverage])
+        agent.variant_tolerance = model.variant_tolerance
         # fine periodo di latenza
     elseif agent.status == :E && (rand(model.rng) < 1 / model.σ)
         agent.status = :I
@@ -249,7 +270,6 @@ function ensemble_collect(
     parallel=false
 )
 
-    # TODO: capire come plottare questi grafici
     adata, mdata = get_observable_data()
 
     ad, md = ensemblerun!(
@@ -262,7 +282,6 @@ function ensemble_collect(
         showprogress=showprogress, # show progress
         parallel=parallel # allow parallelism
     )
-
     return hcat(select(ad, Not([:step, :ensemble])), select(md, Not([:step])), makeunique=true)
 end
 

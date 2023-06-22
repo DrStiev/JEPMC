@@ -1,15 +1,18 @@
 module controller
 
-using Agents, DataFrames, Random, Distributions
+using Agents, DataFrames, Random, Distributions, Distributed
 using Statistics: mean
 
 # https://github.com/epirecipes/sir-julia
 
-include("utils.jl")
+@everywhere include("utils.jl")
 # parametri su cui il controllore può agire:
 # η → countermeasures (0.0 - 1.0)
 # Rᵢ → objective value for R₀
 # ξ → vaccination rate
+
+# TODO: inserire controller in modello
+# e attivare sse esplicitato
 
 function controller_vaccine!(model::StandardABM, avg_effectiveness::Float64; time=365)
     # poco realistico ma funzionale
@@ -23,24 +26,24 @@ function controller_vaccine!(model::StandardABM, avg_effectiveness::Float64; tim
         # entro model.ω tempo
         model.ξ = v / model.ω
         model.vaccine_coverage = model.all_variants
+        model.variant_tolerance = round(Int, tanh(model.step / time * avg_effectiveness) * 1024)
     end
-    # TODO: usando un uuid1 i valori che cambiano sono sempre e soli i primi 8
+    # usando un uuid1 i valori che cambiano sono sempre e soli i primi 8
     # questo a "codificare" una variante di uno specifico virus. se la variante
-    # non è troppo distante da quelle inserite nella copertura vaccinale si è 
-    # resistenti anche a quella. ognuna delle 8 posizioni può assumere un 
-    # valore hex in [0-f]. posso calcolare una edit distance custom
+    # non è troppo distante da quelle inserite nella copertura vaccinale si è
+    # resistenti anche a quella. ognuna delle 8 posizioni può assumere un
+    # valore ascii [0-127]. posso calcolare una edit distance custom
     # definendo come pesare la differenza tra due valori. Questa differenza
     # viene poi pesata per la tolleranza insita del vaccino.
-    # s1 = xxxxxxxx-..., s2 = xxxxxxxx-... sum(abs(x1i-x2i)) 
-    # diff in [0-128]. se diff <= abstol allora si è coperti. 
-    # abstol è dato dal tempo di sviluppo del vaccino (+ tempo + abstol) 
+    # s1 = xxxxxxxx-..., s2 = xxxxxxxx-... sum(abs(x1i-x2i))
+    # diff in [0-1024]. se diff <= abstol allora si è coperti.
+    # abstol è dato dal tempo di sviluppo del vaccino (+ tempo + abstol)
     # * effectiveness. abstol = tanh(model.step/time*avg_effectiveness)
-    # max_diff = round(Int, abstol*128)
-    
+    # max_diff = round(Int, abstol*1024)
+
 end
 
 function controller_η!(model::StandardABM, data::Matrix{Int}, step::Int; mininfects=1)
-
     # funzione si occupa di applicare delle contromisure
     # al modello in base alla sua situazione corrente rispetto
     # a quella di N passi precedenti.
