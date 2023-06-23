@@ -21,7 +21,7 @@ function controller_vaccine!(model::StandardABM, avg_effectiveness::Float64; tim
     end
 end
 
-function controller_η!(model::StandardABM, data::Matrix{Float64}, step::Int; mininfects=1)
+function controller_η!(model::StandardABM, data::Matrix, step::Int; mininfects=1)
     slope(pred) = tanh(pred[3, end] - pred[3, 1]) + tanh(pred[5, end] - pred[5, 1])
 
     function get_node_status(model::StandardABM, pos::Int)

@@ -76,7 +76,7 @@ function test_system_identification()
         try
             p = parameters.get_abm_parameters(20, 0.01, 3300)
             model = graph.init(; p...)
-            data = graph.collect(model; n=30, showprogress=true)
+            data = graph.collect(model; n=100, showprogress=true)
 
             d = select(
                 data,
@@ -86,10 +86,9 @@ function test_system_identification()
             eq, (prob, sol) = SysId.system_identification(d; saveplot=true)
             p = plot(plot(prob), plot(sol))
             save_plot(p, "img/system_identification/", "SYSTEM IDENTIFICATION", "pdf")
-            println("successful iterazion: $i")
+            println("successful after $i iterazion")
             break
         catch
-            println("failed iteration: $i")
             i += 1
         end
     end
@@ -152,10 +151,9 @@ function test_prediction()
 
             pt = plot(plot(p), plot(p1))
             save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
-            println("successful iterazion: $i")
+            println("successful after $i iterazion")
             break
         catch
-            println("failed iteration: $i")
             i += 1
         end
     end

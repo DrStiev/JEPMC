@@ -10,7 +10,7 @@ using UUIDs
 @everywhere include("controller.jl")
 
 @agent Person GraphAgent begin
-    status::Symbol 
+    status::Symbol
     variant::UUID
     infected_by::Vector{UUID}
     variant_tolerance::Int
@@ -109,10 +109,11 @@ function happiness!(model::StandardABM)
 
         model.happiness[n] = tanh(model.happiness[n] - model.η[n]) +
                              tanh(recovered - (dead + infects)) / 2
-        if model.step % model.γ == 0
+        if model.step_count % model.γ == 0
             controller.controller_happiness!(model)
         end
-        model.happiness[n] = model.happiness[n] > 1.0 ? 1.0 : model.happiness[n] < -1.0 ? -1.0 : model.happiness[n]
+        model.happiness[n] = model.happiness[n] > 1.0 ? 1.0 :
+                             model.happiness[n] < -1.0 ? -1.0 : model.happiness[n]
     end
 end
 
