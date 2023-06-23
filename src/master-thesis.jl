@@ -1,4 +1,6 @@
-using Pkg, JuliaFormatter, UpdateJulia
+# https://julialang.org/contribute/developing_package/
+
+using Pkg #, JuliaFormatter, UpdateJulia
 Pkg.activate(".")
 # format(".")
 # update_julia() # to update julia version

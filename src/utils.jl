@@ -97,10 +97,10 @@ using Random, DataDrivenSparse, LinearAlgebra, DataFrames, Plots
 
 function system_identification(
     data::DataFrame;
-    opt=ADMM,
-    λ=exp10.(-3:0.01:3),
-    # opt=STLSQ,
-    # λ=exp10.(-5:0.1:-1),
+    # opt=ADMM,
+    # λ=exp10.(-3:0.01:3),
+    opt=STLSQ,
+    λ=exp10.(-5:0.1:-1),
     maxiters=10_000,
     seed=1234,
     saveplot=false
@@ -222,7 +222,13 @@ function ude_prediction(
     optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
     iterations = round(Int, maxiters * 4 / 5)
-    res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=iterations)
+    res1 = Optimization.solve(
+        optprob,
+        ADAMW(),
+        #ADAM(),
+        callback=callback,
+        maxiters=iterations
+    )
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     res2 = Optimization.solve(
         optprob2,
@@ -301,7 +307,7 @@ function symbolic_regression(
         ),
     )
 
-    nn_res = solve(nn_problem, basis, opt, options=options)
+    nn_res = solve(nn_problem, basis, opt, options=options, verbose=false)
     nn_eqs = get_basis(nn_res)
 
     function recovered_dynamics!(du, u, p, t, p_true)
@@ -318,7 +324,7 @@ function symbolic_regression(
     dynamics!(du, u, p, t) = recovered_dynamics!(du, u, p, t, p_true)
     estimation_prob =
         ODEProblem(dynamics!, u0, tspan, get_parameter_values(nn_eqs))
-    estimate = solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=1.0)
+    estimate = solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=1.0, verbose=false)
 
     function parameter_loss(p)
         Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
@@ -337,17 +343,28 @@ function symbolic_regression(
     adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> parameter_loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, get_parameter_values(nn_eqs))
+
+    iterations = round(Int, maxiters / 5)
+    res1 = Optimization.solve(
+        optprob,
+        ADAMW(),
+        #ADAM(),
+        callback=callback,
+        maxiters=round(Int, iterations * 4 / 5)
+    )
+
+    optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     parameter_res =
         Optimization.solve(
-            optprob,
+            optprob2,
             Optim.LBFGS(),
             callback=callback,
-            maxiters=trunc(Int, maxiters / 10)
+            maxiters=round(Int, iterations / 5)
         )
 
     estimation_prob = ODEProblem(dynamics!, u0, tspan, parameter_res)
     estimate_long =
-        solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=1.0) # Using higher tolerances here results in exit of julia
+        solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=1.0, verbose=false) # Using higher tolerances here results in exit of julia
     return estimate_long
 end
 end

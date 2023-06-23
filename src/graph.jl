@@ -7,8 +7,6 @@ using Distributions, Distributed
 using CSV, Dates
 using UUIDs
 
-@everywhere include("controller.jl")
-
 @agent Person GraphAgent begin
     status::Symbol
     variant::UUID
@@ -63,6 +61,10 @@ function init(;
             all_variants = [],
             vaccine_coverage = [],
             variant_tolerance = 0,
+            # aggiungo campo DataFrame in cui raccolto tutti
+            # i dati di ogni passo della simulazione
+            # cosi' posso chiamare il controller agilmente
+            # dall'esterno 
         ),
         rng
     )
@@ -94,24 +96,23 @@ function model_step!(model::StandardABM)
     happiness!(model)
     update!(model)
     voc!(model)
-    controller.controller_vaccine!(model, 0.83; time=365)
+    # controller.controller_vaccine!(model, 0.83; time=365)
     model.step_count += 1
 end
 
 function happiness!(model::StandardABM)
     for n = 1:model.C
         agents = filter(x -> x.pos == n, [a for a in allagents(model)])
-        dead = length(agents) / model.number_point_of_interest[n]
+        dead = (length(agents) - model.number_point_of_interest[n]) / model.number_point_of_interest[n]
         infects = filter(x -> x.status == :I, agents)
         infects = length(infects) / length(agents)
         recovered = filter(x -> x.status == :R, agents)
         recovered = length(recovered) / length(agents)
-
-        model.happiness[n] = tanh(model.happiness[n] - model.η[n]) +
-                             tanh(recovered - (dead + infects)) / 2
-        if model.step_count % model.γ == 0
-            controller.controller_happiness!(model)
-        end
+        model.happiness[n] =
+            tanh((model.happiness[n] - model.η[n]) + (recovered/3 - (dead + infects)))
+        # if model.step_count % model.γ == 0
+        #     controller.controller_happiness!(model)
+        # end
         model.happiness[n] = model.happiness[n] > 1.0 ? 1.0 :
                              model.happiness[n] < -1.0 ? -1.0 : model.happiness[n]
     end

@@ -1,10 +1,10 @@
 using Agents, DataFrames, Plots, Distributions, Random, Dates, Distributed
 using Statistics: mean
 
-@everywhere include("utils.jl")
-@everywhere include("controller.jl")
-@everywhere include("graph.jl")
-@everywhere include("ode.jl")
+include("utils.jl")
+include("controller.jl")
+include("graph.jl")
+include("ode.jl")
 
 gr()
 
@@ -72,12 +72,16 @@ plot_current_situation("data/OWID/owid-covid-data.csv", "ITA")
 
 function test_system_identification()
     i = 1
-    while true
-        try
-            p = parameters.get_abm_parameters(20, 0.01, 3300)
-            model = graph.init(; p...)
-            data = graph.collect(model; n=100, showprogress=true)
+    maxiter = 100
 
+    p = parameters.get_abm_parameters(20, 0.01, 3300)
+
+    while i ≤ maxiter
+        try
+            # se non runno ad ogni try il modello, se fallisce una volta allora
+            # fallira' sempre. Ogni try e' associato ad un nuovo modello.
+            model = graph.init(; p...)
+            data = graph.collect(model; n=50, showprogress=true)
             d = select(
                 data,
                 [:susceptible_status, :exposed_status, :infected_status, :recovered_status, :dead],
@@ -86,9 +90,10 @@ function test_system_identification()
             eq, (prob, sol) = SysId.system_identification(d; saveplot=true)
             p = plot(plot(prob), plot(sol))
             save_plot(p, "img/system_identification/", "SYSTEM IDENTIFICATION", "pdf")
-            println("successful after $i iterazion")
+            println("iteration $i of $maxiter successful")
             break
         catch
+            println("iteration $i of $maxiter failed")
             i += 1
         end
     end
@@ -98,12 +103,15 @@ test_system_identification()
 
 function test_prediction()
     i = 1
-    while true
+    maxiter = 100
+
+    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
+    n = 50
+    sp = n * 3 # short term prediction
+
+    while i ≤ maxiter
         try
-            abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
             model = graph.init(; abm_parameters...)
-            n = 50
-            sp = n * 3 # short term prediction
             data = graph.collect(model; n=sp, showprogress=true)
             ddata = select(
                 data,
@@ -111,14 +119,14 @@ function test_prediction()
             )
             Xₙ = Array(ddata)
             p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
-            # Eye control
+
             pred = udePredict.ude_prediction(
                 ddata[1:n, :],
                 p_true,
                 round(Int, n * 1.5);
                 lossTitle="LOSS",
                 plotLoss=true,
-                maxiters=2000
+                maxiters=2500
             )
             p = scatter(
                 Array(Xₙ ./ sum(Xₙ[1, :])),
@@ -151,9 +159,10 @@ function test_prediction()
 
             pt = plot(plot(p), plot(p1))
             save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
-            println("successful after $i iterazion")
+            println("iteration $i of $maxiter successful")
             break
         catch
+            println("iteration $i of $maxiter failed")
             i += 1
         end
     end
@@ -193,8 +202,8 @@ function test_ensemble()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     models = [graph.init(; seed=i, abm_parameters...) for i in rand(UInt64, 100)]
     data = graph.ensemble_collect(models; n=1200, showprogress=true, parallel=true)
-    graph.save_dataframe(data, "data/abm/", "ENSEMBLE ABM SEIR NO INTERVENTION")
-    ens_data = dataset.read_dataset("data/abm/ENSEMBLE ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
+    graph.save_dataframe(data, "data/ensemble/", "ENSEMBLE ABM SEIR NO INTERVENTION")
+    ens_data = dataset.read_dataset("data/ensemble/ENSEMBLE ABM SEIR NO INTERVENTION_" * string(today()) * ".csv")
     d = [filter(:ensemble => ==(i), ens_data) for i in unique(ens_data[!, :ensemble])]
     res_seir = DataFrame(
         [

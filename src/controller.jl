@@ -5,10 +5,21 @@ using Statistics: mean
 
 # https://github.com/epirecipes/sir-julia
 
-@everywhere include("utils.jl")
+include("utils.jl")
+include("graph.jl")
 
 # TODO: inserire controller in modello
 # e attivare sse esplicitato
+
+function collect(
+    model::StandardABM,
+    agent_step,
+    model_step,
+    n;
+    showprogress=false
+)
+    adata, mdata = graph.get_observable_data()
+end
 
 function controller_vaccine!(model::StandardABM, avg_effectiveness::Float64; time=365)
     if rand(model.rng) < 1 / time
@@ -17,7 +28,7 @@ function controller_vaccine!(model::StandardABM, avg_effectiveness::Float64; tim
             rand(model.rng, Normal(avg_effectiveness, avg_effectiveness / 10))
         model.ξ = v / model.ω
         model.vaccine_coverage = model.all_variants
-        model.variant_tolerance = round(Int, tanh(model.step / time * avg_effectiveness) * 1024)
+        model.variant_tolerance = round(Int, tanh(model.step_count / time * avg_effectiveness) * 1024)
     end
 end
 
