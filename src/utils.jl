@@ -176,7 +176,7 @@ function ude_prediction(
     seed::Int=1234,
     plotLoss::Bool=false,
     maxiters::Int=5000,
-    optimizers::Vector{2}=[ADMW(), Optim.LBFGS()], # cercare gli optimizer
+    optimizers::Vector=[ADAMW, Optim.LBFGS], # cercare gli optimizer
     activation_function=tanh,
     lossTitle::String="loss",
     verbose::Bool=false
@@ -186,7 +186,7 @@ function ude_prediction(
     X = Array(data)'
     tspan = float.([i for i = 1:size(Array(data), 1)])
     timeshift = float.([i for i = 1:timeshift])
-    if (any(X .<= 0) || any(X .>= 1))
+    if any(X .>= 1)
         X = X ./ sum(data[1, :])
     end
 
@@ -249,14 +249,14 @@ function ude_prediction(
     iterations = round(Int, maxiters * 4 / 5)
     res1 = Optimization.solve(
         optprob,
-        optimizers[1],
+        optimizers[1](),
         callback=callback,
         maxiters=iterations,
     )
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     res2 = Optimization.solve(
         optprob2,
-        optimizers[2],
+        optimizers[2](),
         callback=callback,
         maxiters=maxiters - iterations,
     )
@@ -306,7 +306,7 @@ function symbolic_regression(
     timeshift::Int;
     opt=ADMM,
     λ=exp10.(-3:0.01:3),
-    optimizers::Vector{2}=[ADAMW(), Optim.LBFGS()],
+    optimizers::Vector=[ADAMW, Optim.LBFGS],
     maxiters::Int=10_000,
     seed::Int=1234,
     verbose::Bool=false
@@ -377,7 +377,7 @@ function symbolic_regression(
     iterations = round(Int, maxiters / 5)
     res1 = Optimization.solve(
         optprob,
-        optimizers[1],
+        optimizers[1](),
         callback=callback,
         maxiters=round(Int, iterations * 4 / 5),
     )
@@ -385,7 +385,7 @@ function symbolic_regression(
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     parameter_res = Optimization.solve(
         optprob2,
-        optimizers[2],
+        optimizers[2](),
         callback=callback,
         maxiters=round(Int, iterations / 5),
     )
