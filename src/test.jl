@@ -106,103 +106,165 @@ test_system_identification()
 function test_prediction()
     i = 1
     maxiter = 100
+    plt = []
 
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     complete_run = 1200
     n = 30
+    model = graph.init(; abm_parameters...)
+    data = graph.collect(model; n=complete_run, showprogress=true)
+    ddata, _, _ = split_dataset(data)
+    originalplt = plot(Array(ddata), labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"])
+    Xₙ = Array(ddata)
+    p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
 
-    # find better way to display long run 
-    while i ≤ maxiter
+    while i in 1:4
+        n += (i - 1) * 300
+        s = (i - 1) * 300 + 1
         try
-            model = graph.init(; abm_parameters...)
-            data = graph.collect(model; n=complete_run, showprogress=true)
-            ddata, _, _ = split_dataset(data)
-            Xₙ = Array(ddata)
-            p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
+            pred = udePredict.ude_prediction(
+                ddata[s:n, :],
+                p_true,
+                i * 300;
+                lossTitle="LOSS_TD_$n",
+                plotLoss=true,
+                maxiters=2500,
+                verbose=false
+            )
+            long_time_estimation = udePredict.symbolic_regression(
+                pred[1],
+                pred[2],
+                p_true,
+                i * 300;
+                maxiters=10_000
+            )
 
-            while n < complete_run
-                pred = udePredict.ude_prediction(
-                    ddata[1:n, :],
-                    p_true,
-                    n + 30;
-                    lossTitle="LOSS_TD_$n",
-                    plotLoss=true,
-                    maxiters=2500,
-                    verbose=false
-                )
-                p = scatter(
-                    Array(Xₙ ./ sum(Xₙ[1, :]))[1:n, :],
-                    label=["True S" "True E" "True I" "True R" "True D"],
-                )
-                plot!(
-                    transpose(pred[1]),
-                    xlabel="t",
-                    label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-                    title="NN Approximation",
-                    titlefontsize=10
-                )
-                plot!(
-                    p,
-                    [n - 0.01, n + 0.01],
-                    [0.0, 1.0],
-                    lw=2,
-                    color=:black,
-                    label=nothing,
-                )
-                annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
-                # test symbolic regression
-                long_time_estimation = udePredict.symbolic_regression(
-                    pred[1],
-                    pred[2],
-                    p_true,
-                    n + 30;
-                    maxiters=10_000
-                )
-
-                p1 = scatter(
-                    Array(Xₙ ./ sum(Xₙ[1, :]))[1:n, :],
-                    label=["True S" "True E" "True I" "True R" "True D"],
-                )
-                plot!(
-                    long_time_estimation,
-                    xlabel="t",
-                    label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-                    title="NN + SINDy Approximation",
-                    titlefontsize=10
-                )
-                plot!(
-                    p1,
-                    [n - 0.01, n + 0.01],
-                    [0.0, 1.0],
-                    lw=2,
-                    color=:black,
-                    label=nothing,
-                )
-                annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
-                l = @layout [
-                    grid(1, 1)
-                    grid(1, 1)
-                ]
-                pt = plot(
-                    plot(p),
-                    plot(p1),
-                    layout=l,
-                    plot_title="PREDICTION WITH TRAINING SIZE $n",
-                    plot_titlefontsize=12
-                )
-                save_plot(pt, "img/prediction/", "PREDICTION WITH TRAINING SIZE $n", "pdf")
-                println("prediction with training data size $n successful")
-                n += 30
-            end
-            break
+            p1 = scatter(
+                Array(Xₙ ./ sum(Xₙ[1, :]))[s:n, :],
+                label=["True S" "True E" "True I" "True R" "True D"],
+            )
+            plot!(
+                long_time_estimation,
+                xlabel="t",
+                label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+                title="NN + SINDy Approximation",
+                titlefontsize=10
+            )
+            plot!(
+                p1,
+                [n - 0.01, n + 0.01],
+                [0.0, 1.0],
+                lw=2,
+                color=:black,
+                label=nothing,
+            )
+            annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
+            push!(plt, p1)
+            println("prediction with training data size $n successful")
         catch ex
-            # try to free as much memory as possible after each try
-            GC.gc()
-            println("attempt $i of $maxiter for prediction for training data size $n failed because of $ex")
-            n = 30
-            i += 1
+            println("attempt for prediction failed because of $ex")
         end
     end
+
+    l = @layout [
+        grid(1, 1)
+        grid(ceil(Int, sqrt(length(plt))), floor(Int, sqrt(length(plt))))
+    ]
+    pt = plot(
+        plot(originalplt),
+        plot(plt...),
+        layout=l,
+        plot_title="PREDICTION WITH TRAINING SIZE $n",
+        plot_titlefontsize=12
+    )
+    save_plot(pt, "img/prediction/", "PREDICTION WITH TRAINING SIZE $n", "pdf")
+
+    # # find better way to display long run
+    # while i ≤ maxiter
+    #     try
+    #         while n < complete_run
+    #             pred = udePredict.ude_prediction(
+    #                 ddata[1:n, :],
+    #                 p_true,
+    #                 n + 30;
+    #                 lossTitle="LOSS_TD_$n",
+    #                 plotLoss=true,
+    #                 maxiters=2500,
+    #                 verbose=false
+    #             )
+    #             p = scatter(
+    #                 Array(Xₙ ./ sum(Xₙ[1, :]))[1:n, :],
+    #                 label=["True S" "True E" "True I" "True R" "True D"],
+    #             )
+    #             plot!(
+    #                 transpose(pred[1]),
+    #                 xlabel="t",
+    #                 label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+    #                 title="NN Approximation",
+    #                 titlefontsize=10
+    #             )
+    #             plot!(
+    #                 p,
+    #                 [n - 0.01, n + 0.01],
+    #                 [0.0, 1.0],
+    #                 lw=2,
+    #                 color=:black,
+    #                 label=nothing,
+    #             )
+    #             annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
+    #             # test symbolic regression
+    #             long_time_estimation = udePredict.symbolic_regression(
+    #                 pred[1],
+    #                 pred[2],
+    #                 p_true,
+    #                 n + 30;
+    #                 maxiters=10_000
+    #             )
+
+    #             p1 = scatter(
+    #                 Array(Xₙ ./ sum(Xₙ[1, :]))[1:n, :],
+    #                 label=["True S" "True E" "True I" "True R" "True D"],
+    #             )
+    #             plot!(
+    #                 long_time_estimation,
+    #                 xlabel="t",
+    #                 label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+    #                 title="NN + SINDy Approximation",
+    #                 titlefontsize=10
+    #             )
+    #             plot!(
+    #                 p1,
+    #                 [n - 0.01, n + 0.01],
+    #                 [0.0, 1.0],
+    #                 lw=2,
+    #                 color=:black,
+    #                 label=nothing,
+    #             )
+    #             annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
+    #             l = @layout [
+    #                 grid(1, 1)
+    #                 grid(1, 1)
+    #             ]
+    #             pt = plot(
+    #                 plot(p),
+    #                 plot(p1),
+    #                 layout=l,
+    #                 plot_title="PREDICTION WITH TRAINING SIZE $n",
+    #                 plot_titlefontsize=12
+    #             )
+    #             save_plot(pt, "img/prediction/", "PREDICTION WITH TRAINING SIZE $n", "pdf")
+    #             println("prediction with training data size $n successful")
+    #             n += 30
+    #         end
+    #         break
+    #     catch ex
+    #         # try to free as much memory as possible after each try
+    #         GC.gc()
+    #         println("attempt $i of $maxiter for prediction for training data size $n failed because of $ex")
+    #         n = 30
+    #         i += 1
+    #     end
+    # end
 end
 
 test_prediction()

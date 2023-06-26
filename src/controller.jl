@@ -89,6 +89,8 @@ function controller_voc()
 end
 
 function predict(model::StandardABM, tspan::Int)
+    # predizione a blocchi di tspan. Fornire in pasto solamente tspan (≤ 30)
+    # esempi di training oppure potrebbe incorrere in svariati problemi
     data = select(model.outresults, [:susceptible, :exposed, :infected, :recovered, :dead])
     p_true = [model.R₀, model.γ, model.σ, model.ω, model.δ, model.η, model.ξ]
     (pred, guess) = udePredict.ude_prediction(data, p_true, tspan)
