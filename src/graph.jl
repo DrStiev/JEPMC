@@ -7,6 +7,8 @@ using Distributions, Distributed
 using CSV, Dates
 using UUIDs
 
+include("controller.jl")
+
 @agent Person GraphAgent begin
     status::Symbol
     variant::UUID
@@ -24,7 +26,8 @@ function init(;
     ω::Int,
     ξ::Float64,
     δ::Float64,
-    seed=1234
+    controller::Bool=false,
+    seed::Int=1234
 )
     rng = Xoshiro(seed)
     C = length(number_point_of_interest)
@@ -61,24 +64,24 @@ function init(;
             all_variants = [],
             vaccine_coverage = [],
             variant_tolerance = 0,
-            # aggiungo campo DataFrame in cui raccolto tutti
-            # i dati di ogni passo della simulazione
-            # cosi' posso chiamare il controller agilmente
-            # dall'esterno 
+            outresults = DataFrame(
+                susceptible=Int[],
+                exposed=Int[],
+                infected=Int[],
+                recovered=Int[],
+                dead=Int[],
+                R0=Float64[],
+                active_countermeasures=Float64[],
+                happiness=Float64[],
+            ),
+            controller,
         ),
         rng
     )
 
     variant = uuid1(model.rng)
     for city = 1:C, _ = 1:number_point_of_interest[city]
-        add_agent!(
-            city,
-            model,
-            :S,
-            variant,
-            [variant],
-            0,
-        )
+        add_agent!(city, model, :S, variant, [variant], 0)
     end
     for city = 1:C
         inds = ids_in_position(city, model)
@@ -89,32 +92,64 @@ function init(;
             push!(model.all_variants, agent.variant)
         end
     end
+    push!(
+        model.outresults,
+        [
+            length(filter(x -> x.status == :S, [a for a in allagents(model)])),
+            length(filter(x -> x.status == :E, [a for a in allagents(model)])),
+            length(filter(x -> x.status == :I, [a for a in allagents(model)])),
+            length(filter(x -> x.status == :R, [a for a in allagents(model)])),
+            length([a for a in allagents(model)]) - sum(model.number_point_of_interest),
+            model.R₀,
+            mean(model.η),
+            mean(model.happiness),
+        ],
+    )
     return model
 end
 
 function model_step!(model::StandardABM)
+    if model.controller
+        ns = [controller.get_node_status(model, i) for i = 1:model.C]
+        if any(ns .> 0.0)
+            controller.controller_η!(model, controller.predict(model, 30), 30)
+            controller.controller_vaccine!(model, 0.83; time=365)
+        end
+    end
     happiness!(model)
     update!(model)
     voc!(model)
-    # controller.controller_vaccine!(model, 0.83; time=365)
+    push!(
+        model.outresults,
+        [
+            length(filter(x -> x.status == :S, [a for a in allagents(model)])),
+            length(filter(x -> x.status == :E, [a for a in allagents(model)])),
+            length(filter(x -> x.status == :I, [a for a in allagents(model)])),
+            length(filter(x -> x.status == :R, [a for a in allagents(model)])),
+            length([a for a in allagents(model)]) - sum(model.number_point_of_interest),
+            model.R₀,
+            mean(model.η),
+            mean(model.happiness),
+        ],
+    )
     model.step_count += 1
 end
 
 function happiness!(model::StandardABM)
     for n = 1:model.C
         agents = filter(x -> x.pos == n, [a for a in allagents(model)])
-        dead = (length(agents) - model.number_point_of_interest[n]) / model.number_point_of_interest[n]
+        dead =
+            (length(agents) - model.number_point_of_interest[n]) /
+            model.number_point_of_interest[n]
         infects = filter(x -> x.status == :I, agents)
         infects = length(infects) / length(agents)
         recovered = filter(x -> x.status == :R, agents)
         recovered = length(recovered) / length(agents)
         model.happiness[n] =
-            tanh((model.happiness[n] - model.η[n]) + (recovered/3 - (dead + infects)))
-        # if model.step_count % model.γ == 0
-        #     controller.controller_happiness!(model)
-        # end
-        model.happiness[n] = model.happiness[n] > 1.0 ? 1.0 :
-                             model.happiness[n] < -1.0 ? -1.0 : model.happiness[n]
+            tanh((model.happiness[n] - model.η[n]) + (recovered / 3 - (dead + infects)))
+        model.happiness[n] =
+            model.happiness[n] > 1.0 ? 1.0 :
+            model.happiness[n] < -1.0 ? -1.0 : model.happiness[n]
     end
 end
 
@@ -127,7 +162,7 @@ end
 function voc!(model::StandardABM)
     if rand(model.rng) ≤ 8 * 10E-4
         variant = uuid1(model.rng)
-        model.R₀ = rand(model.rng, Uniform(3.3, 5.7))
+        model.R₀ = rand(model.rng, Uniform(3.3, 5.7)) * 0.48 # rapporto R₀ ABM - ODE
         model.γ = round(Int, rand(model.rng, Normal(model.γ, model.γ / 5)))
         model.σ = round(Int, rand(model.rng, Normal(model.σ)))
         model.ω = round(Int, rand(model.rng, Normal(model.ω, model.ω / 10)))
@@ -176,9 +211,11 @@ function transmit!(agent, model::StandardABM)
     for i = 1:ncontacts
         contact = model[rand(model.rng, ids_in_position(agent, model))]
         if (
-            contact.status == :S ||
-            (contact.status == :R && !(agent.variant ∈ contact.infected_by) &&
-             !coverage(agent.variant, contact.infected_by, contact.variant_tolerance))
+            contact.status == :S || (
+                contact.status == :R &&
+                !(agent.variant ∈ contact.infected_by) &&
+                !coverage(agent.variant, contact.infected_by, contact.variant_tolerance)
+            )
         ) && (rand(model.rng) < model.R₀ / model.γ)
             contact.status = :E
             contact.variant = agent.variant
@@ -270,7 +307,11 @@ function ensemble_collect(
         showprogress=showprogress,
         parallel=parallel
     )
-    return hcat(select(ad, Not([:step, :ensemble])), select(md, Not([:step])), makeunique=true)
+    return hcat(
+        select(ad, Not([:step, :ensemble])),
+        select(md, Not([:step])),
+        makeunique=true,
+    )
 end
 
 function save_dataframe(data::DataFrame, path::String, title="StandardABM")

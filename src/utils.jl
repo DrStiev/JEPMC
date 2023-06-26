@@ -41,7 +41,13 @@ using Random, Distributions, DataFrames
 using LinearAlgebra: diagind
 using DrWatson: @dict
 
-function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=1337)
+function get_abm_parameters(
+    C::Int=20,
+    max_travel_rate::Float64=0.01,
+    avg::Int=3300;
+    seed::Int=1337,
+    controller::Bool=false
+)
     pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     migration_rate = zeros(C, C)
@@ -61,12 +67,26 @@ function get_abm_parameters(C::Int, max_travel_rate::Float64, avg=1000; seed=133
     ω = 280
     ξ = 0.0
     δ = 0.007
-    R₀ = 3.54
+    # per avere un risultato comparabile a quello di un ODE system
+    # R₀ deve essere lo 0.48% del valore di R₀ usato nell'ODE system
+    R₀ = 1.7
 
-    return @dict(number_point_of_interest, migration_rate, R₀, γ, σ, ω, ξ, δ, Rᵢ = 0.99,)
+    return @dict(
+        number_point_of_interest,
+        migration_rate,
+        R₀,
+        γ,
+        σ,
+        ω,
+        ξ,
+        δ,
+        Rᵢ = 0.99,
+        controller,
+        seed
+    )
 end
 
-function get_ode_parameters(C::Int, avg=1000; seed=1337)
+function get_ode_parameters(C::Int=20, avg::Int=3300; seed::Int=1337)
     pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     γ = 14
@@ -83,7 +103,7 @@ function get_ode_parameters(C::Int, avg=1000; seed=1337)
     return [S, E, I, R, D], [R₀, 1 / γ, 1 / σ, 1 / ω, δ], tspan
 end
 
-function save_parameters(params, path, title="parameters")
+function save_parameters(params, path::String, title::String="parameters")
     isdir(path) == false && mkpath(path)
     save(path * title * ".jld2", params)
 end
@@ -101,9 +121,10 @@ function system_identification(
     # λ=exp10.(-3:0.01:3),
     opt=STLSQ,
     λ=exp10.(-5:0.1:-1),
-    maxiters=10_000,
-    seed=1234,
-    saveplot=false
+    maxiters::Int=10_000,
+    seed::Int=1234,
+    saveplot::Bool=false,
+    verbose::Bool=false
 )
     s = sum(data[1, :])
     X = DataFrame(float.(Array(data)'), :auto) ./ s
@@ -132,7 +153,7 @@ function system_identification(
         ),
     )
 
-    ddsol = solve(ddprob, basis, opt, options=options, verbose=false)
+    ddsol = solve(ddprob, basis, opt, options=options, verbose=verbose)
     sys = get_basis(ddsol)
     if saveplot
         return sys, (ddprob, ddsol)
@@ -152,12 +173,16 @@ function ude_prediction(
     data::DataFrame,
     p_true::Array{Float64},
     timeshift::Int;
-    seed=1234,
-    plotLoss=false,
-    maxiters=5000,
+    seed::Int=1234,
+    plotLoss::Bool=false,
+    maxiters::Int=5000,
+    optimizers::Vector{2}=[ADMW(), Optim.LBFGS()], # cercare gli optimizer
     activation_function=tanh,
-    lossTitle="loss"
+    lossTitle::String="loss",
+    verbose::Bool=false
 )
+    # https://docs.sciml.ai/Optimization/stable/optimization_packages/optim/
+    # https://docs.sciml.ai/Optimization/stable/optimization_packages/optimisers/
     X = Array(data)'
     tspan = float.([i for i = 1:size(Array(data), 1)])
     timeshift = float.([i for i = 1:timeshift])
@@ -198,7 +223,7 @@ function ude_prediction(
                 saveat=T,
                 abstol=1e-6,
                 reltol=1e-6,
-                verbose=false,
+                verbose=verbose,
             ),
         )
     end
@@ -211,7 +236,7 @@ function ude_prediction(
     losses = Float64[]
     callback = function (p, l)
         push!(losses, l)
-        if length(losses) % 50 == 0
+        if length(losses) % 100 == 0
             println("Current loss after $(length(losses)) iterations: $(losses[end])")
         end
         return false
@@ -224,15 +249,14 @@ function ude_prediction(
     iterations = round(Int, maxiters * 4 / 5)
     res1 = Optimization.solve(
         optprob,
-        ADAMW(),
-        #ADAM(),
+        optimizers[1],
         callback=callback,
-        maxiters=iterations
+        maxiters=iterations,
     )
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     res2 = Optimization.solve(
         optprob2,
-        Optim.LBFGS(),
+        optimizers[2],
         callback=callback,
         maxiters=maxiters - iterations,
     )
@@ -276,14 +300,16 @@ function ude_prediction(
 end
 
 function symbolic_regression(
-    X̂,
-    Ŷ,
+    X̂::Matrix,
+    Ŷ::Matrix,
     p_true::Vector{Float64},
     timeshift::Int;
     opt=ADMM,
     λ=exp10.(-3:0.01:3),
-    maxiters=10_000,
-    seed=1234
+    optimizers::Vector{2}=[ADAMW(), Optim.LBFGS()],
+    maxiters::Int=10_000,
+    seed::Int=1234,
+    verbose::Bool=false
 )
 
     tspan = (1.0, float(timeshift))
@@ -307,7 +333,7 @@ function symbolic_regression(
         ),
     )
 
-    nn_res = solve(nn_problem, basis, opt, options=options, verbose=false)
+    nn_res = solve(nn_problem, basis, opt, options=options, verbose=verbose)
     nn_eqs = get_basis(nn_res)
 
     function recovered_dynamics!(du, u, p, t, p_true)
@@ -322,9 +348,13 @@ function symbolic_regression(
     end
 
     dynamics!(du, u, p, t) = recovered_dynamics!(du, u, p, t, p_true)
-    estimation_prob =
-        ODEProblem(dynamics!, u0, tspan, get_parameter_values(nn_eqs))
-    estimate = solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=1.0, verbose=false)
+    estimation_prob = ODEProblem(dynamics!, u0, tspan, get_parameter_values(nn_eqs))
+    estimate = solve(
+        estimation_prob,
+        Tsit5(; thread=OrdinaryDiffEq.True()),
+        saveat=1.0,
+        verbose=verbose,
+    )
 
     function parameter_loss(p)
         Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
@@ -334,7 +364,7 @@ function symbolic_regression(
     losses = Float64[]
     callback = function (p, l)
         push!(losses, l)
-        if length(losses) % 50 == 0
+        if length(losses) % 100 == 0
             println("Current loss after $(length(losses)) iterations: $(losses[end])")
         end
         return false
@@ -347,24 +377,26 @@ function symbolic_regression(
     iterations = round(Int, maxiters / 5)
     res1 = Optimization.solve(
         optprob,
-        ADAMW(),
-        #ADAM(),
+        optimizers[1],
         callback=callback,
-        maxiters=round(Int, iterations * 4 / 5)
+        maxiters=round(Int, iterations * 4 / 5),
     )
 
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
-    parameter_res =
-        Optimization.solve(
-            optprob2,
-            Optim.LBFGS(),
-            callback=callback,
-            maxiters=round(Int, iterations / 5)
-        )
+    parameter_res = Optimization.solve(
+        optprob2,
+        optimizers[2],
+        callback=callback,
+        maxiters=round(Int, iterations / 5),
+    )
 
     estimation_prob = ODEProblem(dynamics!, u0, tspan, parameter_res)
-    estimate_long =
-        solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=1.0, verbose=false) # Using higher tolerances here results in exit of julia
+    estimate_long = solve(
+        estimation_prob,
+        Tsit5(; thread=OrdinaryDiffEq.True()),
+        saveat=1.0,
+        verbose=verbose,
+    ) # Using higher tolerances here results in exit of julia
     return estimate_long
 end
 end
