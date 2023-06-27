@@ -88,7 +88,7 @@ function test_system_identification()
             p = plot(
                 plot(prob),
                 plot(sol),
-                plot_title="SUCCESSFUL SYSTEM IDENTIFICATION AFTER $i ITERATIONS",
+                plot_title="SYSTEM IDENTIFICATION ($i ITERATIONS)",
                 plot_titlefontsize=12,
             )
             save_plot(p, "img/system_identification/", "SYSTEM IDENTIFICATION", "pdf")
@@ -104,49 +104,50 @@ end
 test_system_identification()
 
 function test_prediction()
-    i = 1
-    maxiter = 100
     plt = []
 
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-    complete_run = 1200
     n = 30
     model = graph.init(; abm_parameters...)
-    data = graph.collect(model; n=complete_run, showprogress=true)
+    data = graph.collect(model; n=1200, showprogress=true)
     ddata, _, _ = split_dataset(data)
-    originalplt = plot(Array(ddata), labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"])
+    originalplt = plot(Array(ddata), labels=["True S" "True E" "True I" "True R" "True D" "Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"])
     Xₙ = Array(ddata)
     p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
 
-    while i in 1:4
-        n += (i - 1) * 300
-        s = (i - 1) * 300 + 1
+    for i in 1:4
+        n += (i - 1) * 200
+        s = (i - 1) * 200 + 1
         try
             pred = udePredict.ude_prediction(
                 ddata[s:n, :],
                 p_true,
-                i * 300;
-                lossTitle="LOSS_TD_$n",
+                n + 60;
+                lossTitle="LOSS WINDOW $(i)",
                 plotLoss=true,
                 maxiters=2500,
                 verbose=false
             )
-            long_time_estimation = udePredict.symbolic_regression(
-                pred[1],
-                pred[2],
-                p_true,
-                i * 300;
-                maxiters=10_000
-            )
+            # long_time_estimation = udePredict.symbolic_regression(
+            #     pred[1],
+            #     pred[2],
+            #     p_true,
+            #     n + 100;
+            #     maxiters=10_000,
+            #     verbose=false
+            # )
 
             p1 = scatter(
-                Array(Xₙ ./ sum(Xₙ[1, :]))[s:n, :],
-                label=["True S" "True E" "True I" "True R" "True D"],
+                Array(Xₙ ./ sum(Xₙ[1, :]))[s:n+60, :],
+                # label=["True S" "True E" "True I" "True R" "True D"],
+                legend=false
             )
             plot!(
-                long_time_estimation,
+                # long_time_estimation,
+                pred[3],
                 xlabel="t",
-                label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+                # label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+                legend=false,
                 title="NN + SINDy Approximation",
                 titlefontsize=10
             )
@@ -158,11 +159,11 @@ function test_prediction()
                 color=:black,
                 label=nothing,
             )
-            annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
+            annotate!([(n / 3, 1.0, text("Training \nData", :center, :top, 6, :black))])
             push!(plt, p1)
-            println("prediction with training data size $n successful")
+            println("prediction [$i / 4] successful")
         catch ex
-            println("attempt for prediction failed because of $ex")
+            println("attempt for prediction [$i / 4] failed because of $ex")
         end
     end
 
@@ -174,97 +175,10 @@ function test_prediction()
         plot(originalplt),
         plot(plt...),
         layout=l,
-        plot_title="PREDICTION WITH TRAINING SIZE $n",
+        plot_title="PREDICTION OVER DIFFERENT TIME STEP",
         plot_titlefontsize=12
     )
-    save_plot(pt, "img/prediction/", "PREDICTION WITH TRAINING SIZE $n", "pdf")
-
-    # # find better way to display long run
-    # while i ≤ maxiter
-    #     try
-    #         while n < complete_run
-    #             pred = udePredict.ude_prediction(
-    #                 ddata[1:n, :],
-    #                 p_true,
-    #                 n + 30;
-    #                 lossTitle="LOSS_TD_$n",
-    #                 plotLoss=true,
-    #                 maxiters=2500,
-    #                 verbose=false
-    #             )
-    #             p = scatter(
-    #                 Array(Xₙ ./ sum(Xₙ[1, :]))[1:n, :],
-    #                 label=["True S" "True E" "True I" "True R" "True D"],
-    #             )
-    #             plot!(
-    #                 transpose(pred[1]),
-    #                 xlabel="t",
-    #                 label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-    #                 title="NN Approximation",
-    #                 titlefontsize=10
-    #             )
-    #             plot!(
-    #                 p,
-    #                 [n - 0.01, n + 0.01],
-    #                 [0.0, 1.0],
-    #                 lw=2,
-    #                 color=:black,
-    #                 label=nothing,
-    #             )
-    #             annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
-    #             # test symbolic regression
-    #             long_time_estimation = udePredict.symbolic_regression(
-    #                 pred[1],
-    #                 pred[2],
-    #                 p_true,
-    #                 n + 30;
-    #                 maxiters=10_000
-    #             )
-
-    #             p1 = scatter(
-    #                 Array(Xₙ ./ sum(Xₙ[1, :]))[1:n, :],
-    #                 label=["True S" "True E" "True I" "True R" "True D"],
-    #             )
-    #             plot!(
-    #                 long_time_estimation,
-    #                 xlabel="t",
-    #                 label=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-    #                 title="NN + SINDy Approximation",
-    #                 titlefontsize=10
-    #             )
-    #             plot!(
-    #                 p1,
-    #                 [n - 0.01, n + 0.01],
-    #                 [0.0, 1.0],
-    #                 lw=2,
-    #                 color=:black,
-    #                 label=nothing,
-    #             )
-    #             annotate!([(n / 3, 1.0, text("Training Data", :center, :top, :black))])
-    #             l = @layout [
-    #                 grid(1, 1)
-    #                 grid(1, 1)
-    #             ]
-    #             pt = plot(
-    #                 plot(p),
-    #                 plot(p1),
-    #                 layout=l,
-    #                 plot_title="PREDICTION WITH TRAINING SIZE $n",
-    #                 plot_titlefontsize=12
-    #             )
-    #             save_plot(pt, "img/prediction/", "PREDICTION WITH TRAINING SIZE $n", "pdf")
-    #             println("prediction with training data size $n successful")
-    #             n += 30
-    #         end
-    #         break
-    #     catch ex
-    #         # try to free as much memory as possible after each try
-    #         GC.gc()
-    #         println("attempt $i of $maxiter for prediction for training data size $n failed because of $ex")
-    #         n = 30
-    #         i += 1
-    #     end
-    # end
+    save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
 end
 
 test_prediction()
@@ -478,31 +392,47 @@ end
 
 test_ode()
 
+# TODO: single legend
 function test_comparison_abm_ode()
     u, p, t = parameters.get_ode_parameters(20, 3300)
     prob = ode.get_ode_problem(ode.seir!, u, t, p)
+    println("get ode solution")
     sol = ode.get_ode_solution(prob)
     p1 = plot(
         sol,
-        labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        # labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        legend=false,
         title="SEIR Dynamics R₀ = $(p[1])",
     )
 
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
+    println("get abm solution with R₀ = $(abm_parameters[:R₀])")
     data = graph.collect(model; n=1200, showprogress=true)
     x, _, _ = split_dataset(data)
     x = x ./ sum(x[1, :])
-    l = @layout [
-        grid(1, 1)
-        grid(1, 1)
-    ]
     p2 = plot(
         Array(x),
-        labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        # labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        legend=false,
         title="ABM Dynamics R₀ = $(abm_parameters[:R₀])",
     )
-    p = plot(plot(p2), plot(p1), layout=l)
+
+    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
+    abm_parameters[:R₀] = 3.54
+    model = graph.init(; abm_parameters...)
+    println("get abm solution with R₀ = $(abm_parameters[:R₀])")
+    data = graph.collect(model; n=1200, showprogress=true)
+    y, _, _ = split_dataset(data)
+    y = y ./ sum(y[1, :])
+    p3 = plot(
+        Array(y),
+        # labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        legend=false,
+        title="ABM Dynamics R₀ = $(abm_parameters[:R₀])",
+    )
+
+    p = plot(plot(p3), plot(p2), plot(p1), layout=(3, 1))
     save_plot(p, "img/abm/", "ABM-ODE COMPARISON", "pdf")
 end
 

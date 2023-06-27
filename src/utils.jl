@@ -45,7 +45,7 @@ function get_abm_parameters(
     C::Int=20,
     max_travel_rate::Float64=0.01,
     avg::Int=3300;
-    seed::Int=1337,
+    seed::Int=1234,
     controller::Bool=false
 )
     pop = randexp(Xoshiro(seed), C) * avg
@@ -68,8 +68,8 @@ function get_abm_parameters(
     ξ = 0.0
     δ = 0.007
     # per avere un risultato comparabile a quello di un ODE system
-    # R₀ deve essere lo 0.48% del valore di R₀ usato nell'ODE system
-    R₀ = 1.7
+    # R₀ deve essere ≈ 0.5 del valore di R₀ usato nell'ODE system
+    R₀ = 1.8
 
     return @dict(
         number_point_of_interest,
@@ -86,7 +86,7 @@ function get_abm_parameters(
     )
 end
 
-function get_ode_parameters(C::Int=20, avg::Int=3300; seed::Int=1337)
+function get_ode_parameters(C::Int=20, avg::Int=3300; seed::Int=1234)
     pop = randexp(Xoshiro(seed), C) * avg
     number_point_of_interest = map((x) -> round(Int, x), pop)
     γ = 14
@@ -169,6 +169,11 @@ using Optimization, OptimizationOptimisers, OptimizationOptimJL, CUDA
 using LinearAlgebra, Statistics
 using ComponentArrays, Lux, Zygote, StableRNGs, DataFrames, Dates, Plots
 
+function save_plot(plot, path="", title="title", format="png")
+    isdir(path) == false && mkpath(path)
+    savefig(plot, path * title * string(today()) * "." * format)
+end
+
 function ude_prediction(
     data::DataFrame,
     p_true::Array{Float64},
@@ -246,27 +251,22 @@ function ude_prediction(
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
-    iterations = round(Int, maxiters * 4 / 5)
+    iterations = trunc(Int, maxiters / 5)
     res1 = Optimization.solve(
         optprob,
         optimizers[1](),
         callback=callback,
-        maxiters=iterations,
+        maxiters=iterations * 4,
     )
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
     res2 = Optimization.solve(
         optprob2,
         optimizers[2](),
         callback=callback,
-        maxiters=maxiters - iterations,
+        maxiters=iterations,
     )
 
     if plotLoss
-        function save_plot(plot, path="", title="title", format="png")
-            isdir(path) == false && mkpath(path)
-            savefig(plot, path * title * "_" * string(today()) * "." * format)
-        end
-
         pl_losses = plot(
             1:iterations,
             losses[1:iterations],
@@ -288,7 +288,7 @@ function ude_prediction(
             color=:red,
         )
 
-        save_plot(pl_losses, "img/prediction/", lossTitle, "pdf")
+        save_plot(pl_losses, "img/prediction/", lossTitle * "_NN_", "pdf")
     end
 
     p_trained = res2.u
@@ -296,7 +296,23 @@ function ude_prediction(
     ts = first(timeshift):(mean(diff(timeshift))):last(timeshift)
     X̂ = predict(p_trained, X[:, 1], ts)
     Ŷ = U(X̂, p_trained, st)[1]
-    return (X̂, Ŷ)
+    long_pred = nothing
+    try
+        long_pred = symbolic_regression(
+            X̂,
+            Ŷ,
+            p_true,
+            timeshift;
+            optimizers=optimizers,
+            verbose=verbose,
+            plotLoss=plotLoss,
+            lossTitle=lossTitle
+        )
+    catch ex
+        error("$ex")
+    finally
+        return (X̂, Ŷ, long_pred)
+    end
 end
 
 function symbolic_regression(
@@ -309,7 +325,9 @@ function symbolic_regression(
     optimizers::Vector=[ADAMW, Optim.LBFGS],
     maxiters::Int=10_000,
     seed::Int=1234,
-    verbose::Bool=false
+    verbose::Bool=false,
+    plotLoss::Bool=false,
+    lossTitle::String="title"
 )
 
     tspan = (1.0, float(timeshift))
@@ -374,12 +392,12 @@ function symbolic_regression(
     optf = Optimization.OptimizationFunction((x, p) -> parameter_loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, get_parameter_values(nn_eqs))
 
-    iterations = round(Int, maxiters / 5)
+    iterations = trunc(Int, maxiters / 5)
     res1 = Optimization.solve(
         optprob,
         optimizers[1](),
         callback=callback,
-        maxiters=round(Int, iterations * 4 / 5),
+        maxiters=iterations * 4,
     )
 
     optprob2 = Optimization.OptimizationProblem(optf, res1.u)
@@ -387,8 +405,33 @@ function symbolic_regression(
         optprob2,
         optimizers[2](),
         callback=callback,
-        maxiters=round(Int, iterations / 5),
+        maxiters=iterations,
     )
+
+    if plotLoss
+        pl_losses = plot(
+            1:iterations,
+            losses[1:iterations],
+            yaxis=:log10,
+            xaxis=:log10,
+            xlabel="Iterations",
+            ylabel="Loss",
+            label="ADAM",
+            color=:blue,
+        )
+        plot!(
+            iterations+1:length(losses),
+            losses[iterations+1:end],
+            yaxis=:log10,
+            xaxis=:log10,
+            xlabel="Iterations",
+            ylabel="Loss",
+            label="LBFGS",
+            color=:red,
+        )
+
+        save_plot(pl_losses, "img/prediction/", lossTitle * "_SR_", "pdf")
+    end
 
     estimation_prob = ODEProblem(dynamics!, u0, tspan, parameter_res)
     estimate_long = solve(

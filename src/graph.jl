@@ -50,7 +50,7 @@ function init(;
             new_migration_rate = migration_rate,
             step_count = 0,
             R₀,
-            R₀ᵢ = R₀,
+            R₀ᵢ = R₀* 0.5, # 0.5 ≈ rapporto tra ode e abm R₀
             ξ,
             Is,
             C,
@@ -162,7 +162,7 @@ end
 function voc!(model::StandardABM)
     if rand(model.rng) ≤ 8 * 10E-4
         variant = uuid1(model.rng)
-        model.R₀ = rand(model.rng, Uniform(3.3, 5.7)) * 0.48 # rapporto R₀ ABM - ODE
+        model.R₀ = rand(model.rng, Uniform(3.3, 5.7)) * 0.5 # rapporto R₀ ABM - ODE ≈ 0.5
         model.γ = round(Int, rand(model.rng, Normal(model.γ, model.γ / 5)))
         model.σ = round(Int, rand(model.rng, Normal(model.σ)))
         model.ω = round(Int, rand(model.rng, Normal(model.ω, model.ω / 10)))
@@ -281,7 +281,7 @@ function collect(
         mdata=mdata,
         showprogress=showprogress
     )
-    AgentsIO.save_checkpoint("data/abm/checkpoint_" * string(today()) * ".jld2", model)
+    # AgentsIO.save_checkpoint("data/abm/checkpoint_" * string(today()) * ".jld2", model)
     # AgentsIO.load_checkpoint("data/abm/checkpoint_"*string(today())*".jld2")
     return hcat(select(ad, Not([:step])), select(md, Not([:step])))
 end
