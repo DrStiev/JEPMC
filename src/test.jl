@@ -175,7 +175,7 @@ function test_prediction()
             isdir("data/error/") == false && mkpath("data/error/")
             joinpath("data/error/", "log_" * string(today()) * ".txt")
             log = @error "prediction failed" exception = (ex, catch_backtrace())
-            open("data/error/log_"*string(today())*".txt", "a") do io
+            open("data/error/log_" * string(today()) * ".txt", "a") do io
                 write(io, log)
             end
             AgentsIO.save_checkpoint("data/error/abm_checkpoint_" * string(today()) * ".jld2", model)
@@ -399,49 +399,6 @@ end
 
 test_ode()
 
-# TODO: single legend
-function test_comparison_abm_ode()
-    u, p, t = parameters.get_ode_parameters(20, 3300)
-    prob = ode.get_ode_problem(ode.seir!, u, t, p)
-    println("get ode solution")
-    sol = ode.get_ode_solution(prob)
-    p1 = plot(
-        sol,
-        legend=false,
-        title="SEIR Dynamics R₀ = $(p[1])",
-    )
-
-    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-    model = graph.init(; abm_parameters...)
-    println("get abm solution with R₀ = $(abm_parameters[:R₀])")
-    data = graph.collect(model; n=1200, showprogress=true)
-    x, _, _ = split_dataset(data)
-    x = x ./ sum(x[1, :])
-    p2 = plot(
-        Array(x),
-        legend=false,
-        title="ABM Dynamics R₀ = $(abm_parameters[:R₀])",
-    )
-
-    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-    abm_parameters[:R₀] = 3.54
-    model = graph.init(; abm_parameters...)
-    println("get abm solution with R₀ = $(abm_parameters[:R₀])")
-    data = graph.collect(model; n=1200, showprogress=true)
-    y, _, _ = split_dataset(data)
-    y = y ./ sum(y[1, :])
-    p3 = plot(
-        Array(y),
-        legend=false,
-        title="ABM Dynamics R₀ = $(abm_parameters[:R₀])",
-    )
-
-    p = plot(plot(p3), plot(p2), plot(p1), layout=(3, 1))
-    save_plot(p, "img/abm/", "ABM-ODE COMPARISON", "pdf")
-end
-
-test_comparison_abm_ode()
-
 function test_differentR₀_abm()
     plt = []
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
@@ -458,6 +415,7 @@ function test_differentR₀_abm()
             plot(
                 Array(y),
                 legend=false,
+                xlabel="t",
                 title="R₀ = $(round(abm_parameters[:R₀]; digits=2))",
                 titlefontsize=10
             )
@@ -469,3 +427,30 @@ function test_differentR₀_abm()
 end
 
 test_differentR₀_abm()
+
+
+function test_differentR₀_ode()
+    plt = []
+    u, p, t = parameters.get_ode_parameters(20, 3300)
+    x = 1.1:mean(diff([1.1, 5.7]))/15:5.7
+    for i in 1:length(x)
+        println("get ode solution with R₀ = $(round(abm_parameters[:R₀]; digits=2))")
+        p[1] = x[i]
+        prob = ode.get_ode_problem(ode.seir!, u, t, p)
+        sol = ode.get_ode_solution(prob)
+        push!(
+            plt,
+            plot(
+                sol,
+                legend=false,
+                title="R₀ = $(round(p[1]; digits=2))",
+                titlefontsize=10
+            )
+        )
+    end
+
+    p = plot(plot(plt...), layout=(round(Int, sqrt(length(plt))), round(Int, sqrt(length(plt)))))
+    save_plot(p, "img/ode/", "COMPARISON DIFFERENT R₀ VALUE", "pdf")
+end
+
+test_differentR₀_ode()

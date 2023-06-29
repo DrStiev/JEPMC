@@ -131,7 +131,7 @@ function model_step!(model::StandardABM)
     end
     happiness!(model)
     update!(model)
-    voc!(model)
+    # voc!(model)
     model.step_count += 1
 end
 
@@ -207,7 +207,7 @@ end
 
 function transmit!(agent, model::StandardABM)
     agent.status != :I && return
-    ncontacts = rand(model.rng, Poisson(model.R₀))
+    ncontacts = rand(model.rng, Poisson(model.R₀ * 0.77))
     for i = 1:ncontacts
         contact = model[rand(model.rng, ids_in_position(agent, model))]
         if (
