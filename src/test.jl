@@ -105,21 +105,20 @@ test_system_identification()
 
 # TODO: multiplot in diversi time point per osservare come cambiano le predizioni
 function test_prediction()
-    i = 1
-    n = 30
-    while true
-        println("Try $i... ")
+    plt = []
 
-        abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-        model = graph.init(; abm_parameters...)
-        data = graph.collect(model; n=1200, showprogress=true)
-        ddata, _, _ = split_dataset(data)
-        Xₙ = Array(ddata)
-        p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
-
+    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
+    model = graph.init(; abm_parameters...)
+    data = graph.collect(model; n=1200, showprogress=true)
+    ddata, _, _ = split_dataset(data)
+    Xₙ = Array(ddata)
+    p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
+    for i in 1:5
+        s = (i - 1) * 250 + 1
+        n = s + 30
         try
             pred = udePredict.ude_prediction(
-                ddata[70:70+n, :],
+                ddata[s:n, :],
                 p_true,
                 1200;
                 lossTitle="LOSS",
@@ -129,12 +128,14 @@ function test_prediction()
             )
             p1 = plot(
                 Array(Xₙ ./ sum(Xₙ[1, :])),
+                legend=false,
                 labels=["True S" "True E" "True I" "True R" "True D"]
             )
             if isnothing(pred[3])
                 plot!(
                     transpose(pred[1]),
                     xlabel="t",
+                    legend=false,
                     labels=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
                     title="NN Approximation",
                     titlefontsize=10
@@ -143,6 +144,7 @@ function test_prediction()
                 plot!(
                     pred[3],
                     xlabel="t",
+                    legend=false,
                     labels=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
                     title="NN + SINDy Approximation",
                     titlefontsize=10
@@ -150,7 +152,7 @@ function test_prediction()
             end
             plot!(
                 p1,
-                [70 - 0.01, 70 + 0.01],
+                [s - 0.01, s + 0.01],
                 [0.0, 1.0],
                 lw=2,
                 color=:black,
@@ -158,28 +160,31 @@ function test_prediction()
             )
             plot!(
                 p1,
-                [70 + n - 0.01, 70 + n + 0.01],
+                [n - 0.01, n + 0.01],
                 [0.0, 1.0],
                 lw=2,
                 color=:black,
                 label=nothing,
             )
-            annotate!([((70 * 2 + n) / 2, 1.2, text("Training \nData", 6, :center, :top, :black, "Helvetica"))])
+            annotate!([(n / 2, 1.2, text("Training \nData", 6, :center, :top, :black, "Helvetica"))])
 
-            pt = plot(
-                plot(p1),
-                plot_title="PREDICTION RESULTS",
-                plot_titlefontsize=12
-            )
-            save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
-
-            println("Success!")
+            push!(plt, p1)
+            println("Success! [$i/6]")
             break
         catch ex
-            println("Failed because of $ex")
+            isdir("data/error/") == false && mkpath("data/error/")
+            joinpath("data/error/", "log_" * string(today()) * ".txt")
+            log = @error "prediction failed" exception = (ex, catch_backtrace())
+            open("data/error/log_"*string(today())*".txt", "a") do io
+                write(io, log)
+            end
+            AgentsIO.save_checkpoint("data/error/abm_checkpoint_" * string(today()) * ".jld2", model)
+            graph.save_dataframe(data, "data/error/", "abm_dataframe")
             i += 1
         end
     end
+    pt = plot(plt..., layout(3, 2), plot_title="PREDICTION RESULTS", plot_titlefontsize=12)
+    save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
 end
 
 test_prediction()
@@ -453,7 +458,6 @@ function test_differentR₀_abm()
             plot(
                 Array(y),
                 legend=false,
-                xlabel="t",
                 title="R₀ = $(round(abm_parameters[:R₀]; digits=2))",
                 titlefontsize=10
             )

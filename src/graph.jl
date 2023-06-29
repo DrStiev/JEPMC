@@ -131,7 +131,7 @@ function model_step!(model::StandardABM)
     end
     happiness!(model)
     update!(model)
-    # voc!(model)
+    voc!(model)
     model.step_count += 1
 end
 

@@ -308,7 +308,12 @@ function ude_prediction(
             maxiters=maxiters * 2
         )
     catch ex
-        println("Symbolic Regression failed because of: $ex")
+        isdir("data/error/") == false && mkpath("data/error/")
+        joinpath("data/error/", "log_" * string(today()) * ".txt")
+        log = @error "Symbolic regression failed" exception = (ex, catch_backtrace())
+        open("data/error/log_" * string(today()) * ".txt", "a") do io
+            write(io, log)
+        end
     finally
         return (X̂, Ŷ, long_pred)
     end
