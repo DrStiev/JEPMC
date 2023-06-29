@@ -50,7 +50,7 @@ function init(;
             new_migration_rate = migration_rate,
             step_count = 0,
             R₀,
-            R₀ᵢ = R₀* 0.5, # 0.5 ≈ rapporto tra ode e abm R₀
+            R₀ᵢ = R₀,
             ξ,
             Is,
             C,
@@ -110,28 +110,28 @@ end
 
 function model_step!(model::StandardABM)
     if model.controller
+        push!(
+            model.outresults,
+            [
+                length(filter(x -> x.status == :S, [a for a in allagents(model)])),
+                length(filter(x -> x.status == :E, [a for a in allagents(model)])),
+                length(filter(x -> x.status == :I, [a for a in allagents(model)])),
+                length(filter(x -> x.status == :R, [a for a in allagents(model)])),
+                length([a for a in allagents(model)]) - sum(model.number_point_of_interest),
+                model.R₀,
+                mean(model.η),
+                mean(model.happiness),
+            ],
+        )
         ns = [controller.get_node_status(model, i) for i = 1:model.C]
         if any(ns .> 0.0)
-            controller.controller_η!(model, controller.predict(model, 30), 30)
+            controller.controller_η!(model, controller.predict(model, 30), 30; vaccine=model.ξ > 0.0)
             controller.controller_vaccine!(model, 0.83; time=365)
         end
     end
     happiness!(model)
     update!(model)
-    voc!(model)
-    push!(
-        model.outresults,
-        [
-            length(filter(x -> x.status == :S, [a for a in allagents(model)])),
-            length(filter(x -> x.status == :E, [a for a in allagents(model)])),
-            length(filter(x -> x.status == :I, [a for a in allagents(model)])),
-            length(filter(x -> x.status == :R, [a for a in allagents(model)])),
-            length([a for a in allagents(model)]) - sum(model.number_point_of_interest),
-            model.R₀,
-            mean(model.η),
-            mean(model.happiness),
-        ],
-    )
+    # voc!(model)
     model.step_count += 1
 end
 
@@ -162,7 +162,7 @@ end
 function voc!(model::StandardABM)
     if rand(model.rng) ≤ 8 * 10E-4
         variant = uuid1(model.rng)
-        model.R₀ = rand(model.rng, Uniform(3.3, 5.7)) * 0.5 # rapporto R₀ ABM - ODE ≈ 0.5
+        model.R₀ = rand(model.rng, Uniform(3.3, 5.7))
         model.γ = round(Int, rand(model.rng, Normal(model.γ, model.γ / 5)))
         model.σ = round(Int, rand(model.rng, Normal(model.σ)))
         model.ω = round(Int, rand(model.rng, Normal(model.ω, model.ω / 10)))

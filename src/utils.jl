@@ -69,7 +69,7 @@ function get_abm_parameters(
     δ = 0.007
     # per avere un risultato comparabile a quello di un ODE system
     # R₀ deve essere ≈ 0.5 del valore di R₀ usato nell'ODE system
-    R₀ = 1.8
+    R₀ = 3.54
 
     return @dict(
         number_point_of_interest,
@@ -117,8 +117,6 @@ using Random, DataDrivenSparse, LinearAlgebra, DataFrames, Plots
 
 function system_identification(
     data::DataFrame;
-    # opt=ADMM,
-    # λ=exp10.(-3:0.01:3),
     opt=STLSQ,
     λ=exp10.(-5:0.1:-1),
     maxiters::Int=10_000,
@@ -177,7 +175,7 @@ end
 function ude_prediction(
     data::DataFrame,
     p_true::Array{Float64},
-    timeshift::Int;
+    tshift::Int;
     seed::Int=1234,
     plotLoss::Bool=false,
     maxiters::Int=5000,
@@ -190,7 +188,7 @@ function ude_prediction(
     # https://docs.sciml.ai/Optimization/stable/optimization_packages/optimisers/
     X = Array(data)'
     tspan = float.([i for i = 1:size(Array(data), 1)])
-    timeshift = float.([i for i = 1:timeshift])
+    timeshift = float.([i for i = 1:tshift])
     if any(X .>= 1)
         X = X ./ sum(data[1, :])
     end
@@ -302,14 +300,15 @@ function ude_prediction(
             X̂,
             Ŷ,
             p_true,
-            timeshift;
+            tshift;
             optimizers=optimizers,
             verbose=verbose,
             plotLoss=plotLoss,
-            lossTitle=lossTitle
+            lossTitle=lossTitle,
+            maxiters=maxiters * 2
         )
     catch ex
-        error("$ex")
+        println("Symbolic Regression failed because of: $ex")
     finally
         return (X̂, Ŷ, long_pred)
     end

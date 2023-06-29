@@ -88,13 +88,25 @@ function controller_voc()
     # idea molto ambiziosa
 end
 
-function predict(model::StandardABM, tspan::Int)
-    # predizione a blocchi di tspan. Fornire in pasto solamente tspan (≤ 30)
-    # esempi di training oppure potrebbe incorrere in svariati problemi
+function predict(model::StandardABM, tspan::Int; traindata_size::Int=30)
     data = select(model.outresults, [:susceptible, :exposed, :infected, :recovered, :dead])
     p_true = [model.R₀, model.γ, model.σ, model.ω, model.δ, model.η, model.ξ]
-    (pred, guess) = udePredict.ude_prediction(data, p_true, tspan)
-    long_pred = udePredict.symbolic_regression(pred, guess, p_true, tspan)
-    return long_pred
+    l = length(data[:, 1])
+    l == 0 && return nothing
+    traindata_size = min(l, traindata_size)
+    res = nothing
+    try
+        res = udePredict.ude_prediction(data[:, l-trainingdata_size+1:l], p_true, tspan)
+    catch ex
+        println("UDE prediction failed because of: $ex")
+    finally
+        if isnothing(res)
+            return nothing
+        elseif isnothing(res[3])
+            return res[1]
+        else
+            return res[3]
+        end
+    end
 end
 end
