@@ -16,6 +16,10 @@ include("controller.jl")
     variant_tolerance::Int
 end
 
+# funzione per adattare R₀ del modello ODE al funzionamento
+# bizzarro del modello ad agente. Vedi grafici in img/abm, img/ode, img/abm_ode
+adapt_R₀!(x) = return 0.8965098523656243 + 0.3034619450278763 * x - 0.006097194691341035 * x^2
+
 function init(;
     number_point_of_interest::Vector{Int},
     migration_rate::Array,
@@ -49,7 +53,7 @@ function init(;
             migration_rate,
             new_migration_rate = migration_rate,
             step_count = 0,
-            R₀,
+            R₀ = adapt_R₀!(R₀),
             R₀ᵢ = R₀,
             ξ,
             Is,
@@ -73,6 +77,7 @@ function init(;
                 R0=Float64[],
                 active_countermeasures=Float64[],
                 happiness=Float64[],
+                node=Int[],
             ),
             controller,
         ),
@@ -92,38 +97,46 @@ function init(;
             push!(model.all_variants, agent.variant)
         end
     end
-    push!(
-        model.outresults,
-        [
-            length(filter(x -> x.status == :S, [a for a in allagents(model)])),
-            length(filter(x -> x.status == :E, [a for a in allagents(model)])),
-            length(filter(x -> x.status == :I, [a for a in allagents(model)])),
-            length(filter(x -> x.status == :R, [a for a in allagents(model)])),
-            length([a for a in allagents(model)]) - sum(model.number_point_of_interest),
-            model.R₀,
-            mean(model.η),
-            mean(model.happiness),
-        ],
-    )
+    for i = 1:C
+        node = filter(x -> x.pos == i, [a for a in allagents(model)])
+        push!(
+            model.outresults,
+            [
+                length(filter(x -> x.status == :S, node)),
+                length(filter(x -> x.status == :E, node)),
+                length(filter(x -> x.status == :I, node)),
+                length(filter(x -> x.status == :R, node)),
+                length(node) - sum(model.number_point_of_interest[i]),
+                model.R₀,
+                model.η[i],
+                model.happiness[i],
+                i,
+            ],
+        )
+    end
     return model
 end
 
 function model_step!(model::StandardABM)
+    ns = [controller.get_node_status(model, i) for i = 1:model.C]
     if model.controller
-        push!(
-            model.outresults,
-            [
-                length(filter(x -> x.status == :S, [a for a in allagents(model)])),
-                length(filter(x -> x.status == :E, [a for a in allagents(model)])),
-                length(filter(x -> x.status == :I, [a for a in allagents(model)])),
-                length(filter(x -> x.status == :R, [a for a in allagents(model)])),
-                length([a for a in allagents(model)]) - sum(model.number_point_of_interest),
-                model.R₀,
-                mean(model.η),
-                mean(model.happiness),
-            ],
-        )
-        ns = [controller.get_node_status(model, i) for i = 1:model.C]
+        for i = 1:model.C
+            node = filter(x -> x.pos == i, [a for a in allagents(model)])
+            push!(
+                model.outresults,
+                [
+                    length(filter(x -> x.status == :S, node)),
+                    length(filter(x -> x.status == :E, node)),
+                    length(filter(x -> x.status == :I, node)),
+                    length(filter(x -> x.status == :R, node)),
+                    length(node) - sum(model.number_point_of_interest[i]),
+                    model.R₀,
+                    model.η[i],
+                    model.happiness[i],
+                    i,
+                ],
+            )
+        end
         if any(ns .> 0.0)
             controller.controller_η!(model, controller.predict(model, 30), 30; vaccine=model.ξ > 0.0)
             controller.controller_vaccine!(model, 0.83; time=365)
@@ -162,7 +175,7 @@ end
 function voc!(model::StandardABM)
     if rand(model.rng) ≤ 8 * 10E-4
         variant = uuid1(model.rng)
-        model.R₀ = rand(model.rng, Uniform(3.3, 5.7))
+        model.R₀ = adapt_R₀!(rand(model.rng, Uniform(3.3, 5.7)))
         model.γ = round(Int, rand(model.rng, Normal(model.γ, model.γ / 5)))
         model.σ = round(Int, rand(model.rng, Normal(model.σ)))
         model.ω = round(Int, rand(model.rng, Normal(model.ω, model.ω / 10)))
@@ -207,7 +220,7 @@ end
 
 function transmit!(agent, model::StandardABM)
     agent.status != :I && return
-    ncontacts = rand(model.rng, Poisson(model.R₀ * 0.77))
+    ncontacts = rand(model.rng, Poisson(model.R₀))
     for i = 1:ncontacts
         contact = model[rand(model.rng, ids_in_position(agent, model))]
         if (

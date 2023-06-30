@@ -1,4 +1,4 @@
-using Agents, DataFrames, Plots, Distributions, Random, Dates, Distributed
+using Agents, DataFrames, Plots, Distributions, Random, Dates, Distributed, Polynomials
 using Statistics: mean
 
 @everywhere include("utils.jl")
@@ -123,7 +123,7 @@ function test_prediction()
                 1200;
                 lossTitle="LOSS",
                 plotLoss=true,
-                maxiters=2500,
+                maxiters=1000,
                 verbose=false
             )
             p1 = plot(
@@ -433,9 +433,10 @@ function test_differentR₀_ode()
     plt = []
     u, p, t = parameters.get_ode_parameters(20, 3300)
     x = 1.1:mean(diff([1.1, 5.7]))/15:5.7
+    # x = 5.7:mean(diff([5.7, 18.3]))/15:18.3
     for i in 1:length(x)
-        println("get ode solution with R₀ = $(round(abm_parameters[:R₀]; digits=2))")
         p[1] = x[i]
+        println("get ode solution with R₀ = $(round(p[1]; digits=2))")
         prob = ode.get_ode_problem(ode.seir!, u, t, p)
         sol = ode.get_ode_solution(prob)
         push!(
@@ -454,3 +455,28 @@ function test_differentR₀_ode()
 end
 
 test_differentR₀_ode()
+
+function test_fit_abm_ode()
+    a = [1.1, 1.41, 1.71, 2.02, 2.63, 3.55, 4.47]
+    b = [1.1, 1.71, 2.63, 4.17, 5.7, 12.42, 18.3]
+    plt = scatter(b, a, xlabel="ODE R₀", ylabel="ABM R₀", title="ABM vs ODE R₀")
+
+    f = Polynomials.fit(b, a, 1)
+    plot!(f, extrema(b)..., label="Linear Fit")
+    f(1.41)
+
+    f1 = Polynomials.fit(b, a, 2)
+    plot!(f1, extrema(b)..., label="Quadratic Fit")
+    f1(1.41)
+
+    # fn = Polynomials.fit(b, a)
+    # plot!(fn, extrema(b)..., label="Nth-Grade Fit")
+    # fn(1.41)
+
+    save_plot(plt, "img/abm_ode/", "ABM vs ODE R₀", "pdf")
+end
+
+test_fit_abm_ode()
+
+abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
+model = graph.init(; abm_parameters...)
