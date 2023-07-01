@@ -12,7 +12,7 @@ function save_dataframe(data::DataFrame, path::String, title="StandardABM")
     CSV.write(path * title * "_" * string(today()) * ".csv", data)
 end
 
-function controller_vaccine!(
+function vaccine!(
     model::StandardABM,
     avg_effectiveness::Float64=0.83;
     time::Int=365
@@ -30,7 +30,7 @@ end
 
 slope(pred) = tanh(pred[3, end] - pred[3, 1]) + tanh(pred[5, end] - pred[5, 1])
 
-function get_node_status(model::StandardABM, pos::Int; mininfects::Int=1)
+function get_node_status(model::StandardABM, pos::Int; mininfects::Int=2)
     agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
     infects = filter(x -> x.status == :I, agents)
     if length(infects) > mininfects
@@ -40,20 +40,10 @@ function get_node_status(model::StandardABM, pos::Int; mininfects::Int=1)
     end
 end
 
-function apply_lockdown!(model::StandardABM, node::Int, restriction::Float64)
-    model.new_migration_rate = model.migration_rate
-    model.new_migration_rate[node, :] -= model.migration_rate[node, :] * restriction
-    model.new_migration_rate[:, node] -= model.migration_rate[:, node] * restriction
-    model.new_migration_rate[node, node] +=
-        (1 - model.migration_rate[node, node]) * restriction
-    model.new_migration_rate[model.new_migration_rate.<0.0] .= 0.0
-    model.new_migration_rate[model.new_migration_rate.>1.0] .= 1.0
-end
-
-
-function controller_η!(
+function local_controller!(
     model::StandardABM,
     data::Matrix,
+    node::Int,
     step::Int;
     mininfects::Int=1,
     vaccine::Bool=false,
@@ -61,25 +51,36 @@ function controller_η!(
 )
 
     rate = slope(data[:, (end-step)+1:end])
-    for i = 1:length(model.η)
-        if get_node_status(model, i; mininfects) > 0.0
-            if rate > 0.0
-                model.η[i] = rate ≥ model.η[i] ? rate : model.η[i]
-                # TODO: aggiungere gestione lockdown e gestione riapertura
-                # if rate > 0.2
-                #     apply_lockdown!(model, i, rate)
-                # end
-            else
-                model.η[i] *= (1.0 + rate)
-            end
-            if check_happiness
-                controller_happiness!(model)
-            end
+    if rate > 0.0
+        model.η[node] = rate ≥ model.η[node] ? rate : model.η[node]
+    else
+        model.η[node] *= (1.0 + rate)
+    end
+    if check_happiness
+        happiness!(model)
+    end
+end
+
+function global_controller!(
+    model::StandardABM,
+    ns::Vector{Float64},
+    restriction::Vector{Float64}
+)
+    appo = ns .> 0.0
+    for i in 1:length(appo)
+        if appo[i] == true
+            model.migration_rate[i, :] -= model.migration_rate[i, :] * restriction[i]
+            model.migration_rate[:, i] -= model.migration_rate[:, i] * restriction[i]
+            model.migration_rate[i, i] +=
+                (1 - model.migration_rate[i, i]) * restriction[i]
+            model.migration_rate[model.migration_rate.<0.0] .= 0.0
+            model.migration_rate[model.migration_rate.>1.0] .= 1.0
         end
     end
 end
 
-function controller_happiness!(model::StandardABM)
+
+function happiness!(model::StandardABM)
     for i = 1:length(model.η)
         h = model.happiness[i]
         model.η[i] =
@@ -88,7 +89,7 @@ function controller_happiness!(model::StandardABM)
     end
 end
 
-function controller_voc()
+function voc()
     # prova a predire quando uscira' la nuova variante
     # idea molto ambiziosa
 end
@@ -120,5 +121,37 @@ function predict(model::StandardABM, tspan::Int; traindata_size::Int=30)
             return res[3]
         end
     end
+end
+
+function predict(model::StandardABM, nodes::Vector{Float64}, tspan::Int; traindata_size::Int=30)
+    pred = []
+    for n in 1:length(nodes)
+        if nodes[n] ≠ 0.0
+            p_true = [model.R₀, model.γ, model.σ, model.ω, model.δ, model.η[n], model.ξ]
+            df = filter(:node => ==(n), model.outresults)
+            data = select(df, [:susceptible, :exposed, :infected, :recovered, :dead])
+            l = length(data[:, 1])
+            l == 0 && return nothing
+            traindata_size = min(l, traindata_size)
+            res = nothing
+            try
+                res = udePredict.ude_prediction(data[:, l-trainingdata_size+1:l], p_true, tspan)
+            catch ex
+                isdir("data/error/") == false && mkpath("data/error/")
+                joinpath("data/error/", "log_" * string(today()) * ".txt")
+                log = @error "prediction failed" exception = (ex, catch_backtrace())
+                open("data/error/log_" * string(today()) * ".txt", "a") do io
+                    write(io, log)
+                end
+                AgentsIO.save_checkpoint("data/error/abm_checkpoint_" * string(today()) * ".jld2", model)
+                save_dataframe(data, "data/error/", "abm_dataframe")
+            finally
+                push!(pred, res)
+            end
+        else
+            push!(pred, nothing)
+        end
+    end
+    return pred
 end
 end

@@ -428,7 +428,6 @@ end
 
 test_differentR₀_abm()
 
-
 function test_differentR₀_ode()
     plt = []
     u, p, t = parameters.get_ode_parameters(20, 3300)
@@ -457,26 +456,68 @@ end
 test_differentR₀_ode()
 
 function test_fit_abm_ode()
-    a = [1.1, 1.41, 1.71, 2.02, 2.63, 3.55, 4.47]
-    b = [1.1, 1.71, 2.63, 4.17, 5.7, 12.42, 18.3]
-    plt = scatter(b, a, xlabel="ODE R₀", ylabel="ABM R₀", title="ABM vs ODE R₀")
+    u, p, t = parameters.get_ode_parameters(20, 3300)
+    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
 
-    f = Polynomials.fit(b, a, 1)
-    plot!(f, extrema(b)..., label="Linear Fit")
-    f(1.41)
+    x = 1.1:mean(diff([1.1, 5.7]))/15:5.7
+    y = 1.1:mean(diff([1.1, 18.3]))/31:18.3
 
-    f1 = Polynomials.fit(b, a, 2)
-    plot!(f1, extrema(b)..., label="Quadratic Fit")
-    f1(1.41)
+    res_abm = []
+    res_ode = []
+    res_a = []
+    res_b = []
 
-    # fn = Polynomials.fit(b, a)
-    # plot!(fn, extrema(b)..., label="Nth-Grade Fit")
-    # fn(1.41)
+    for i in 1:length(y)
+        p[1] = y[i]
+        println("get ode solution with R₀ = $(round(p[1]; digits=2))")
+        prob = ode.get_ode_problem(ode.seir!, u, t, p)
+        sol = ode.get_ode_solution(prob)
+        push!(
+            res_ode,
+            sol
+        )
+    end
+
+    for i in 1:length(x)
+        abm_parameters[:R₀] = x[i]
+        model = graph.init(; abm_parameters...)
+        println("get abm solution with R₀ = $(round(abm_parameters[:R₀]; digits=2))")
+        data = graph.collect(model; n=1199, showprogress=true)
+        ddata, _, _ = split_dataset(data)
+        ddata = ddata ./ sum(ddata[1, :])
+        push!(
+            res_abm,
+            Array(ddata)'
+        )
+    end
+    
+    for i in 1:length(res_abm)
+        temp = []
+        for j in 1:length(res_ode)
+            push!(temp, mean(abs2, res_abm[i] .- res_ode[j]))
+        end
+        push!(res_a, x[i])
+        push!(res_b, y[findmin(temp)[2]])
+    end
+    res_a = float.(res_a)
+    res_b = float.(res_b)
+    plt = scatter(res_b, res_a, xlabel="ODE R₀", ylabel="ABM R₀", title="ABM vs ODE R₀", label="R₀")
+
+    f = Polynomials.fit(res_b, res_a, 1)
+    plot!(f, extrema(res_b)..., label="Linear Fit")
+
+    f1 = Polynomials.fit(res_b, res_a, 2)
+    plot!(f1, extrema(res_b)..., label="Quadratic Fit")
+
+    fn = Polynomials.fit(res_b, res_a)
+    plot!(fn, extrema(res_b)..., label="Nth-Grade Fit")
 
     save_plot(plt, "img/abm_ode/", "ABM vs ODE R₀", "pdf")
+    return (f, f1, fn)
 end
 
-test_fit_abm_ode()
-
-abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-model = graph.init(; abm_parameters...)
+func = test_fit_abm_ode()
+func[1], func[2], func[3]
+func[1]
+func[2](3.54)
+func[3](3.54)

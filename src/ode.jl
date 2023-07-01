@@ -36,7 +36,7 @@ function Fseir!(du, u, p, t)
 end
 
 get_ode_problem(F, u, tspan, p) = ODEProblem(F, u, tspan, p)
-get_ode_solution(prob; solver=Tsit5) = solve(prob, solver())
+get_ode_solution(prob; solver=Tsit5, saveat=1) = solve(prob, solver(), saveat=saveat)
 get_ode_integrator(prob; solver=Tsit5) =
     OrdinaryDiffEq.init(prob, solver(); advance_to_stop=true)
 
@@ -66,9 +66,9 @@ end
 function affect_voc!(integrator)
     println("voc")
     integrator.p[1] = rand(rng, Uniform(3.3, 5.7))
-    integrator.p[2] = abs(rand(rng, Normal(integrator.p[2], integrator.p[2] * 5)))
+    integrator.p[2] = abs(rand(rng, Normal(integrator.p[2], integrator.p[2] / 5)))
     integrator.p[3] = abs(rand(rng, Normal(integrator.p[3], integrator.p[3])))
-    integrator.p[4] = abs(rand(rng, Normal(integrator.p[4], integrator.p[4] * 10)))
+    integrator.p[4] = abs(rand(rng, Normal(integrator.p[4], integrator.p[4] / 10)))
     integrator.p[5] = abs(rand(rng, Normal(integrator.p[5], integrator.p[5] / 10)))
 end
 

@@ -18,7 +18,7 @@ end
 
 # funzione per adattare R₀ del modello ODE al funzionamento
 # bizzarro del modello ad agente. Vedi grafici in img/abm, img/ode, img/abm_ode
-adapt_R₀!(x) = return 0.8965098523656243 + 0.3034619450278763 * x - 0.006097194691341035 * x^2
+adapt_R₀!(x) = 1.1730158534328545 + 0.21570538523224972 * x
 
 function init(;
     number_point_of_interest::Vector{Int},
@@ -118,34 +118,46 @@ function init(;
 end
 
 function model_step!(model::StandardABM)
-    ns = [controller.get_node_status(model, i) for i = 1:model.C]
     if model.controller
-        for i = 1:model.C
-            node = filter(x -> x.pos == i, [a for a in allagents(model)])
-            push!(
-                model.outresults,
-                [
-                    length(filter(x -> x.status == :S, node)),
-                    length(filter(x -> x.status == :E, node)),
-                    length(filter(x -> x.status == :I, node)),
-                    length(filter(x -> x.status == :R, node)),
-                    length(node) - sum(model.number_point_of_interest[i]),
-                    model.R₀,
-                    model.η[i],
-                    model.happiness[i],
-                    i,
-                ],
-            )
-        end
-        if any(ns .> 0.0)
-            controller.controller_η!(model, controller.predict(model, 30), 30; vaccine=model.ξ > 0.0)
-            controller.controller_vaccine!(model, 0.83; time=365)
-        end
+        collect!(model)
+        ns = [controller.get_node_status(model, i) for i = 1:model.C]
+        controller!(model, ns)
     end
     happiness!(model)
     update!(model)
     # voc!(model)
     model.step_count += 1
+end
+
+function collect!(model::StandardABM)
+    for i = 1:model.C
+        node = filter(x -> x.pos == i, [a for a in allagents(model)])
+        push!(
+            model.outresults,
+            [
+                length(filter(x -> x.status == :S, node)),
+                length(filter(x -> x.status == :E, node)),
+                length(filter(x -> x.status == :I, node)),
+                length(filter(x -> x.status == :R, node)),
+                length(node) - sum(model.number_point_of_interest[i]),
+                model.R₀,
+                model.η[i],
+                model.happiness[i],
+                i,
+            ],
+        )
+    end
+end
+
+function controller!(model::StandardABM, ns::Vector{Float64})
+    res = controller.predict(model, ns, 30)
+    for i in 1:length(res)
+        if !isnothing(res[i])
+            controller.local_controller!(model, res[i], i, 30; vaccine=model.ξ > 0.0)
+            controller.vaccine!(model, 0.83; time=365)
+        end
+    end
+    controller.global_controller!(model, ns, model.η)
 end
 
 function happiness!(model::StandardABM)
