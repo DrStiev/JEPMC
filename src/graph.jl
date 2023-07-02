@@ -18,7 +18,7 @@ end
 
 # funzione per adattare R₀ del modello ODE al funzionamento
 # bizzarro del modello ad agente. Vedi grafici in img/abm, img/ode, img/abm_ode
-adapt_R₀!(x) = 1.1730158534328545 + 0.21570538523224972 * x
+adapt_R₀!(x) = return 1.1730158534328545 + 0.21570538523224972 * x
 
 function init(;
     number_point_of_interest::Vector{Int},
@@ -224,7 +224,7 @@ end
 
 function migrate!(agent, model::StandardABM)
     pid = agent.pos
-    m = sample(1:(model.C), Weights(model.new_migration_rate[pid, :]))
+    m = sample(1:(model.C), Weights(model.migration_rate[pid, :]))
     if m ≠ pid
         move_agent!(agent, m, model)
     end
