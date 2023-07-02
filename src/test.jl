@@ -121,7 +121,7 @@ function test_prediction()
                 ddata[s:n, :],
                 p_true,
                 1200;
-                lossTitle="LOSS",
+                lossTitle="LOSS_$i",
                 plotLoss=true,
                 maxiters=1000,
                 verbose=false
@@ -166,24 +166,23 @@ function test_prediction()
                 color=:black,
                 label=nothing,
             )
-            annotate!([(n / 2, 1.2, text("Training \nData", 6, :center, :top, :black, "Helvetica"))])
+            annotate!([(n / 2, 1.0, text("Training \nData", 6, :center, :top, :black, "Helvetica"))])
 
             push!(plt, p1)
-            println("Success! [$i/6]")
-            break
+            println("Success! [$i/5]")
         catch ex
             isdir("data/error/") == false && mkpath("data/error/")
             joinpath("data/error/", "log_" * string(today()) * ".txt")
-            log = @error "prediction failed" exception = (ex, catch_backtrace())
+            @error "prediction failed" exception = (ex, catch_backtrace())
             open("data/error/log_" * string(today()) * ".txt", "a") do io
-                write(io, log)
+                write(io, catch_backtrace())
             end
             AgentsIO.save_checkpoint("data/error/abm_checkpoint_" * string(today()) * ".jld2", model)
             graph.save_dataframe(data, "data/error/", "abm_dataframe")
             i += 1
         end
     end
-    pt = plot(plt..., layout(3, 2), plot_title="PREDICTION RESULTS", plot_titlefontsize=12)
+    pt = plot(plot(plt...), layout=(3, 2), plot_title="PREDICTION RESULTS", plot_titlefontsize=12)
     save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
 end
 
@@ -490,7 +489,7 @@ function test_fit_abm_ode()
             Array(ddata)'
         )
     end
-    
+
     for i in 1:length(res_abm)
         temp = []
         for j in 1:length(res_ode)
