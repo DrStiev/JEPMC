@@ -1,21 +1,16 @@
-using Agents
-using Graphs
+using Agents, Graphs, Random, GraphPlot, Colors
+using DiffEqCallbacks, Distributions, Plots
 using SparseArrays: findnz
-using Random
 using LinearAlgebra: diagind
-using GraphPlot
 using StatsBase: sample, Weights
 using Statistics: mean
-using Colors
 
 import OrdinaryDiffEq
 
 @agent Node ContinuousAgent{2} begin
-    N::Int
-    status::Vector{Float64} # S, E, I, R
+    status::Vector{Float64} # S, E, I, R, D
+    param::Vector{Float64} # R₀, γ, σ, ω, δ, η, ξ
     happiness::Float64
-    η::Float64
-    R₀::Float64
 end
 
 adapt_R₀!(x) = return 1.1730158534328545 + 0.21570538523224972 * x
@@ -57,10 +52,11 @@ end
 function init(;
     numNodes::Int=50,
     initialNodeInfected::Int=1,
-    param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0],
+    param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.007],
     avgPopulation::Int=3300,
-    maxTravelingRate::Float64=0.1,
+    maxTravelingRate::Float64=0.7,  # flusso di persone che si spostano
     spacing::Float64=4.0,
+    tspan::Tuple=(1.0, Inf),
     seed::Int=1234
 )
 
@@ -76,7 +72,6 @@ function init(;
             :numNodes => numNodes,
             :param => param,
             :connections => graph,
-            :population => population,
             :migrationMatrix => migrationMatrix,
         ),
         rng
@@ -88,75 +83,145 @@ function init(;
     end
 
     for node in 1:numNodes
-        # https://stackoverflow.com/questions/5837572/generate-a-random-point-within-a-circle-uniformly
-        r = model.space.extent[1] * 0.5 * sqrt(rand(model.rng))
+        r = model.space.extent[1] * 0.25 * sqrt(rand(model.rng))
         θ = 2 * pi * rand(model.rng)
         position = model.space.extent .* 0.5 .+ (r * cos(θ), r * sin(θ)) .- 0.5
-        status = Is[node] == 1 ? [(population[node] - 1) / population[node], 0.0, 1 / population[node], 0.0] : [1.0, 0.0, 0.0, 0.0]
-        happiness = randn()
+        status = Is[node] == 1 ? [population[node] - 1, 0, 1, 0, 0] : [population[node], 0, 0, 0, 0]
+        happiness = randn(model.rng)
         happiness = happiness < -1.0 ? -1.0 : happiness > 1.0 ? 1.0 : happiness
-        add_agent!(position, model, (0, 0), population[node], status, happiness, 0.0, param[1])
+        parameters = vcat(param, [0.0, 0.0])
+        add_agent!(position, model, (0, 0), status, parameters, happiness)
     end
+
+    function seir!(du, u, p, t)
+        S, E, I, R, D = u
+        N = S + E + I + R
+        R₀, γ, σ, ω, δ, η, ξ = p
+        du[1] = ((-R₀ * γ * S * I) / N) + (ω * R) - (S * ξ) # dS
+        du[2] = ((R₀ * γ * S * I) / N) - (σ * E) # dE
+        du[3] = (σ * E) - (γ * I) - (δ * I) # dI
+        du[4] = ((1 - δ) * γ * I - ω * R) + (S * ξ) # dR
+        du[5] = (δ * I * γ) # dD
+    end
+
+    prob = [OrdinaryDiffEq.ODEProblem(seir!, a.status, tspan, a.param) for a in allagents(model)]
+    integrator = [OrdinaryDiffEq.init(p, OrdinaryDiffEq.Tsit5(); advance_to_tstop=true) for p in prob]
+    model.properties[:integrator] = integrator
+
     return model
 end
 
-model = init()
-
-# utile per plot
-max = maximum(model.population)
-status = [a.status for a in allagents(model)]
-nodefillc = [RGBA(1.0 * (status[i][2] + status[i][3]), 1.0 * status[i][1], 1.0 * status[i][4], 1.0) for i in 1:length(status)]
-gplot(model.connections, nodesize=model.population ./ max, nodefillc=nodefillc)
-
 function model_step!(model::ABM)
-    update!(model)
-    happiness!(model)
+    agents = [agent for agent in allagents(model)]
+    for agent in 1:length(agents)
+        migrate!(agents[agent], model, agent)
+        OrdinaryDiffEq.step!(model.integrator[agent], 1.0, true)
+        OrdinaryDiffEq.u_modified!(model.integrator[agent], true)
+        agents[agent].status = model.integrator[agent].u
+        OrdinaryDiffEq.u_modified!(model.integrator[agent], true)
+        update!(agents[agent])
+        happiness!(agents[agent])
+    end
     voc!(model)
-    controller!(model)
+    # controller!(model)
 end
 
 # https://juliadynamics.github.io/Agents.jl/stable/examples/diffeq/
-function update!(model::ABM)
-    # faccio una chiamata all'integrator con step ≈ 14gg
-    OrdinaryDiffEq.step!(model.i, model.param[2]^-1, true)
-    # notifico l'integrator che i dati sono stati aggiornati
-    OrdinaryDiffEq.u_modified!(model.i, true)
-    OrdinaryDiffEq.step!(model.i, 1.0, true)
-
+function update!(agent)
+    if agent.param[1] > 1.0
+        agent.param[1] -= agent.param[6] * (agent.param[1] - 1.0)
+        index = findfirst(a -> a.id == agent.id, [a for a in allagents(model)])
+        OrdinaryDiffEq.u_modified!(model.integrator[index], true)
+    end
 end
 
-function happiness!(model::ABM)
+function migrate!(agent, model::ABM, index::Int)
+    network = model.migrationMatrix[agent.id, :]
+    tidxs, tweights = findnz(network)
+
+    for i in 1:length(tidxs)
+        people_traveling_out = map((x) -> round(Int, x), agent.status .* tweights[i])
+        people_traveling_out[end] = 0
+
+        objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
+        objective.status += people_traveling_out
+        agent.status -= people_traveling_out
+
+        model.integrator[index].u = agent.status
+        OrdinaryDiffEq.u_modified!(model.integrator[index], true)
+    end
+end
+
+function happiness!(agent)
+    agent.happiness = tanh(agent.happiness - agent.param[6])
 end
 
 function voc!(model::ABM)
+    if rand(model.rng) ≤ 8e-3
+        agent = random_agent(model)
+        if agent.status[3] ≠ 0.0
+            agent.param[1] = rand(model.rng, Uniform(3.3, 5.7))
+            agent.param[2] = rand(model.rng, Normal(agent.param[2], agent.param[2] / 10))
+            agent.param[3] = rand(model.rng, Normal(agent.param[3], agent.param[3] / 10))
+            agent.param[4] = rand(model.rng, Normal(agent.param[4], agent.param[4] / 10))
+            agent.param[5] = rand(model.rng, Normal(agent.param[5], agent.param[5] / 10))
+
+            index = findfirst(a -> a.id == agent.id, [a for a in allagents(model)])
+            OrdinaryDiffEq.u_modified!(model.integrator[index], true)
+        end
+    end
 end
 
 function controller!(model::ABM)
 end
 
-function agent_step!(agent, model::ABM)
-    migrate!(agent, model)
+function plot_system(model::ABM)
+    # utile per plot
+    max = maximum([sum(agent.status) for agent in allagents(model)])
+    status = [a.status ./ sum(a.status) for a in allagents(model)]
+    nodefillc = [RGBA(1.0 * (status[i][2] + status[i][3]), 1.0 * status[i][1], 1.0 * status[i][4], 1.0) for i in 1:length(status)]
+    gplot(model.connections, nodesize=[sum(agent.status) for agent in allagents(model)] ./ max, nodefillc=nodefillc, nodelabel=[agent.id for agent in allagents(model)])
 end
 
-function migrate!(agent, model::ABM)
-    network = model.migrationMatrix[agent.id, :]
-    tidxs, tweights = findnz(network)
-
-    for i in 1:length(tidxs)
-        people_traveling_out = round(Int, agent.N * tweights[i])
-        people_status = map((x) -> round(Int, x), agent.status .* people_traveling_out)
-
-        for j in length(people_status)
-            objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])
-            objective.status = objective.status .* objective.N
-            objective.status[j] += people_status[j]
-            objective.N += people_status[j]
-            objective.status = objective.status ./ objective.N
-
-            agent.status = agent.status .* agent.N
-            agent.status[j] -= agent.status[j]
-            agent.N -= agent.status[j]
-            agent.status = agent.status ./ agent.N
-        end
-    end
+function get_observable_data()
+    status(x) = x.status
+    happiness(x) = x.happiness
+    η(x) = x.param[6]
+    R₀(x) = x.param[1]
+    return [status, happiness, η, R₀]
 end
+
+model = init(numNodes=4, maxTravelingRate=0.7)
+initial = sum([sum(agent.status) for agent in allagents(model)])
+plot_system(model)
+
+model.migrationMatrix
+
+ares, mres = run!(model, dummystep, model_step!, 1200; showprogress=true, adata=get_observable_data())
+ending = sum([sum(agent.status) for agent in allagents(model)])
+plot_system(model)
+initial - ending == 0.0 # dovrebbe essere 0
+ares
+mres
+using DataFrames
+res = [filter(:id => ==(i), ares) for i in unique(ares[!, :id])]
+plt = []
+
+for r in res
+    x = DataFrame(Array(r[!, :status]), :auto)
+    y = DataFrame(Array(select(r, [:happiness, :η])), :auto)
+    z = DataFrame(Array(select(r, [:R₀])), :auto)
+    push!(
+        plt,
+        plot(
+            plot(Array(x)', label=["S" "E" "I" "R" "D"]),
+            plot(Array(y), label=["Happiness" "η"]),
+            plot(Array(z), label="R₀"),
+        )
+    )
+end
+plot(plt...)
+
+# TODO: fare grafico decente, con tanto di grafo
+# TODO: applicare controller. lockdown viene gestito con migrationrate e ricalcolo migration maxMatrix
+# TODO: il migration matrix influisce sensibilmente sul tipo di grafico che ottengo del modello
