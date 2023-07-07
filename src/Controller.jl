@@ -1,16 +1,9 @@
-module controller
-
 using Agents, DataFrames, Random, Distributions, Distributed
 using Statistics: mean
 
 # https://github.com/epirecipes/sir-julia
 
-include("utils.jl")
-
-function save_dataframe(data::DataFrame, path::String, title="StandardABM")
-    isdir(path) == false && mkpath(path)
-    CSV.write(path * title * "_" * string(today()) * ".csv", data)
-end
+include("ControllerUtils.jl")
 
 function vaccine!(
     model::StandardABM,
@@ -94,35 +87,6 @@ function voc()
     # idea molto ambiziosa
 end
 
-function predict(model::StandardABM, tspan::Int; traindata_size::Int=30)
-    data = select(model.outresults, [:susceptible, :exposed, :infected, :recovered, :dead])
-    p_true = [model.R₀, model.γ, model.σ, model.ω, model.δ, model.η, model.ξ]
-    l = length(data[:, 1])
-    l == 0 && return nothing
-    traindata_size = min(l, traindata_size)
-    res = nothing
-    try
-        res = udePredict.ude_prediction(data[:, l-trainingdata_size+1:l], p_true, tspan)
-    catch ex
-        isdir("data/error/") == false && mkpath("data/error/")
-        joinpath("data/error/", "log_" * string(today()) * ".txt")
-        log = @error "prediction failed" exception = (ex, catch_backtrace())
-        open("data/error/log_" * string(today()) * ".txt", "a") do io
-            write(io, log)
-        end
-        AgentsIO.save_checkpoint("data/error/abm_checkpoint_" * string(today()) * ".jld2", model)
-        save_dataframe(data, "data/error/", "abm_dataframe")
-    finally
-        if isnothing(res)
-            return nothing
-        elseif isnothing(res[3])
-            return res[1]
-        else
-            return res[3]
-        end
-    end
-end
-
 function predict(model::StandardABM, nodes::Vector{Float64}, tspan::Int; traindata_size::Int=30)
     pred = []
     for n in 1:length(nodes)
@@ -153,5 +117,4 @@ function predict(model::StandardABM, nodes::Vector{Float64}, tspan::Int; trainda
         end
     end
     return pred
-end
 end

@@ -1,1 +1,3 @@
-# julia-epidemiology-models
+# CovidSim
+
+[![Build Status](https://github.com/DrStiev/CovidSim.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/DrStiev/CovidSim.jl/actions/workflows/CI.yml?query=branch%3Amain)

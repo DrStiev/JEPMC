@@ -81,18 +81,29 @@ voc_cb = ContinuousCallback(condition_voc, affect_voc!)
 countermeasures_cb = ContinuousCallback(condition_countermeasures, affect_countermeasures!)
 cb = CallbackSet(vaccine_cb, voc_cb, countermeasures_cb)
 
-pop = randexp(Xoshiro(1337), 20) * 1000
+condition_migration(u, t, integrator) = rand(rng) < 1 / 10
+function affect_migration!(integrator)
+    println("migration")
+end
+
+
+pop = randexp(Xoshiro(42), 4) * 10000
 pop = map((x) -> round(Int, x), pop)
-S = (sum(pop) - 1) / sum(pop)
-E = 0.0
-I = 1 / sum(pop)
-R = 0.0
-D = 0.0
-H = 0.0
+pop = [100, 10000, 1000000, 100000000]
+param = [[(p-1)/p, 0, 1/p, 0, 0, 0, 0, 0] for p in pop]
 tspan = (1.0, 1200.0)
 p = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0, 0.0]
-prob = ODEProblem(F!, [S, E, I, R, D, H], tspan, p, callback=cb)
-sol = solve(prob, Tsit5(), saveat=1)
-plot(sol, labels=["S" "E" "I" "R" "D" "Happiness"])
+prob = [ODEProblem(F!, i, tspan, p) for i in param] #, callback=cb)
+sol = [solve(p, Tsit5(), saveat=1) for p in prob]
+plt = []
+for s in sol
+    push!(plt, plot(s))
+end
+plot(plt..., labels=["S" "E" "I" "R" "D" "Happiness"])
+sol[1][end]
+sol[2][end]
+sol[3][end]
+sol[4][end]
+
 
 end
