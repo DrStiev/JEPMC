@@ -8,6 +8,68 @@ include("Utils.jl")
 # bizzarro del modello ad agente. Vedi grafici in img/abm, img/ode, img/abm_ode
 adapt_R₀!(x) = return 1.1730158534328545 + 0.21570538523224972 * x
 
+Base.@kwdef mutable struct Parameters
+    numNodes::Int
+    migrationMatrix::Matrix{Float64}
+    population::Vector{Int}
+    param::Vector{Float64}
+    η::Vector{Float64}
+    controller::Bool
+    all_variants::Vector{UUID}
+    vaccine_coverage::Vector{Float64}
+    variant_tolerance::Int
+    happiness::Vector{Float64}
+    outresults::DataFrame
+end
+
+function set_parameters(
+    numNodes::Int,
+    edgesCoverage::Float64,
+    param::Vector{Float64},
+    avgPopulation::Int,
+    maxTravelingRate::Float64,  # flusso di persone che si spostano
+    controller::Bool,
+    rng::AbstractRNG,
+)
+
+    population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
+    graph = generate_nearly_complete_graph(numNodes, floor(Int, (1 - edgesCoverage) * (numNodes * (numNodes - 1) / 2)); rng=rng)
+    migrationMatrix = get_migration_matrix(graph, population, numNodes, maxTravelingRate)
+
+    Is = [zeros(Int, numNodes)...]
+    Is[rand(rng, 1:length(Is))] = 1
+
+    happiness = randn(numNodes)
+    happiness[happiness.>1.0] .= 1.0
+    happiness[happiness.<-1.0] .= -1.0
+
+    res = Parameters(
+        numNodes,
+        migrationMatrix,
+        population,
+        param,
+        [zeros(Float64, numNodes)...],
+        controller,
+        [],
+        [],
+        0,
+        happiness,
+        DataFrame(
+            susceptible=Int[],
+            exposed=Int[],
+            infected=Int[],
+            recovered=Int[],
+            dead=Int[],
+            R0=Float64[],
+            active_countermeasures=Float64[],
+            happiness=Float64[],
+            node=Int[],
+        )
+    )
+
+    return res
+end
+
 function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, numNodes::Int, maxTravelingRate::Float64)
     migrationMatrix = zeros(numNodes, numNodes)
 
@@ -28,9 +90,8 @@ function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, numNodes:
     return migrationMatrix .* adjacency_matrix(g)
 end
 
-function generate_nearly_complete_graph(n::Int, N::Int; seed::Int=1234)
+function generate_nearly_complete_graph(n::Int, N::Int; rng::AbstractRNG)
     (n * (n - 1) / 2) - N < n && throw("The number of edges that will be removed [$N] will prevent the construction of a connected graph of [$n] nodes!")
-    rng = Xoshiro(seed)
     g = complete_graph(n)
 
     # Remove N random edges

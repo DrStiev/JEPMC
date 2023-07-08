@@ -47,8 +47,20 @@ function ude_prediction(
         du[5] = (δ * I * γ) * û[5] # dD
     end
 
+    condition_voc(u, t, integrator) = rand(rng) < 8e-3
+    function affect_voc!(integrator)
+        println("voc")
+        integrator.p_true[1] = rand(rng, Uniform(3.3, 5.7))
+        integrator.p_true[2] = abs(rand(rng, Normal(integrator.p_true[2], integrator.p_true[2] / 10)))
+        integrator.p_true[3] = abs(rand(rng, Normal(integrator.p_true[3], integrator.p_true[3] / 10)))
+        integrator.p_true[4] = abs(rand(rng, Normal(integrator.p_true[4], integrator.p_true[4] / 10)))
+        integrator.p_true[5] = abs(rand(rng, Normal(integrator.p_true[5], integrator.p_true[5] / 10)))
+    end
+
+    voc_cb = ContinuousCallback(condition_voc, affect_voc!)
+
     nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p_true)
-    prob_nn = ODEProblem(nn_dynamics!, X[:, 1], (tspan[1], tspan[end]), p)
+    prob_nn = ODEProblem(nn_dynamics!, X[:, 1], (tspan[1], tspan[end]), p, callback=voc_cb)
 
     function predict(θ, X=X[:, 1], T=tspan)
         _prob = remake(prob_nn, u0=X, tspan=(T[1], T[end]), p=θ)
@@ -202,8 +214,20 @@ function symbolic_regression(
         du[5] = (δ * I * γ) * û[5] # dD
     end
 
+    condition_voc(u, t, integrator) = rand(rng) < 8e-3
+    function affect_voc!(integrator)
+        println("voc")
+        integrator.p_true[1] = rand(rng, Uniform(3.3, 5.7))
+        integrator.p_true[2] = abs(rand(rng, Normal(integrator.p_true[2], integrator.p_true[2] / 10)))
+        integrator.p_true[3] = abs(rand(rng, Normal(integrator.p_true[3], integrator.p_true[3] / 10)))
+        integrator.p_true[4] = abs(rand(rng, Normal(integrator.p_true[4], integrator.p_true[4] / 10)))
+        integrator.p_true[5] = abs(rand(rng, Normal(integrator.p_true[5], integrator.p_true[5] / 10)))
+    end
+
+    voc_cb = ContinuousCallback(condition_voc, affect_voc!)
+
     dynamics!(du, u, p, t) = recovered_dynamics!(du, u, p, t, p_true)
-    estimation_prob = ODEProblem(dynamics!, u0, tspan, get_parameter_values(nn_eqs))
+    estimation_prob = ODEProblem(dynamics!, u0, tspan, get_parameter_values(nn_eqs), callback=voc_cb)
     estimate = solve(
         estimation_prob,
         Tsit5(; thread=OrdinaryDiffEq.True()),
@@ -270,7 +294,7 @@ function symbolic_regression(
         save_plot(pl_losses, "img/prediction/", lossTitle * "_SR_", "pdf")
     end
 
-    estimation_prob = ODEProblem(dynamics!, u0, tspan, parameter_res)
+    estimation_prob = ODEProblem(dynamics!, u0, tspan, parameter_res, callback=voc_cb)
     estimate_long = solve(
         estimation_prob,
         Tsit5(; thread=OrdinaryDiffEq.True()),

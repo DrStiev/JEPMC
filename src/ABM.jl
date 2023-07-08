@@ -1,5 +1,4 @@
 using Agents, Random, Distributions, UUIDs
-using DrWatson: @dict
 using StatsBase: sample, Weights
 using Statistics: mean
 
@@ -13,59 +12,45 @@ include("Controller.jl")
     variant_tolerance::Int
 end
 
+"""
+    init([numNodes=Int], [edgesCoverage=Float64], [param=Vector{Float64}], [avgPopulation=Int], [maxTravelingRate=Float64], [tspan=Tuple], [controller=Bool], [seed=Int])
+
+    Initialize the model with the given parameters.
+    If none is given, the model will be Initialize with default parameters.
+
+# Examples
+```jldoctest
+julia> model = init();
+
+```
+"""
 function init(;
-    numNodes::Int=50,
+    numNodes::Int=8,
     edgesCoverage::Float64=0.2,
     param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0],
     avgPopulation::Int=3300,
-    maxTravelingRate::Float64=0.1,  # flusso di persone che si spostano
-    tspan::Tuple=(1.0, Inf),
+    maxTravelingRate::Float64=1e-4,  # flusso di persone che si spostano da un nodo all'altro
     controller::Bool=false,
     seed::Int=1234
 )
     rng = Xoshiro(seed)
-    population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
-    graph = generate_nearly_complete_graph(numNodes, floor(Int, (1 - edgesCoverage) * (numNodes * (numNodes - 1) / 2)); seed=seed)
-    migrationMatrix = get_migration_matrix(graph, population, numNodes, maxTravelingRate)
-
-    Is = [zeros(Int, numNodes)...]
-    Is[rand(rng, 1:length(Is))] = 1
-
-    happiness = randn(numNodes)
-    happiness[happiness.>1.0] .= 1.0
-    happiness[happiness.<-1.0] .= -1.0
-
     model = StandardABM(
         Person,
         GraphSpace(graph);
-        properties=@dict(
+        properties=set_parameters(
             numNodes,
-            migrationMatrix,
-            population,
+            edgesCoverage,
             param,
-            η = [zeros(Float64, numNodes)...],
+            avgPopulation,
+            maxTravelingRate,
             controller,
-            all_variants = [],
-            vaccine_coverage = [],
-            variant_tolerance = 0,
-            happiness,
-            outresults = DataFrame(
-                susceptible=Int[],
-                exposed=Int[],
-                infected=Int[],
-                recovered=Int[],
-                dead=Int[],
-                R0=Float64[],
-                active_countermeasures=Float64[],
-                happiness=Float64[],
-                node=Int[],
-            ),
+            rng
         ),
         rng
     )
 
     variant = uuid1(model.rng)
-    for city = 1:numNodes, _ = 1:population[city]
+    for city = 1:numNodes, _ = 1:model.population[city]
         add_agent!(city, model, :S, variant, [variant], 0)
     end
     for city = 1:numNodes
@@ -77,67 +62,98 @@ function init(;
             push!(model.all_variants, agent.variant)
         end
     end
-    for i = 1:numNodes
-        node = filter(x -> x.pos == i, [a for a in allagents(model)])
-        push!(
-            model.outresults,
-            [
-                length(filter(x -> x.status == :S, node)),
-                length(filter(x -> x.status == :E, node)),
-                length(filter(x -> x.status == :I, node)),
-                length(filter(x -> x.status == :R, node)),
-                length(node) - sum(population[i]),
-                model.param[1],
-                model.η[i],
-                model.happiness[i],
-                i,
-            ],
-        )
+    if controler
+        fill(model)
     end
     return model
 end
 
+
+"""
+    model_step!(model=StandardABM)
+
+    Function that advance the model by one step. Has different
+    behaviour based on the boolean value of the parameter `controller`.
+"""
 function model_step!(model::StandardABM)
     if model.controller
-        collect!(model)
-        ns = [controller.get_node_status(model, i) for i = 1:model.numNodes]
+        fill(model)
+        ns = [get_node_status(model, i) for i = 1:model.numNodes]
         controller!(model, ns)
     end
-    happiness!(model)
+    ABMUtilis.happiness!(model)
     update!(model)
     voc!(model)
     model.step_count += 1
 end
 
+"""
+    controller!(model=StandardABM, ns=Vector{Float64})
+
+    Function that call all the routines associated to the
+    part of controll, prediction and prevention
+"""
 function controller!(model::StandardABM, ns::Vector{Float64})
-    res = controller.predict(model, ns, 30)
+    res = predict(model, ns, 30)
     for i in 1:length(res)
         if !isnothing(res[i])
-            controller.local_controller!(model, res[i], i, 30; vaccine=model.param[6] > 0.0)
-            controller.vaccine!(model, 0.83; time=365)
+            local_controller!(model, res[i], i, 30; vaccine=model.param[6] > 0.0)
+            vaccine!(model, 0.83; time=365)
         end
     end
-    controller.global_controller!(model, ns, model.η)
+    global_controller!(model, ns, model.η)
 end
 
+"""
+    update!(model=StandardABM)
+
+    Function that update the global value of `R₀` based on the
+    average value of `η`. `η` represents a vector full of `Float64`
+    values ∈ [0, 1] that represent the average value of the active_countermeasures
+    applied in a specific node
+"""
 function update!(model::StandardABM)
     if model.param[1] > 1.0
         model.param[1] -= mean(model.η) * (model.param[1] - 1.0)
     end
 end
 
+"""
+    agent_step!(agent, model=StandardABM)
+
+    Function that advance the agent by one step
+"""
 function agent_step!(agent, model::StandardABM)
     migrate!(agent, model)
     transmit!(agent, model)
     update!(agent, model)
 end
 
+"""
+    migrate!(agent, model=StandardABM)
+
+    Function that migrate each agent from a node to another with a certain
+    probability, given by a SparseMatrix `migrationMatrix` created initially
+    and associated with the toppology of the graph used to create the model
+"""
 function migrate!(agent, model::StandardABM)
     pid = agent.pos
     m = sample(model.rng, 1:(model.numNodes), Weights(model.migrationMatrix[pid, :]))
     move_agent!(agent, m, model)
 end
 
+"""
+    transmit!(agent, model=StandardABM)
+
+    Function that control the contagion. If an agent has status :I
+    it means it can infect other agent. The contact ratio between agents is
+    governed by a Poisson distribution with λ = `model.param[1]` = R₀.
+
+    This function handle the reinfection from a contact with status = :R
+    depending on the type of variant with which is infected. Moreover is
+    modeled the possibility to have a resistance based on the similarity between
+    variants.
+"""
 function transmit!(agent, model::StandardABM)
     agent.status != :I && return
     ncontacts = rand(model.rng, Poisson(model.param[1]))
@@ -156,6 +172,12 @@ function transmit!(agent, model::StandardABM)
     end
 end
 
+"""
+    update!(agent, model=StandardABM)
+
+    Function that handle the change in status over time of all the
+    agents in the model based on their status and the model.parameter vector
+"""
 function update!(agent, model::StandardABM)
     if agent.status == :S && (rand(model.rng) < model.param[6])
         agent.status = :R

@@ -5,6 +5,23 @@ using Statistics: mean
 
 include("ControllerUtils.jl")
 
+"""
+    vaccine!(model=StandardABM, [avg_effectiveness=Float64]; [time=Int])
+
+    Function that is used to simulate the research for a vaccine. This
+    research gives then a vaccine with an average effectiveness sample
+    from a normal distribution with mean = avg_effectiveness and variance = avg_effectiveness / 10
+
+    The result is a vaccine with total coverage from all the variants that exist in the model
+    and with a tolerance from variation that depends on how quick the vaccine is being
+    released. Quicker vaccine means a lower tolerance to variation.
+
+# Example
+```jldoctest
+julia> vaccine!(model)
+
+```
+"""
 function vaccine!(
     model::StandardABM,
     avg_effectiveness::Float64=0.83;
@@ -21,8 +38,33 @@ function vaccine!(
     end
 end
 
-slope(pred) = tanh(pred[3, end] - pred[3, 1]) + tanh(pred[5, end] - pred[5, 1])
+"""
+    slope(pred=Matrix)
 
+    Function that is used to obtain a value for the increase or decrease
+    of the infected and dead agents.
+
+# Example
+```jldoctest
+julia> slope(pred)
+
+```
+"""
+slope(pred::Matrix) = tanh(pred[3, end] - pred[3, 1]) + tanh(pred[5, end] - pred[5, 1])
+
+"""
+    get_node_status(model=StandardABM, pos=Int; [mininfects=Int])
+
+    Function that return the status of a node. If the number of infected individuals in a
+    node is less or equal than mininfects, than the node status is 0. Otherwise,
+    the node status is infected individual / total individuals
+
+# Example
+```jldoctest
+julia> get_node_status(model, 1)
+
+```
+"""
 function get_node_status(model::StandardABM, pos::Int; mininfects::Int=2)
     agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
     infects = filter(x -> x.status == :I, agents)
@@ -33,6 +75,11 @@ function get_node_status(model::StandardABM, pos::Int; mininfects::Int=2)
     end
 end
 
+"""
+    local_controller!(model=StandardABM, data=Matrix, node=Int, step=Int; [mininfects=Int], [vaccine=Bool], [check_happiness=Bool])
+
+    Function that is used to apply a countermeasure to a specific node of a the model
+"""
 function local_controller!(
     model::StandardABM,
     data::Matrix,
@@ -54,6 +101,13 @@ function local_controller!(
     end
 end
 
+"""
+    global_controller!(model=StandardABM, ns=Vector, restriction=Vector)
+
+    Function that is used to apply the countermeasures or restriction to the entire model
+    changing the migration flux rate of the agents between the nodes, applying a sort
+    of lockdown strategy
+"""
 function global_controller!(
     model::StandardABM,
     ns::Vector{Float64},
@@ -72,7 +126,14 @@ function global_controller!(
     end
 end
 
+"""
+    happiness!(model=StandardABM)
 
+    Function that estimate in a very rough way the impact of the countermeasures given
+    the happiness of a node. This is used to counterbalance the strictness of them to
+    avoid to fall into a bad loop of too high and strick countermeasures that will be
+    realistically impossible to mantain
+"""
 function happiness!(model::StandardABM)
     for i = 1:length(model.η)
         h = model.happiness[i]
@@ -87,7 +148,11 @@ function voc()
     # idea molto ambiziosa
 end
 
+"""
+    predict(model=StandardABM, nodes=Vector{Float64}, tspan=Int; [traindata_size=Int])
+"""
 function predict(model::StandardABM, nodes::Vector{Float64}, tspan::Int; traindata_size::Int=30)
+    # TODO: predico andamento del nodo più brutto e uso quella predizione per gli altri
     pred = []
     for n in 1:length(nodes)
         if nodes[n] ≠ 0.0
@@ -95,6 +160,7 @@ function predict(model::StandardABM, nodes::Vector{Float64}, tspan::Int; trainda
             df = filter(:node => ==(n), model.outresults)
             data = select(df, [:susceptible, :exposed, :infected, :recovered, :dead])
             l = length(data[:, 1])
+            # TODO: rivedi logica
             l == 0 && return nothing
             traindata_size = min(l, traindata_size)
             res = nothing
