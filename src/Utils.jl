@@ -56,3 +56,29 @@ function save_plot(plot, path="", title="title", format="png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * string(today()) * "." * format)
 end
+
+function split_dataset(data::DataFrame)
+    res = [filter(:node => ==(i), data) for i in unique(data[!, :node])]
+    return res
+end
+
+function split_and_plot(data::DataFrame)
+    p1 = select(data, [:susceptible, :exposed, :infected, :recovered, :dead])
+    p2 = select(data, [:active_countermeasures, :happiness])
+    p3 = select(data, [:R0])
+    l = @layout [
+        RecipesBase.grid(1, 1)
+        RecipesBase.grid(1, 2)
+    ]
+    p = plot(
+        plot(
+            Array(p1),
+            labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+            title="ABM Dynamics",
+        ),
+        plot(Array(p2), labels=["η" "Happiness"], title="Agents response to η"),
+        plot(Array(p3), labels="R₀", title="Reproduction number"),
+        layout=l,
+    )
+    return p
+end

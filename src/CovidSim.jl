@@ -1,4 +1,3 @@
-# https://julialang.org/contribute/developing_package/
 module CovidSim
 using Pkg #, JuliaFormatter, UpdateJulia
 Pkg.activate(".")
@@ -7,7 +6,7 @@ Pkg.activate(".")
 # Pkg.gc()
 
 include("ABM.jl")
-include("ABMUtilis.jl")
+include("ABMUtils.jl")
 include("Controller.jl")
 include("ControllerUtils.jl")
 include("Utils.jl")

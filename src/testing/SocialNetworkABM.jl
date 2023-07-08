@@ -16,7 +16,8 @@ end
 
 adapt_R₀!(x) = return 1.1730158534328545 + 0.21570538523224972 * x
 
-function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, numNodes::Int, maxTravelingRate::Float64)
+function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, maxTravelingRate::Float64)
+    numNodes = Graphs.nv(g)
     migrationMatrix = zeros(numNodes, numNodes)
 
     for n = 1:numNodes
@@ -36,26 +37,37 @@ function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, numNodes:
     return migrationMatrix .* adjacency_matrix(g)
 end
 
-function generate_nearly_complete_graph(n::Int, N::Int; seed::Int=1234)
-    (n*(n-1)/2) - N < n && throw("The number of edges that will be removed [$N] will prevent the construction of a connected graph of [$n] nodes!")
-    rng = Xoshiro(seed)
+function generate_nearly_complete_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
+    function edge_to_remove(n::Int, coverage::Symbol, rng::AbstractRNG)
+        low = n - 1
+        max = n * (n - 1) / 2
+        avg = (n * (n - 1) / 2 + (n - 1)) / 2
+        if coverage == :low
+            return trunc(Int, max - rand(rng, low:floor(Int, (avg + low) / 2)))
+        elseif coverage == :medium
+            return trunc(Int, max - rand(rng, ceil(Int, (avg + low) / 2):floor(Int, (avg + max) / 2)))
+        elseif coverage == :high
+            return trunc(Int, max - rand(rng, ceil(Int, (avg + max) / 2):max))
+        end
+    end
+
     g = complete_graph(n)
 
     # Remove N random edges
     e = Graphs.collect(Graphs.edges(g))
     shuffled_edges = e[randperm(rng, length(e))]
-    edges_to_remove = shuffled_edges[1:N]
+    edges_to_remove = shuffled_edges[1:edge_to_remove(n, coverage, rng)]
     for e in edges_to_remove
-        rem_edge!(g, e)
+        Graphs.rem_edge!(g, e)
     end
 
     return g
 end
-nv()
+
 # https://juliadynamics.github.io/Agents.jl/stable/examples/schoolyard/
 function init(;
     numNodes::Int=50,
-    edgesCoverage::Float64=0.6,
+    edgesCoverage::Symbol=:low,
     initialNodeInfected::Int=1,
     param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.007],
     avgPopulation::Int=3300,
@@ -66,8 +78,8 @@ function init(;
 
     rng = Xoshiro(seed)
     population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
-    graph = generate_nearly_complete_graph(numNodes, floor(Int, (1 - edgesCoverage) * (numNodes * (numNodes - 1) / 2)); seed=seed)
-    migrationMatrix = get_migration_matrix(graph, population, numNodes, maxTravelingRate)
+    graph = generate_nearly_complete_graph(numNodes, edgesCoverage; rng=rng)
+    migrationMatrix = get_migration_matrix(graph, population, maxTravelingRate)
 
     model = ABM(
         Node,

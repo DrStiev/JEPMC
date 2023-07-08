@@ -2,7 +2,9 @@ using Agents, Random, Distributions, UUIDs
 using StatsBase: sample, Weights
 using Statistics: mean
 
-include("ABMUtilis.jl")
+# https://github.com/epirecipes/sir-julia
+
+include("ABMUtils.jl")
 include("Controller.jl")
 
 @agent Person GraphAgent begin
@@ -13,7 +15,7 @@ include("Controller.jl")
 end
 
 """
-    init([numNodes=Int], [edgesCoverage=Float64], [param=Vector{Float64}], [avgPopulation=Int], [maxTravelingRate=Float64], [tspan=Tuple], [controller=Bool], [seed=Int])
+    init([numNodes=Int], [edgesCoverage=Symbol], [param=Vector{Float64}], [avgPopulation=Int], [maxTravelingRate=Float64], [tspan=Tuple], [controller=Bool], [seed=Int])
 
     Initialize the model with the given parameters.
     If none is given, the model will be Initialize with default parameters.
@@ -26,7 +28,7 @@ julia> model = init();
 """
 function init(;
     numNodes::Int=8,
-    edgesCoverage::Float64=0.2,
+    edgesCoverage::Symbol=:low,
     param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0],
     avgPopulation::Int=3300,
     maxTravelingRate::Float64=1e-4,  # flusso di persone che si spostano da un nodo all'altro
@@ -34,12 +36,14 @@ function init(;
     seed::Int=1234
 )
     rng = Xoshiro(seed)
+
+    graph = generate_nearly_complete_graph(numNodes, edgesCoverage; rng=rng)
+
     model = StandardABM(
         Person,
         GraphSpace(graph);
         properties=set_parameters(
-            numNodes,
-            edgesCoverage,
+            graph,
             param,
             avgPopulation,
             maxTravelingRate,
@@ -51,8 +55,12 @@ function init(;
 
     variant = uuid1(model.rng)
     for city = 1:numNodes, _ = 1:model.population[city]
-        add_agent!(city, model, :S, variant, [variant], 0)
+        add_agent!(city, model, :S, UUID("00000000-0000-0000-0000-000000000000"), [UUID("00000000-0000-0000-0000-000000000000")], 0)
     end
+
+    Is = [zeros(Int, numNodes)...]
+    Is[rand(rng, 1:length(Is))] = 1
+
     for city = 1:numNodes
         inds = ids_in_position(city, model)
         for n = 1:Is[city]
@@ -62,12 +70,11 @@ function init(;
             push!(model.all_variants, agent.variant)
         end
     end
-    if controler
-        fill(model)
-    end
+    fill(model)
     return model
 end
 
+model = init()
 
 """
     model_step!(model=StandardABM)
@@ -76,15 +83,15 @@ end
     behaviour based on the boolean value of the parameter `controller`.
 """
 function model_step!(model::StandardABM)
+    fill(model)
     if model.controller
-        fill(model)
         ns = [get_node_status(model, i) for i = 1:model.numNodes]
         controller!(model, ns)
     end
-    ABMUtilis.happiness!(model)
+    happiness!(model)
     update!(model)
     voc!(model)
-    model.step_count += 1
+    model.step += 1
 end
 
 """
@@ -139,6 +146,9 @@ end
 function migrate!(agent, model::StandardABM)
     pid = agent.pos
     m = sample(model.rng, 1:(model.numNodes), Weights(model.migrationMatrix[pid, :]))
+    # if rand(model.rng) < model.migrationMatrix[1, m]
+    #     move_agent!(agent, m, model)
+    # end
     move_agent!(agent, m, model)
 end
 
@@ -196,3 +206,27 @@ function update!(agent, model::StandardABM)
         agent.status = :S
     end
 end
+
+collect(model; n=100, showprogress=true)
+
+include("Utils.jl")
+
+model = init(; maxTravelingRate=0.1)
+d = collect(model; n=300, showprogress=true)
+res = split_dataset(d)
+display(split_and_plot(d))
+for r in res
+    display(split_and_plot(r))
+end
+
+sum([sum(r[1, 1:5]) for r in res])
+println([sum(r[1, 1:5]) for r in res])
+sum(model.population)
+
+sum([sum(r[2, 1:5]) for r in res])
+println([sum(r[2, 1:5]) for r in res])
+
+model.migrationMatrix
+filter(:node => ==(1), d)[!, :dead][end] += 1
+
+res
