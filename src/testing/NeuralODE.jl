@@ -3,27 +3,18 @@ using Plots, Distributions
 
 rng = Xoshiro(1234)
 
-# TODO: https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0269843#abstract0
-# TODO: https://appliednetsci.springeropen.com/articles/10.1007/s41109-021-00378-3
-
 function F!(du, u, p, t)
     S, E, I, R, D = u
+    N = sum(u)
     R₀, γ, σ, ω, δ, η, ξ = p
-    du[1] = (-R₀ * γ * (1 - η) * S * I) + (ω * R) - (S * ξ) # dS
-    du[2] = (R₀ * γ * (1 - η) * S * I) - (σ * E) # dE
+    du[1] = (-R₀ * γ * (1 - η) * S * I) / N + (ω * R) - (S * ξ) # dS
+    du[2] = (R₀ * γ * (1 - η) * S * I) / N - (σ * E) # dE
     du[3] = (σ * E) - (γ * I) - (δ * I) # dI
     du[4] = ((1 - δ) * γ * I - ω * R) + (S * ξ) # dR
     du[5] = (δ * I * γ) # dD
 end
 
-condition_vaccine(u, t, integrator) = rand(rng) < 1 / 365
 condition_voc(u, t, integrator) = rand(rng) < 8e-3
-condition_migrate(u, t, integrator) = true
-
-function affect_vaccine!(integrator)
-    println("vaccine")
-    integrator.p[7] = (1 - (1 / integrator.p[1])) / 0.83 * integrator.p[4]
-end
 
 function affect_voc!(integrator)
     println("voc")
@@ -34,10 +25,8 @@ function affect_voc!(integrator)
     integrator.p[5] = abs(rand(rng, Normal(integrator.p[5], integrator.p[5] / 10)))
 end
 
-function affect_migrate!(integrator)
-    println("migrate")
-
-end
+# https://stackoverflow.com/questions/58114027/callback-every-regular-time-interval-in-ode-solver-of-differentialequations-jl-i
+# https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/
 
 vaccine_cb = ContinuousCallback(condition_vaccine, affect_vaccine!)
 voc_cb = ContinuousCallback(condition_voc, affect_voc!)
@@ -50,31 +39,19 @@ tspan = (1.0, 1200.0)
 p = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
 prob = [ODEProblem(F!, i, tspan, p, callback=cb) for i in param]; #, callback=cb)
 sol = [solve(p, Tsit5()) for p in prob];
+
 plt = []
-length(sol)
 for i in 1:length(sol)
-    push!(plt, plot(sol[i].t ,sol[i][1:5, :]', title="Node with $(pop[i]) people", label=["S" "E" "I" "R" "D"], titlefontsize=6))
+    push!(plt, plot(sol[i].t, sol[i][1:5, :]', title="Node with $(pop[i]) people", label=["S" "E" "I" "R" "D"], titlefontsize=6))
 end
 plot(plt...)
-
-mean(sol)
-
-for i in 1:length(sol)
-    println(length(sol[i].t))
-end
-
-# function o(prob::ODEProblem)
-#     sol = solve(prob, Tsit5())
-#     return sol
-# end
-
-l = maximum(length, [sol[1].t, sol[2].t])
 
 # https://github.com/epirecipes/sir-julia
 # https://julialang.org/blog/2019/01/fluxdiffeq/
 # https://docs.sciml.ai/DiffEqFlux/stable/examples/neural_ode/
 # https://docs.sciml.ai/DiffEqFlux/stable/examples/GPUs/
 # https://docs.sciml.ai/DiffEqFlux/stable/examples/collocation/
+# https://docs.sciml.ai/DiffEqDocs/stable/features/ensemble/
 
 using Lux, DiffEqFlux, DifferentialEquations, Optimization, OptimizationOptimJL, Random, Plots
 using DifferentialEquations, Lux, SciMLSensitivity, ComponentArrays, OptimizationOptimisers

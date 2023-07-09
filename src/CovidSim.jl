@@ -5,13 +5,13 @@ Pkg.activate(".")
 # Pkg.update()
 # Pkg.gc()
 
-include("ABM.jl")
+include("SocialNetworkABM.jl")
 include("ABMUtils.jl")
-include("Controller.jl")
-include("ControllerUtils.jl")
 include("Utils.jl")
 
-export init, collect, ensemble_collect, save_dataframe, save_plot
+export init, collect, ensemble_collect
+export plot_system_graph, plot_model
+export save_dataframe, save_plot
 
 # format(".")
 # update_julia() # to update julia version

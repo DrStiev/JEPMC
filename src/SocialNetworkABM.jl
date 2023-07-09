@@ -1,11 +1,10 @@
-using Agents, Graphs, Random, GraphPlot, Colors
-using DiffEqCallbacks, Distributions, Plots, DataFrames
+using Agents, Graphs, Random, Distributions, DataFrames
 using SparseArrays: findnz
-using LinearAlgebra: diagind
 using StatsBase: sample, Weights
-using Statistics: mean
 
 import OrdinaryDiffEq, DiffEqCallbacks
+
+include("ABMUtils.jl")
 
 @agent Node ContinuousAgent{2} begin
     population::Float64
@@ -14,63 +13,18 @@ import OrdinaryDiffEq, DiffEqCallbacks
     happiness::Float64
 end
 
-adapt_R₀!(x) = return 1.1730158534328545 + 0.21570538523224972 * x
-
-function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, maxTravelingRate::Float64)
-    numNodes = Graphs.nv(g)
-    migrationMatrix = zeros(numNodes, numNodes)
-
-    for n = 1:numNodes
-        for m = 1:numNodes
-            migrationMatrix[n, m] = (population[n] + population[m]) / population[n]
-        end
-    end
-
-    migrationMatrix = (migrationMatrix .* maxTravelingRate) ./ maximum(migrationMatrix)
-    migrationMatrix[diagind(migrationMatrix)] .= 1.0
-    mmSum = sum(migrationMatrix, dims=2)
-
-    for c = 1:numNodes
-        migrationMatrix[c, :] ./= mmSum[c]
-    end
-
-    return migrationMatrix .* adjacency_matrix(g)
-end
-
-function generate_nearly_complete_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
-    function edge_to_remove(n::Int, coverage::Symbol, rng::AbstractRNG)
-        low = n - 1
-        max = n * (n - 1) / 2
-        avg = (n * (n - 1) / 2 + (n - 1)) / 2
-        if coverage == :low
-            return trunc(Int, max - rand(rng, low:floor(Int, (avg + low) / 2)))
-        elseif coverage == :medium
-            return trunc(Int, max - rand(rng, ceil(Int, (avg + low) / 2):floor(Int, (avg + max) / 2)))
-        elseif coverage == :high
-            return trunc(Int, max - rand(rng, ceil(Int, (avg + max) / 2):max))
-        end
-    end
-
-    g = complete_graph(n)
-
-    # Remove N random edges
-    e = Graphs.collect(Graphs.edges(g))
-    shuffled_edges = e[randperm(rng, length(e))]
-    edges_to_remove = shuffled_edges[1:edge_to_remove(n, coverage, rng)]
-    for e in edges_to_remove
-        Graphs.rem_edge!(g, e)
-    end
-
-    return g
-end
+# https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_ftc_jump/function_map_ftc_jump.md
+# https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_vaccine_jump/function_map_vaccine_jump.md
+# questo esempio potrebbe essere buono per la NeuralODE
+# https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_lockdown_optimization/ode_lockdown_optimization.md
 
 # https://juliadynamics.github.io/Agents.jl/stable/examples/schoolyard/
 function init(;
-    numNodes::Int=50,
-    edgesCoverage::Symbol=:low,
+    numNodes::Int=20,
+    edgesCoverage::Symbol=:high,
     initialNodeInfected::Int=1,
     param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.007],
-    avgPopulation::Int=3300,
+    avgPopulation::Int=round(Int, 2.9555e6),
     maxTravelingRate::Float64=0.1,  # flusso di persone che si spostano
     tspan::Tuple=(1.0, Inf),
     seed::Int=42
@@ -78,7 +32,7 @@ function init(;
 
     rng = Xoshiro(seed)
     population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
-    graph = generate_nearly_complete_graph(numNodes, edgesCoverage; rng=rng)
+    graph = connected_graph(numNodes, edgesCoverage; rng=rng)
     migrationMatrix = get_migration_matrix(graph, population, maxTravelingRate)
 
     model = ABM(
@@ -106,16 +60,6 @@ function init(;
         add_agent!(model, (0, 0), population[node], status, parameters, happiness)
     end
 
-    function seir!(du, u, p, t)
-        S, E, I, R, D = u
-        R₀, γ, σ, ω, δ, η, ξ = p
-        du[1] = (-R₀ * γ * S * I) + (ω * R) - (S * ξ) # dS
-        du[2] = (R₀ * γ * S * I) - (σ * E) # dE
-        du[3] = (σ * E) - (γ * I) - (δ * I) # dI
-        du[4] = ((1 - δ) * γ * I - ω * R) + (S * ξ) # dR
-        du[5] = (δ * I * γ) # dD
-    end
-
     prob = [OrdinaryDiffEq.ODEProblem(seir!, a.status, tspan, a.param) for a in allagents(model)]
     integrator = [OrdinaryDiffEq.init(p, OrdinaryDiffEq.Tsit5(); advance_to_tstop=true) for p in prob]
     model.properties[:integrator] = integrator
@@ -125,26 +69,22 @@ end
 
 function model_step!(model::ABM)
     agents = [agent for agent in allagents(model)]
-    for agent in 1:length(agents)
+    for agent in agents
         # notify the integrator that the condition may be altered
-        OrdinaryDiffEq.u_modified!(model.integrator[agent], true)
-        OrdinaryDiffEq.step!(model.integrator[agent], 1.0, true)
-        OrdinaryDiffEq.u_modified!(model.integrator[agent], true)
-        agents[agent].status = model.integrator[agent].u
+        model.integrator[agent.id].u = agent.status
+        model.integrator[agent.id].p = agent.param
+        OrdinaryDiffEq.u_modified!(model.integrator[agent.id], true)
+        OrdinaryDiffEq.step!(model.integrator[agent.id], 1.0, true)
+        agent.status = model.integrator[agent.id].u
     end
     voc!(model)
-    # controller!(model)
+    controller!(model)
 end
 
 function agent_step!(agent, model::ABM)
     migrate!(agent, model)
-    dead!(agent)
     update!(agent)
     happiness!(agent)
-end
-
-function dead!(agent)
-    agent.population -= round(Int, agent.status[5] * agent.population)
 end
 
 # https://juliadynamics.github.io/Agents.jl/stable/examples/diffeq/
@@ -162,18 +102,23 @@ function migrate!(agent, model::ABM)
     for i in 1:length(tidxs)
         people_traveling_out = agent.status .* tweights[i] .* agent.population
         people_traveling_out[end] = 0
-        agent.population -= sum(people_traveling_out)
-        agent.status ./= agent.population
+
+        new_population = agent.population - sum(people_traveling_out)
+        agent.status = (agent.status .* agent.population - people_traveling_out) ./ new_population
+        agent.population = new_population
         agent.population = map((x) -> round(Int, x), agent.population)
 
         objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
-        objective.status = (objective.status .* objective.population) .+ people_traveling_out
-        objective.population += sum(people_traveling_out)
-        objective.status ./= objective.population
+        new_population = objective.population + sum(people_traveling_out)
+        objective.status = (objective.status .* objective.population + people_traveling_out) ./ new_population
+        objective.population = new_population
         objective.population = map((x) -> round(Int, x), objective.population)
+        indexdst = indexin(objective.id, [a.id for a in allagents(model)])[1]
     end
+    indexsrc = indexin(agent.id, [a.id for a in allagents(model)])[1]
 end
 
+# TODO: vedere se mantenere campo happiness nel caso, migliorare stimatore
 function happiness!(agent)
     agent.happiness = tanh(agent.happiness - agent.param[6])
 end
@@ -191,23 +136,8 @@ function voc!(model::ABM)
     end
 end
 
+# TODO: implementare controller
 function controller!(model::ABM)
-end
-
-function plot_system(model::ABM)
-    # utile per plot
-    max = maximum([sum(agent.status) for agent in allagents(model)])
-    status = [a.status ./ sum(a.status) for a in allagents(model)]
-    nodefillc = [RGBA(1.0 * (status[i][2] + status[i][3]), 1.0 * status[i][1], 1.0 * status[i][4], 1.0) for i in 1:length(status)]
-    gplot(model.connections, nodesize=[sum(agent.status) for agent in allagents(model)] ./ max, nodefillc=nodefillc, nodelabel=sort([agent.id for agent in allagents(model)]))
-end
-
-function get_observable_data()
-    status(x) = x.status
-    happiness(x) = x.happiness
-    η(x) = x.param[6]
-    R₀(x) = x.param[1]
-    return [status, happiness, η, R₀]
 end
 
 function collect(
@@ -265,22 +195,3 @@ function ensemble_collect(
         return data
     end
 end
-
-# TODO: il migration matrix influisce sensibilmente sul tipo di grafico che ottengo del modello
-# TODO: modello sensibile anche al seed e alla randomicita'
-model = init(; numNodes=4, maxTravelingRate=0.1, edgesCoverage=0.6)
-
-models = [init(numNodes=10, maxTravelingRate=0.01, seed=abs(i)) for i in rand(Int64, 10)]
-data = ensemble_collect(models)
-
-plot_system(model)
-model.migrationMatrix
-
-data = collect(model; n=10)
-plot_system(model)
-
-plot(Array(DataFrame(Array(ares[!, :status]), :auto))', label=["S" "E" "I" "R" "D"],)
-mres
-
-# TODO: fare grafico decente
-# TODO: applicare controller. lockdown viene gestito con migrationrate e ricalcolo migration maxMatrix
