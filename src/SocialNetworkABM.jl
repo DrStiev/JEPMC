@@ -15,17 +15,16 @@ end
 
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_ftc_jump/function_map_ftc_jump.md
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_vaccine_jump/function_map_vaccine_jump.md
+
 # questo esempio potrebbe essere buono per la NeuralODE
 # https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_lockdown_optimization/ode_lockdown_optimization.md
-
-# https://juliadynamics.github.io/Agents.jl/stable/examples/schoolyard/
 function init(;
     numNodes::Int=20,
     edgesCoverage::Symbol=:high,
     initialNodeInfected::Int=1,
     param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.007],
     avgPopulation::Int=round(Int, 2.9555e6),
-    maxTravelingRate::Float64=0.1,  # flusso di persone che si spostano
+    maxTravelingRate::Float64=0.01,  # flusso di persone che si spostano
     tspan::Tuple=(1.0, Inf),
     seed::Int=42
 )
@@ -87,14 +86,12 @@ function agent_step!(agent, model::ABM)
     happiness!(agent)
 end
 
-# https://juliadynamics.github.io/Agents.jl/stable/examples/diffeq/
 function update!(agent)
     if agent.param[1] > 1.0
         agent.param[1] -= agent.param[6] * (agent.param[1] - 1.0)
     end
 end
 
-# TODO: capire dove perdo individui
 function migrate!(agent, model::ABM)
     network = model.migrationMatrix[agent.id, :]
     tidxs, tweights = findnz(network)

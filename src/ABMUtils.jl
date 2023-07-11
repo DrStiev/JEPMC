@@ -99,12 +99,7 @@ function plot_model(data::Vector{DataFrame}; cumulative::Bool=false)
 
     if cumulative
         avg_data = mean([Array(d) for d in data])
-        states = reduce(hcat, avg_data[:, 3])
-        cm = vcat(
-            reduce(hcat, avg_data[:, 4]),
-            reduce(hcat, avg_data[:, 5])
-        )
-        r = reduce(hcat, avg_data[:, 6])
+        states, cm, r = split_dataset(avg_data)
         plt = plot(
             plot(states', label=stateslabel),
             plot(cm', label=cmlabel),
@@ -116,12 +111,7 @@ function plot_model(data::Vector{DataFrame}; cumulative::Bool=false)
 
     # TODO: sistemare un pochino
     for d in data
-        states = reduce(hcat, d[:, 3])
-        cm = vcat(
-            reduce(hcat, d[:, 4]),
-            reduce(hcat, d[:, 5])
-        )
-        r = reduce(hcat, d[:, 6])
+        states, cm, r = split_dataset(d)
         push!(plt,
             plot(
                 plot(states', label=stateslabel),
@@ -132,6 +122,16 @@ function plot_model(data::Vector{DataFrame}; cumulative::Bool=false)
         )
     end
     return plt
+end
+
+function split_dataset(data::DataFrame)
+    states = reduce(hcat, d[:, 3])
+    cm = vcat(
+        reduce(hcat, d[:, 4]),
+        reduce(hcat, d[:, 5])
+    )
+    r = reduce(hcat, d[:, 6])
+    return states, cm, r
 end
 
 # TODO: aggiungere plot ensemble
