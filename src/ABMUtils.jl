@@ -1,5 +1,5 @@
-using Graphs, Random, Agents, DataFrames, Dates, CSV
-using Distributions, GraphPlot, Colors, GraphRecipes
+using Graphs, Random, Agents, DataFrames, Dates, CSV, Plots
+using Distributions, GraphPlot, Colors, GraphRecipes, StatsPlots
 using LinearAlgebra: diagind
 using Statistics: mean
 
@@ -66,16 +66,20 @@ function seir!(du, u, p, t)
     du[1] = (-R₀ * γ * S * I) + (ω * R) - (S * ξ) # dS
     du[2] = (R₀ * γ * S * I) - (σ * E) # dE
     du[3] = (σ * E) - (γ * I) - (δ * I) # dI
-    du[4] = ((1 - δ) * γ * I - ω * R) + (S * ξ) # dR
+    du[4] = ((1 - δ) * γ * I) - (ω * R) + (S * ξ) # dR
     du[5] = (δ * I * γ) # dD
 end
 
+# TODO: https://docs.juliaplots.org/stable/generated/statsplots/
 function plot_system_graph(model::ABM)
     # utile per plot
-    max = maximum([sum(agent.population) for agent in allagents(model)])
+    max = maximum([agent.population for agent in allagents(model)])
     status = [a.status for a in allagents(model)]
     nodefillc = [RGBA(1.0 * (status[i][2] + status[i][3]), 1.0 * status[i][1], 1.0 * status[i][4], 1.0) for i in 1:length(status)]
-    gplot(model.connections, nodesize=[agent.population for agent in allagents(model)] ./ max, nodefillc=nodefillc, nodelabel=sort([agent.id for agent in allagents(model)]))
+    nodelabel = [agent.id for agent in allagents(model)]
+    perm = sortperm(nodelabel)
+    nodesize = [agent.population for agent in allagents(model)] ./ max
+    gplot(model.connections, nodesize=nodesize[perm], nodefillc=nodefillc, nodelabel=sort(nodelabel))
 end
 
 function get_observable_data()
@@ -86,52 +90,80 @@ function get_observable_data()
     return [status, happiness, η, R₀]
 end
 
-function plot_model(data::Vector{DataFrame}; cumulative::Bool=false)
-    stateslabel = ["S" " E" "I" "R" "D"]
-    cmlabel = ["happiness" "η"]
-    rlabel = "R₀"
-    plt = []
+# https://docs.juliaplots.org/stable/#simple-is-beautiful
 
+function plot_model(data::Vector{DataFrame}; cumulative::Bool=true, ensemble::Bool=false)
+    # TODO: plot ensemble data
+    if ensemble
+        # get_cumulative_ensemble_data!(data)
+    end
+
+    if cumulative
+        get_cumulative_plot(data, length(data), length(data[1][!, 1]))
+    end
+end
+
+function split_dataset(data::DataFrame)
+    states = reduce(hcat, data[:, 3])
+    cm = vcat(
+        reduce(hcat, data[:, 4]),
+        reduce(hcat, data[:, 5])
+    )
+    r = reduce(hcat, data[:, 6])
+    return states, cm, r
+end
+
+function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
     l = @layout [
         RecipesBase.grid(1, 1)
         RecipesBase.grid(1, 2)
     ]
 
-    if cumulative
-        avg_data = mean([Array(d) for d in data])
-        states, cm, r = split_dataset(avg_data)
-        plt = plot(
-            plot(states', label=stateslabel),
-            plot(cm', label=cmlabel),
-            plot(r', label=rlabel),
-            layout=l
-        )
-        return plt
+    states = 5
+    y = fill(NaN, n, nodes, states)
+    for i = 1:states
+        res = []
+        for d in data
+            push!(res, reduce(hcat, d[:, 3])'[:, i])
+        end
+        res = reduce(hcat, res)
+        y[:, :, i] = res
     end
+    p1 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="S")
+    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="E")
+    errorline!(1:n, y[:, :, 3], errorstyle=:plume, label="I")
+    errorline!(1:n, y[:, :, 4], errorstyle=:plume, label="R")
+    errorline!(1:n, y[:, :, 5], errorstyle=:plume, label="D")
 
-    # TODO: sistemare un pochino
-    for d in data
-        states, cm, r = split_dataset(d)
-        push!(plt,
-            plot(
-                plot(states', label=stateslabel),
-                plot(cm', label=cmlabel),
-                plot(r', label=rlabel),
-                # layout=l
-            )
-        )
+    states = 2
+    y = fill(NaN, n, nodes, states)
+    for i = 1:states
+        res = []
+        for d in data
+            push!(res, reduce(hcat, d[:, 3+i]))
+        end
+        res = reduce(hcat, res)
+        y[:, :, i] = res
     end
+    p2 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="happiness")
+    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="η")
+
+    states = 1
+    y = fill(NaN, n, nodes, states)
+    for i = 1:states
+        res = []
+        for d in data
+            push!(res, reduce(hcat, d[:, 6]))
+        end
+        res = reduce(hcat, res)
+        y[:, :, i] = res
+    end
+    p3 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="R₀")
+    plt = plot(
+        plot(p1, title="ABM Dynamics", titlefontsize=10),
+        plot(p2, title="Agents response to η", titlefontsize=10),
+        plot(p3, title="Variant of Concern", titlefontsize=10),
+        layout=l
+    )
     return plt
 end
-
-function split_dataset(data::DataFrame)
-    states = reduce(hcat, d[:, 3])
-    cm = vcat(
-        reduce(hcat, d[:, 4]),
-        reduce(hcat, d[:, 5])
-    )
-    r = reduce(hcat, d[:, 6])
-    return states, cm, r
-end
-
-# TODO: aggiungere plot ensemble

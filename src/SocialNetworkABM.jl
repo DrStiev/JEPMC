@@ -7,26 +7,21 @@ import OrdinaryDiffEq, DiffEqCallbacks
 include("ABMUtils.jl")
 
 @agent Node ContinuousAgent{2} begin
-    population::Float64
+    population::Int
     status::Vector{Float64} # S, E, I, R, D
     param::Vector{Float64} # R₀, γ, σ, ω, δ, η, ξ
     happiness::Float64
 end
 
-# https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_ftc_jump/function_map_ftc_jump.md
-# https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_vaccine_jump/function_map_vaccine_jump.md
-
-# questo esempio potrebbe essere buono per la NeuralODE
-# https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_lockdown_optimization/ode_lockdown_optimization.md
 function init(;
-    numNodes::Int=20,
+    numNodes::Int=50,
     edgesCoverage::Symbol=:high,
     initialNodeInfected::Int=1,
     param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.007],
-    avgPopulation::Int=round(Int, 2.9555e6),
-    maxTravelingRate::Float64=0.01,  # flusso di persone che si spostano
+    avgPopulation::Int=10000,
+    maxTravelingRate::Float64=0.1,  # flusso di persone che si spostano
     tspan::Tuple=(1.0, Inf),
-    seed::Int=42
+    seed::Int=1234
 )
 
     rng = Xoshiro(seed)
@@ -66,7 +61,7 @@ function init(;
     return model
 end
 
-function model_step!(model::ABM)
+function model_step!(model::ABM; show::Bool=false)
     agents = [agent for agent in allagents(model)]
     for agent in agents
         # notify the integrator that the condition may be altered
@@ -78,6 +73,9 @@ function model_step!(model::ABM)
     end
     voc!(model)
     controller!(model)
+    if show
+        display(plot_system_graph(model))
+    end
 end
 
 function agent_step!(agent, model::ABM)
@@ -97,27 +95,30 @@ function migrate!(agent, model::ABM)
     tidxs, tweights = findnz(network)
 
     for i in 1:length(tidxs)
-        people_traveling_out = agent.status .* tweights[i] .* agent.population
-        people_traveling_out[end] = 0
+        try
+            people_traveling_out = map((x) -> round(Int, x), agent.status .* tweights[i] .* agent.population)
+            dead = people_traveling_out[end]
+            people_traveling_out[end] = 0.0
 
-        new_population = agent.population - sum(people_traveling_out)
-        agent.status = (agent.status .* agent.population - people_traveling_out) ./ new_population
-        agent.population = new_population
-        agent.population = map((x) -> round(Int, x), agent.population)
+            new_population = agent.population - (sum(people_traveling_out) + dead)
+            agent.status = (agent.status .* agent.population - people_traveling_out) ./ new_population
+            agent.population = new_population
+            agent.population = map((x) -> round(Int, x), agent.population)
 
-        objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
-        new_population = objective.population + sum(people_traveling_out)
-        objective.status = (objective.status .* objective.population + people_traveling_out) ./ new_population
-        objective.population = new_population
-        objective.population = map((x) -> round(Int, x), objective.population)
-        indexdst = indexin(objective.id, [a.id for a in allagents(model)])[1]
+            objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
+            new_population = objective.population + sum(people_traveling_out)
+            objective.status = (objective.status .* objective.population + people_traveling_out) ./ new_population
+            objective.population = new_population
+            objective.population = map((x) -> round(Int, x), objective.population)
+        catch ex
+            @warn "Something was odd: " exception = (ex, catch_backtrace())
+        end
     end
-    indexsrc = indexin(agent.id, [a.id for a in allagents(model)])[1]
 end
 
 # TODO: vedere se mantenere campo happiness nel caso, migliorare stimatore
 function happiness!(agent)
-    agent.happiness = tanh(agent.happiness - agent.param[6])
+    agent.happiness = tanh(agent.happiness - agent.param[6] + (agent.status[4] - (agent.status[5] + agent.status[3])))
 end
 
 function voc!(model::ABM)
@@ -137,7 +138,7 @@ end
 function controller!(model::ABM)
 end
 
-function collect(
+function collect!(
     model::ABM;
     agent_step=agent_step!,
     model_step=model_step!,
@@ -161,7 +162,7 @@ function collect(
     end
 end
 
-function ensemble_collect(
+function ensemble_collect!(
     models::Vector;
     agent_step=agent_step!,
     model_step=model_step!,
@@ -191,4 +192,42 @@ function ensemble_collect(
     else
         return data
     end
+end
+
+n = 1200
+model = init(; numNodes=50)
+plot_system_graph(model)
+data = collect!(model; n=n)
+plt = plot_model(data; cumulative=true)
+include("Utils.jl")
+save_plot(plt, "img/abm_ode/", "SocialNetworkABM", "pdf")
+
+# TODO: param scan su :maxTravelingRate, :edgesCoverage, :numNodes, :avgPopulation
+# TODO: cacciare un modo per visualizzare decentemente i grafici soprattutto questi complessi
+# sbattere un bel @everywhere nell'include e via. fare sti test file separato
+parameters = Dict(
+    :maxTravelingRate => Base.collect(0.01:0.01:0.1),
+    :edgesCoverage => [:high, :medium, :low],
+    :numNodes => Base.collect(1:10:101),
+    :avgPopulation => Base.collect(1000:1000:100000),
+)
+
+r = paramscan(
+    parameters,
+    init;
+    adata=get_observable_data(),
+    (agent_step!)=agent_step!,
+    (model_step!)=model_step!,
+    n=1200,
+    showprogress=true,
+    parallel=true
+)
+
+plot_model(data; cumulative=true)
+
+models = [init(; seed=abs(i)) for i in rand(Int64, 10)]
+data = ensemble_collect!(models; n=n)
+
+for d in data
+    display(plot_model(d))
 end
