@@ -12,11 +12,11 @@ using Distributions, Random, Plots
 function F!(du, u, p, t)
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ, η, ξ = p
-    du[1] = (-R₀ * γ * (1 - η) * S * I) + (ω * R) - (S * ξ) # dS
-    du[2] = (R₀ * γ * (1 - η) * S * I) - (σ * E) # dE
-    du[3] = (σ * E) - (γ * I) - (δ * I) # dI
-    du[4] = ((1 - δ) * γ * I) - (ω * R) + (S * ξ) # dR
-    du[5] = (δ * I * γ) # dD
+    du[1] = -R₀ * γ * (1 - η) * S * I + ω * R - ξ * S # dS
+    du[2] = R₀ * γ * (1 - η) * S * I - σ * E # dE
+    du[3] = σ * E - γ * I - δ * I # dI
+    du[4] = (1 - δ) * γ * I - ω * R + ξ * S # dR
+    du[5] = δ * γ * I # dD
 end
 
 condition_voc(u, t, integrator) = rand(rng) < 8e-3

@@ -5,6 +5,7 @@ using StatsBase: sample, Weights
 import OrdinaryDiffEq, DiffEqCallbacks
 
 include("ABMUtils.jl")
+include("Controller.jl")
 
 @agent Node ContinuousAgent{2} begin
     population::Int
@@ -21,6 +22,8 @@ function init(;
     avgPopulation::Int=10000,
     maxTravelingRate::Float64=0.1,  # flusso di persone che si spostano
     tspan::Tuple=(1.0, Inf),
+    control::Bool=false,
+    threshold::Float64=1e-3,
     seed::Int=1234
 )
 
@@ -37,6 +40,8 @@ function init(;
             :param => param,
             :connections => graph,
             :migrationMatrix => migrationMatrix,
+            :step => 0,
+            :control => control,
         ),
         rng
     )
@@ -72,22 +77,16 @@ function model_step!(model::ABM; show::Bool=false)
         agent.status = model.integrator[agent.id].u
     end
     voc!(model)
-    controller!(model)
     if show
         display(plot_system_graph(model))
     end
+    model.step += 1
 end
 
 function agent_step!(agent, model::ABM)
     migrate!(agent, model)
-    update!(agent)
     happiness!(agent)
-end
-
-function update!(agent)
-    if agent.param[1] > 1.0
-        agent.param[1] -= agent.param[6] * (agent.param[1] - 1.0)
-    end
+    model.control ? controller!(agent, model) : nothing
 end
 
 function migrate!(agent, model::ABM)
@@ -96,7 +95,7 @@ function migrate!(agent, model::ABM)
 
     for i in 1:length(tidxs)
         try
-            people_traveling_out = map((x) -> round(Int, x), agent.status .* tweights[i] .* agent.population)
+            people_traveling_out = map((x) -> round(Int, x), agent.status .* tweights[i] .* agent.population .* (1 - agent.param[6]))
             dead = people_traveling_out[end]
             people_traveling_out[end] = 0.0
 
@@ -134,8 +133,11 @@ function voc!(model::ABM)
     end
 end
 
-# TODO: implementare controller
-function controller!(model::ABM)
+function controller!(agent, model::ABM)
+    # TODO: implementare eliminazione di queste policy?
+    if agent.status[3] ≥ 1e-3 && model.step % 30 == 0
+        agent.param[6] = controller!(agent.status, agent.param)[1]
+    end
 end
 
 function collect!(
@@ -194,8 +196,8 @@ function ensemble_collect!(
     end
 end
 
-n = 1200
-model = init(; numNodes=50)
+n = 300
+model = init(; numNodes=4, avgPopulation=2000, control=true)
 plot_system_graph(model)
 data = collect!(model; n=n)
 plt = plot_model(data; cumulative=true)

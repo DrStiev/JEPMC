@@ -1,123 +1,84 @@
 using JuMP, Ipopt, Plots, InfiniteOpt
+using Statistics: mean
 # TODO: https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_ftc_jump/function_map_ftc_jump.md
 # TODO: https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_vaccine_jump/function_map_vaccine_jump.md
 # questo esempio potrebbe essere buono per la NeuralODE
 # TODO: https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_lockdown_optimization/ode_lockdown_optimization.md
 
-# PROVA QUESTO
-# TODO: https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_lockdown_infiniteopt/ode_lockdown_infiniteopt.md
 # https://github.com/epirecipes/sir-julia
 function controller!(
     initial_condition::Vector{Float64},
-    parameters::Vector{Float64},
-    η_max::Float64=0.5,
-    I_max::Float64=0.1, # piu' basso e' I_max piu' alto dovra' essere η_max
-    D_max::Float64=0.001;
-    silent::Bool=true,
+    parameters::Vector{Float64};
+    C₀::Float64=0.0,
+    υ_max::Float64=0.5, # υ_max e υ_total sono inversamente proporzionali
+    υ_total::Float64=10.0,
     timeframe::Tuple{Float64,Float64}=(0.0, 100.0), # anche il tempo potrebbe essere importante
     δt::Float64=0.1,
     showplot::Bool=false
 )
+    extra_ts = collect(δt:δt:timeframe[2]-δt)
+    model = InfiniteModel(Ipopt.Optimizer)
+    set_optimizer_attribute(model, "print_level", 0)
 
-    T = Int(timeframe[2] / δt)
-    # specify a model using JuMP.Model passing an optimizer
-    model = Model(Ipopt.Optimizer)
+    @infinite_parameter(model, t ∈ [timeframe[1], timeframe[2]], num_supports = length(extra_ts) + 2,
+        derivative_method = OrthogonalCollocation(2))
+    add_supports(t, extra_ts)
 
-    # we declare the number of timesteps and vectors of our model variables
-    # including the intervention level each timesteps+1 long
-    # we also define the total cost of the intervention
-    @variable(model, S[1:(T+1)])
-    @variable(model, E[1:(T+1)])
-    @variable(model, I[1:(T+1)])
-    @variable(model, R[1:(T+1)])
-    @variable(model, D[1:(T+1)])
-    @variable(model, η[1:(T+1)])
-    @variable(model, η_total)
+    @variable(model, S ≥ 0, Infinite(t))
+    @variable(model, E ≥ 0, Infinite(t))
+    @variable(model, I ≥ 0, Infinite(t))
+    @variable(model, R ≥ 0, Infinite(t))
+    @variable(model, D ≥ 0, Infinite(t))
+    @variable(model, C ≥ 0, Infinite(t))
 
-    # we constrain our variables to be at their initial conditions
-    # for the first element of the array and between 0 and 1 for the others
-    # with the exception for the proportion of infected individuals,
-    # which is constrained to be less than I_max
-    @constraint(model, S[1] == initial_condition[1])
-    @constraint(model, E[1] == initial_condition[2])
-    @constraint(model, I[1] == initial_condition[3])
-    @constraint(model, R[1] == initial_condition[4])
-    @constraint(model, D[1] == initial_condition[5])
+    @variable(model, 0 ≤ υ ≤ υ_max, Infinite(t), start = 0.0)
+    @constraint(model, υ_total_constr, ∫(υ, t) ≤ υ_total)
 
-    @constraint(model, [t = 2:(T+1)], 0 ≤ S[t] ≤ 1)
-    @constraint(model, [t = 2:(T+1)], 0 ≤ E[t] ≤ 1)
-    @constraint(model, [t = 2:(T+1)], 0 ≤ I[t] ≤ I_max)
-    @constraint(model, [t = 2:(T+1)], 0 ≤ R[t] ≤ 1)
-    @constraint(model, [t = 2:(T+1)], 0 ≤ D[t] ≤ D_max)
+    @objective(model, Min, C(tf))
 
-    # we constrain our policy to lie between 0 and η_max and define
-    # the integral of the intervention to be equal to η_total
-    # assuming that the intervention is piecewise constant during each
-    # T
-    @constraint(model, [t = 1:(T+1)], 0 ≤ η[t] ≤ η_max)
-    @constraint(model, sum(η) == η_total)
+    @constraint(model, S(0) == initial_condition[1])
+    @constraint(model, E(0) == initial_condition[2])
+    @constraint(model, I(0) == initial_condition[3])
+    @constraint(model, R(0) == initial_condition[4])
+    @constraint(model, D(0) == initial_condition[5])
+    @constraint(model, C(0) == C₀)
 
-    # to simplify the model constraint, we define nonlinear expressions for
-    # the various states. We only need a vector that is T long
-    @NLexpression(
-        model,
-        exposed[t=1:T],
-        (1 - exp(-(1 - η[t]) * parameters[1] * parameters[2] * I[t] * δt)) * S[t]
-    )
-    @NLexpression(
-        model,
-        infected[t=1:T],
-        (1 - exp(-parameters[3] * δt)) * E[t]
-    )
-    @NLexpression(
-        model,
-        recovery[t=1:T],
-        (1 - exp(-parameters[2] * δt)) * I[t])
-    @NLexpression(
-        model,
-        death[t=1:T],
-        (1 - exp(-parameters[5] * parameters[2] * δt) * I[t])
-    )
+    @constraint(model, S_constr, ∂(S, t) == -(1 - υ) * parameters[1] * parameters[2] * S * I + parameters[4] * R - parameters[7] * S)
+    @constraint(model, E_constr, ∂(E, t) == (1 - υ) * parameters[1] * parameters[2] * S * I - parameters[3] * E)
+    @constraint(model, I_constr, ∂(I, t) == parameters[3] * E - parameters[2] * I - parameters[5] * I)
+    @constraint(model, R_constr, ∂(R, t) == (1 - parameters[5]) * parameters[2] * I - parameters[4] * R + parameters[7] * S)
+    @constraint(model, D_constr, ∂(D, t) == parameters[5] * parameters[2] * I)
+    @constraint(model, C_constr, ∂(C, t) == parameters[3] * E)
 
-    # we add additional constraints corresponding to the function map for S, E, I, R and D.
-    # These have to be nonlinear constraints due to the inclusion of nonlinear expressions
-    @NLconstraint(model, [t = 1:T], S[t+1] == S[t] - exposed[t])
-    @NLconstraint(model, [t = 1:T], E[t+1] == E[t] + exposed[t] - infected[t])
-    @NLconstraint(model, [t = 1:T], I[t+1] == I[t] + infected[t] - recovery[t])
-    @NLconstraint(model, [t = 1:T], R[t+1] == R[t] + recovery[t] - death[t])
-    @NLconstraint(model, [t = 1:T], D[t+1] == D[t] + death[t])
-
-    # we declare ourr objective as minimizing the total cost of the intervention  plus smoothing penalty
-    @objective(model, Min, η_total)
-    silent ? set_silent(model) : nothing
     optimize!(model)
     @info termination_status(model)
 
-    η_opt = value.(η)
+    S_opt = value(S, ndarray=true)
+    E_opt = value(E, ndarray=true)
+    I_opt = value(I, ndarray=true)
+    R_opt = value(R, ndarray=true)
+    D_opt = value(D, ndarray=true)
+    C_opt = value(C, ndarray=true)
+    υ_opt = value(υ, ndarray=true)
+    obj_opt = objective_value(model)
+    ts = value(t)
+
     # ritorno il vettore di quando applicare le contromisure
-    ηt = unique(map((x) -> trunc(Int, x), findall(x -> x > 1e-3, η_opt) * δt))
-    filter!(e -> e ≠ 0, ηt)
-    # ritorno il vettore del valore delle contromisure utilizzate in
-    # durante il periodo specifico
-    η_opt_t = η_opt[trunc(Int, ηt[1] / δt):trunc(Int, 1 / δt):trunc(Int, ηt[end] / δt)]
+    υt = unique(map((x) -> trunc(Int, x), findall(x -> x > 1e-3, υ_opt) * 0.1))
+    filter!(e -> e ≠ 0, υt)
+    # ritorno il vettore del valore delle contromisure utilizzate durante il periodo specifico
+    υ_opt_t = υ_opt[trunc(Int, υt[1] / δt):trunc(Int, 1 / δt):trunc(Int, υt[end] / δt)]
+    mean(υ_opt_t)
+
     plt = nothing
     if showplot
-        ts = collect(0:δt:timeframe[2])
-        plt = plot(ts, value.(S), label="S", xlabel="Time", ylabel="Number")
-        plot!(ts, value.(E), label="E")
-        plot!(ts, value.(I), label="I")
-        plot!(ts, value.(R), label="R")
-        plot!(ts, value.(D), label="D")
-        plot!(ts, value.(η), label="Optimized η")
-        hline!([I_max], color=:gray, linestyle=:dashdotdot, alpha=0.5, label="Threshold I")
-        hline!([η_max], color=:orange, linestyle=:dashdotdot, alpha=0.5, label="Threshold η")
+        plt = plot(ts, S_opt, label="S", xlabel="Time", ylabel="Number")
+        plot!(ts, E_opt, label="E")
+        plot!(ts, I_opt, label="I")
+        plot!(ts, R_opt, label="R")
+        plot!(ts, D_opt, label="D")
+        plot!(ts, C_opt, label="C")
+        plot!(ts, υ_opt, label="Optimized υ")
     end
-    return ηt, η_opt_t, plt
+    return (mean(υ_opt_t), plt)
 end
-
-ηt, η_opt_t, plt = controller!(
-    [0.99, 0, 0.01, 0, 0],
-    [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0];
-    showplot=true
-)
-plt

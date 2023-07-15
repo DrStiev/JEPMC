@@ -63,11 +63,11 @@ end
 function seir!(du, u, p, t)
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ, η, ξ = p
-    du[1] = (-R₀ * γ * S * I) + (ω * R) - (S * ξ) # dS
-    du[2] = (R₀ * γ * S * I) - (σ * E) # dE
-    du[3] = (σ * E) - (γ * I) - (δ * I) # dI
-    du[4] = ((1 - δ) * γ * I) - (ω * R) + (S * ξ) # dR
-    du[5] = (δ * I * γ) # dD
+    du[1] = -R₀ * γ * (1 - η) * S * I + ω * R - ξ * S # dS
+    du[2] = R₀ * γ * (1 - η) * S * I - σ * E # dE
+    du[3] = σ * E - γ * I - δ * I # dI
+    du[4] = (1 - δ) * γ * I - ω * R + ξ * S # dR
+    du[5] = δ * γ * I # dD
 end
 
 # TODO: https://docs.juliaplots.org/stable/generated/statsplots/
@@ -146,7 +146,7 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         y[:, :, i] = res
     end
     p2 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="happiness")
-    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="η")
+    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="countermeasures")
 
     states = 1
     y = fill(NaN, n, nodes, states)
