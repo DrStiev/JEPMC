@@ -9,6 +9,30 @@ using Lux, DiffEqFlux, DifferentialEquations, Optimization, OptimizationOptimJL
 using DifferentialEquations, Lux, SciMLSensitivity, ComponentArrays, OptimizationOptimisers
 using Distributions, Random, Plots
 
+function plot_loss(losses::Vector{Float64}, label::Vector{String}, iter::Int)
+    plt = plot(
+        1:iter,
+        losses[1:iter],
+        yaxis=:log10,
+        xaxis=:log10,
+        label=label[1],
+        xlabel="Iterations",
+        ylabel="Loss",
+        color=:blue,
+    )
+    plot!(
+        iter+1:length(losses),
+        losses[iter+1:end],
+        yaxis=:log10,
+        xaxis=:log10,
+        label=label[2],
+        xlabel="Iterations",
+        ylabel="Loss",
+        color=:red,
+    )
+    return plt
+end
+
 function F!(du, u, p, t)
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ, η, ξ = p
@@ -65,7 +89,7 @@ end
 # Do not plot by default for the documentation
 # Users should change doplot=true to see the plots callbacks
 losses = Float64[]
-callback = function (p, l, pred; doplot::Bool=true, loss_step::Int=50)
+callback = function (p, l, pred; doplot::Bool=false, loss_step::Int=50)
     push!(losses, l)
     if length(losses) % loss_step == 0
         println("Current loss after $(length(losses)) iterations: $(losses[end])")
@@ -90,38 +114,16 @@ result_neuralode = Optimization.solve(
     optprob,
     ADAM(0.05),
     callback=callback,
-    maxiters=1_000,
-    allow_f_increases=false
+    maxiters=5_000
 )
 
 optprob2 = remake(optprob, u0=result_neuralode.u)
 
-result_neuralode2 = Optimization.solve(optprob2,
+result_neuralode2 = Optimization.solve(
+    optprob2,
     Optim.BFGS(initial_stepnorm=0.01),
     callback=callback,
     allow_f_increases=false
 )
 
-function plot_loss(losses::Vector{Float64}, label::Vector{String}, iter::Int)
-    plt = plot(
-        1:iter,
-        losses[1:iter],
-        yaxis=:log10,
-        xaxis=:log10,
-        label=label[1],
-        xlabel="Iterations",
-        ylabel="Loss",
-        color=:blue,
-    )
-    plot!(
-        iter+1:length(losses),
-        losses[iter+1:end],
-        yaxis=:log10,
-        xaxis=:log10,
-        label=label[2],
-        xlabel="Iterations",
-        ylabel="Loss",
-        color=:red,
-    )
-    return plt
-end
+plot_loss(losses, ["ADAM", "BFGS"], 5_000)

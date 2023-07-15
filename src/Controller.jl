@@ -34,7 +34,7 @@ function controller!(
     @variable(model, 0 ≤ υ ≤ υ_max, Infinite(t), start = 0.0)
     @constraint(model, υ_total_constr, ∫(υ, t) ≤ υ_total)
 
-    @objective(model, Min, C(tf))
+    @objective(model, Min, C(timeframe[2]))
 
     @constraint(model, S(0) == initial_condition[1])
     @constraint(model, E(0) == initial_condition[2])

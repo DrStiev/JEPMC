@@ -13,9 +13,9 @@ include("ABMUtils.jl")
 include("Utils.jl")
 include("Controller.jl")
 
-export init, collect, ensemble_collect
+export init, collect!, ensemble_collect!, collect_paramscan!
 export plot_system_graph, plot_model
-export save_dataframe, save_plot
+export save_dataframe, save_plot, save_parameters, read_dataset, load_parameters
 
 # format(".")
 # update_julia() # to update julia version

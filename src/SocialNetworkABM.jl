@@ -66,7 +66,7 @@ function init(;
     return model
 end
 
-function model_step!(model::ABM; show::Bool=false)
+function model_step!(model::ABM)
     agents = [agent for agent in allagents(model)]
     for agent in agents
         # notify the integrator that the condition may be altered
@@ -77,10 +77,19 @@ function model_step!(model::ABM; show::Bool=false)
         agent.status = model.integrator[agent.id].u
     end
     voc!(model)
-    if show
-        display(plot_system_graph(model))
-    end
+    model.control ? vaccine!(model) : nothing
     model.step += 1
+end
+
+function vaccine!(model::ABM)
+    if rand(model.rng) < 1 / 365
+        R = mean([agent.param[1] for agent in allagents(model)])
+        vaccine = (1 - (1 / R)) / rand(model.rng, Normal(0.83, 0.083))
+        vaccine /= mean([agent.param[4] for agent in allagents(model)])
+        for agent in allagents(model)
+            agent.param[7] = vaccine
+        end
+    end
 end
 
 function agent_step!(agent, model::ABM)
@@ -196,27 +205,14 @@ function ensemble_collect!(
     end
 end
 
-n = 300
-model = init(; numNodes=4, avgPopulation=2000, control=true)
-plot_system_graph(model)
-data = collect!(model; n=n)
-plt = plot_model(data; cumulative=true)
-include("Utils.jl")
-save_plot(plt, "img/abm_ode/", "SocialNetworkABM", "pdf")
-
-# TODO: param scan su :maxTravelingRate, :edgesCoverage, :numNodes, :avgPopulation
-# TODO: cacciare un modo per visualizzare decentemente i grafici soprattutto questi complessi
-# sbattere un bel @everywhere nell'include e via. fare sti test file separato
-parameters = Dict(
-    :maxTravelingRate => Base.collect(0.01:0.01:0.1),
-    :edgesCoverage => [:high, :medium, :low],
-    :numNodes => Base.collect(1:10:101),
-    :avgPopulation => Base.collect(1000:1000:100000),
-)
-
-r = paramscan(
-    parameters,
-    init;
+function collect_paramscan!(
+    parameters::Dict=Dict(
+        :maxTravelingRate => Base.collect(0.01:0.01:0.1),
+        :edgesCoverage => [:high, :medium, :low],
+        :numNodes => Base.collect(1:10:101),
+        :avgPopulation => Base.collect(1000:1000:100000),
+    ),
+    init=init();
     adata=get_observable_data(),
     (agent_step!)=agent_step!,
     (model_step!)=model_step!,
@@ -225,11 +221,16 @@ r = paramscan(
     parallel=true
 )
 
-plot_model(data; cumulative=true)
+    data = paramscan(
+        parameters,
+        init;
+        adata=adata,
+        (agent_step!)=agent_step!,
+        (model_step!)=model_step!,
+        n=n,
+        showprogress=showprogress,
+        parallel=parallel
+    )
 
-models = [init(; seed=abs(i)) for i in rand(Int64, 10)]
-data = ensemble_collect!(models; n=n)
-
-for d in data
-    display(plot_model(d))
+    return data
 end
