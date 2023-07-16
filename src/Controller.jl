@@ -63,10 +63,8 @@ function controller!(
     obj_opt = objective_value(model)
     ts = value(t)
 
-    # ritorno il vettore di quando applicare le contromisure
     υt = unique(map((x) -> trunc(Int, x), findall(x -> x > 1e-3, υ_opt) * 0.1))
     filter!(e -> e ≠ 0, υt)
-    # ritorno il vettore del valore delle contromisure utilizzate durante il periodo specifico
     υ_opt_t = υ_opt[trunc(Int, υt[1] / δt):trunc(Int, 1 / δt):trunc(Int, υt[end] / δt)]
     mean(υ_opt_t)
 

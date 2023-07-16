@@ -6,8 +6,11 @@
 # TODO: https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/
 
 using Lux, DiffEqFlux, DifferentialEquations, Optimization, OptimizationOptimJL
-using DifferentialEquations, Lux, SciMLSensitivity, ComponentArrays, OptimizationOptimisers
-using Distributions, Random, Plots
+using SciMLSensitivity, ComponentArrays, OptimizationOptimisers
+using OrdinaryDiffEq, ModelingToolkit, DataDrivenDiffEq, DataDrivenSparse
+using Distributions, Random, Plots, LinearAlgebra, Statistics, Zygote
+
+gr()
 
 function plot_loss(losses::Vector{Float64}, label::Vector{String}, iter::Int)
     plt = plot(
@@ -43,19 +46,150 @@ function F!(du, u, p, t)
     du[5] = δ * γ * I # dD
 end
 
-condition_voc(u, t, integrator) = rand(rng) < 8e-3
+# TODO: definire funzione comprensiva
+function neural_ode(
+    data::Matrix{Float64},
+    p_true::Vector{Float64},
+    tspan::Tuple;
+    optimizers::Vector=[ADAM, Optim.BFGS],
+    optimizersparameters::Vector{Float64}=[0.1, 0.01],
+    maxiters::Vector{Int}=[5000, 1000],
+    doplot::Bool=false,
+    seed::Int=1234
+)
 
-function affect_voc!(integrator)
-    println("voc")
-    integrator.p[1] = rand(rng, Uniform(3.3, 5.7))
-    integrator.p[2] = abs(rand(rng, Normal(integrator.p[2], integrator.p[2] / 10)))
-    integrator.p[3] = abs(rand(rng, Normal(integrator.p[3], integrator.p[3] / 10)))
-    integrator.p[4] = abs(rand(rng, Normal(integrator.p[4], integrator.p[4] / 10)))
-    integrator.p[5] = abs(rand(rng, Normal(integrator.p[5], integrator.p[5] / 10)))
+    rng = Xoshiro(seed)
+
+    prob_size = size(data, 1)
+    U = Lux.Chain(
+        Lux.Dense(prob_size, prob_size^2 * 2, tanh),
+        Lux.Dense(prob_size^2 * 2, prob_size))
+    p, st = Lux.setup(rng, U)
+
+    function ude_dynamics!(du, u, p, t, p_true)
+        û = U(u, p, st)[1]
+        S, E, I, R, D = u
+        R₀, γ, σ, ω, δ, η, ξ = p_true
+        du[1] = (-R₀ * γ * (1 - η) * S * I + ω * R - ξ * S) * û[1] # dS
+        du[2] = (R₀ * γ * (1 - η) * S * I - σ * E) * û[2] # dE
+        du[3] = (σ * E - γ * I - δ * I) * û[3] # dI
+        du[4] = ((1 - δ) * γ * I - ω * R + ξ * S) * û[4] # dR
+        du[5] = (δ * γ * I) * û[5] # dD
+    end
+
+    nn_dynamics!(du, u, p, t) = ude_dynamics!(du, u, p, t, p_true)
+    prob_nn = ODEProblem(nn_dynamics!, data[:, 1], tspan, p)
+
+    function predict(θ, X=data[:, 1], T=tspan)
+        _prob = remake(prob_nn, u0=X, tspan=(T[1], T[end]), p=θ)
+        Array(solve(_prob, Tsit5(), saveat=T, abstol=1e-6, reltol=1e-6, verbose=false))
+    end
+
+    function loss(θ)
+        X̂ = predict(θ)
+        mean(abs2, X .- X̂)
+    end
+
+    losses = Float64[]
+    callback = function (p, l; loss_step::Int=100)
+        push!(losses, l)
+        if length(losses) % loss_step == 0
+            println("Current loss after $(length(losses)) iterations: $(losses[end])")
+        end
+        return false
+    end
+
+    adtype = Optimization.AutoZygote()
+    optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
+    optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
+
+    res1 = Optimization.solve(optprob, optimizers[1](optimizersparameters[1]), callback=callback, maxiters=maxiters[1])
+    println("Training loss after $(length(losses)) iterations: $(losses[end])")
+
+    optprob2 = Optimization.OptimizationProblem(optf, res1.u)
+    res2 = Optimization.solve(optprob2, optimizers[2](optimizersparameters[2]), callback=callback, maxiters=maxiters[2])
+    println("Final training loss after $(length(losses)) iterations: $(losses[end])")
+
+    plt = nothing
+    if doplot
+        # TODO: make plot
+        X̂ = predict(res2.u, data[:, 1], tspan)
+        # Trained on noisy data vs real solution
+        pl_trajectory = plot(tspan, transpose(X̂), xlabel="t", ylabel="percentage", label=["S Approximation" "E Approximation" "I Approximation" "R Approximation" "D Approximation"])
+        scatter!(tspan, transpose(data), label=["S Measurements" "E Measurements" "I Measurements" "R Measurements" "D Measurements"])
+        # Ideal unknown interactions of the predictors
+        Ȳ = []
+        Ŷ = U(X̂, res2.u, st)[1]
+        # Plot the error
+        pl_reconstruction_error = plot(tspan, norm.(eachcol(Ȳ .- Ŷ)), yaxis=:log, xlabel="t", ylabel="L2-Error", label=nothing, color=:red)
+        pl_missing = plot(pl_recontruction, pl_recontruction_error, layout=(1, 2))
+        plt = plot(pl_trajectory, pl_missing)
+    end
+    return (res2.u, Ŷ=U(X̂, res2.u, st)[1], losses, plt)
 end
 
-voc_cb = ContinuousCallback(condition_voc, affect_voc!)
-cb = CallbackSet(voc_cb)
+function sparse_regression(
+    X̂::Matrix{Float64},
+    Ŷ::Matrix{Float64},
+    p_true::Vector{Float64},
+    tspan::Tuple;
+    λ=exp10.(-3:0.01:3),
+    optimizers::Vector=[ADMM, Optim.BFGS],
+    maxiters::Int=1000,
+    doplot::Bool=false,
+    seed::Int=1234
+)
+    @variables u[1:size(X̂, 1)]
+    b = polynomial_basis(u, size(X̂, 1))
+    basis = Basis(b, u)
+
+    nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
+    opt = optimizers[1](λ)
+
+    options = DataDrivenCommonOptions(maxiters=10_000,
+        normalize=DataNormalization(ZScoreTransform),
+        selector=bic, digits=1,
+        data_processing=DataProcessing(split=0.9,
+            batchsize=30,
+            shuffle=true,
+            rng=Xoshiro(seed)))
+
+    nn_res = solve(nn_problem, basis, opt, options=options)
+    nn_eqs = get_basis(nn_res)
+    println(nn_res)
+
+    # Define the recovered, hybrid model
+    function recovered_dynamics!(du, u, p, t, p_true)
+        û = nn_eqs(u, p) # recovered equations
+        S, E, I, R, D = u
+        R₀, γ, σ, ω, δ, η, ξ = p_true
+        du[1] = (-R₀ * γ * (1 - η) * S * I + ω * R - ξ * S) * û[1] # dS
+        du[2] = (R₀ * γ * (1 - η) * S * I - σ * E) * û[2] # dE
+        du[3] = (σ * E - γ * I - δ * I) * û[3] # dI
+        du[4] = ((1 - δ) * γ * I - ω * R + ξ * S) * û[4] # dR
+        du[5] = (δ * γ * I) * û[5] # dD
+    end
+
+    recovered_dynamics!(du, u, p, t) = recovered_dynamics!(du, u, p, t, p_true)
+    estimation_prob = ODEProblem(recovered_dynamics!, X̂[:, 1], tspan, get_parameter_values(nn_eqs))
+    estimate = solve(estimation_prob, Tsit5(), saveat=tspan)
+
+    function parameter_loss(p)
+        Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
+        sum(abs2, Ŷ .- Y)
+    end
+
+    optf = Optimization.OptimizationFunction((x, p) -> parameter_loss(x), Optimization.AutoZygote())
+    optprob = Optimization.OptimizationProblem(optf, get_parameter_values(nn_eqs))
+    parameter_res = Optimization.solve(optprob, optimizers[2], maxiters=maxiters)
+
+    # Simulation long term
+    t_long = (0.0, 50.0)
+    estimation_prob = ODEProblem(recovered_dynamics!, u0, t_long, parameter_res)
+    estimate_long = solve(estimation_prob, Tsit5(), saveat=tsteps)
+
+    return estimate_long
+end
 
 rng = Xoshiro(1234)
 u = [(1e6 - 1) / 1e6, 0, 1 / 1e6, 0, 0]
@@ -64,66 +198,7 @@ tspan = (0.0f0, 1200.0f0)
 param = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
 tsteps = range(tspan[1], tspan[2], length=datasize)
 
-prob_trueode = ODEProblem(F!, u, tspan, param) #, callback=cb)
-ode_data = Array(solve(prob_trueode, Tsit5(), saveat=tsteps))
+prob_trueode = ODEProblem(F!, u, tspan, param)
+ode_data = Array(solve(prob_trueode, Tsit5(), saveat=tsteps, abstol=1e-12, reltol=1e-12))
 
-prob_size = size(ode_data, 1)
-dudt2 = Lux.Chain(
-    Lux.Dense(prob_size, prob_size^2, tanh),
-    Lux.Dense(prob_size^2, prob_size^2, tanh),
-    Lux.Dense(prob_size^2, prob_size^2, tanh),
-    Lux.Dense(prob_size^2, prob_size))
-p, st = Lux.setup(rng, dudt2)
-prob_neuralode = NeuralODE(dudt2, tspan, Tsit5(), saveat=tsteps)
-
-function predict_neuralode(p)
-    Array(prob_neuralode(u, p, st)[1])
-end
-
-function loss_neuralode(p)
-    pred = predict_neuralode(p)
-    loss = sum(abs2, ode_data .- pred)
-    return loss, pred
-end
-
-# Do not plot by default for the documentation
-# Users should change doplot=true to see the plots callbacks
-losses = Float64[]
-callback = function (p, l, pred; doplot::Bool=false, loss_step::Int=50)
-    push!(losses, l)
-    if length(losses) % loss_step == 0
-        println("Current loss after $(length(losses)) iterations: $(losses[end])")
-        if doplot
-            plt = scatter(ode_data', label=["data S" "data E" "data I" "data R" "data D"])
-            plot!(plt, pred', label=["prediction S" "prediction E" "prediction I" "prediction R" "prediction D"])
-            display(plot(plt))
-        end
-    end
-    return false
-end
-
-pinit = ComponentArray(p)
-
-# use Optimization.jl to solve the problem
-adtype = Optimization.AutoZygote()
-
-optf = Optimization.OptimizationFunction((x, p) -> loss_neuralode(x), adtype)
-optprob = Optimization.OptimizationProblem(optf, pinit)
-
-result_neuralode = Optimization.solve(
-    optprob,
-    ADAM(0.05),
-    callback=callback,
-    maxiters=5_000
-)
-
-optprob2 = remake(optprob, u0=result_neuralode.u)
-
-result_neuralode2 = Optimization.solve(
-    optprob2,
-    Optim.BFGS(initial_stepnorm=0.01),
-    callback=callback,
-    allow_f_increases=false
-)
-
-plot_loss(losses, ["ADAM", "BFGS"], 5_000)
+x, y, z, plt = neural_ode(ode_data, param, tspan)

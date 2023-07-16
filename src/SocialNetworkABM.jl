@@ -234,3 +234,15 @@ function collect_paramscan!(
 
     return data
 end
+
+modelL = init(; numNodes=6, edgesCoverage=:low)
+plot_system_graph(modelL)
+
+modelM = init(; numNodes=6, edgesCoverage=:medium)
+plot_system_graph(modelM)
+
+modelH = init(; numNodes=6, edgesCoverage=:high)
+plot_system_graph(modelH)
+
+
+modelH.connections
