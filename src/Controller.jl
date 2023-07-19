@@ -51,7 +51,7 @@ function controller!(
     @constraint(model, C_constr, ∂(C, t) == parameters[3] * E)
 
     optimize!(model)
-    @info termination_status(model)
+    @debug termination_status(model)
 
     S_opt = value(S, ndarray=true)
     E_opt = value(E, ndarray=true)

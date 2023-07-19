@@ -38,7 +38,7 @@ end
 
 function save_parameters(params, path::String, title::String="parameters")
     isdir(path) == false && mkpath(path)
-    save(path * title * "_" * string(today()) * ".jld2", params)
+    save(path * title * ".jld2", params)
 end
 
 load_parameters(path) = load(path)
@@ -49,10 +49,10 @@ end
 
 function save_dataframe(data::DataFrame, path::String, title="StandardABM")
     isdir(path) == false && mkpath(path)
-    CSV.write(path * title * "_" * string(today()) * ".csv", data)
+    CSV.write(path * title * ".csv", data)
 end
 
 function save_plot(plot, path="", title="title", format="png")
     isdir(path) == false && mkpath(path)
-    savefig(plot, path * title * "_" * string(today()) * "." * format)
+    savefig(plot, path * title * "." * format)
 end

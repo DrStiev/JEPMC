@@ -63,10 +63,11 @@ end
 function seir!(du, u, p, t)
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ, η, ξ = p
-    du[1] = -R₀ * γ * (1 - η) * S * I + ω * R - ξ * S # dS
-    du[2] = R₀ * γ * (1 - η) * S * I - σ * E # dE
-    du[3] = σ * E - γ * I - δ * I # dI
-    du[4] = (1 - δ) * γ * I - ω * R + ξ * S # dR
+    μ = δ / 101
+    du[1] = μ * sum(u) - R₀ * γ * (1 - η) * S * I + ω * R - ξ * S - μ * S # dS
+    du[2] = R₀ * γ * (1 - η) * S * I - σ * E - μ * E # dE
+    du[3] = σ * E - γ * I - δ * I - μ * I # dI
+    du[4] = (1 - δ) * γ * I - ω * R + ξ * S - μ * R # dR
     du[5] = δ * γ * I # dD
 end
 

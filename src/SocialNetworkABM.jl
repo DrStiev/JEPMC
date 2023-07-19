@@ -77,7 +77,8 @@ function model_step!(model::ABM)
         agent.status = model.integrator[agent.id].u
     end
     voc!(model)
-    model.control ? vaccine!(model) : nothing
+    # TODO: test wonky behaviour
+    # model.control ? vaccine!(model) : nothing
     model.step += 1
 end
 
@@ -95,7 +96,7 @@ end
 function agent_step!(agent, model::ABM)
     migrate!(agent, model)
     happiness!(agent)
-    model.control ? controller!(agent, model) : nothing
+    model.control ? control!(agent, model) : nothing
 end
 
 function migrate!(agent, model::ABM)
@@ -119,12 +120,11 @@ function migrate!(agent, model::ABM)
             objective.population = new_population
             objective.population = map((x) -> round(Int, x), objective.population)
         catch ex
-            @warn "Something was odd: " exception = (ex, catch_backtrace())
+            # @warn "Something was odd: " exception = (ex, catch_backtrace())
         end
     end
 end
 
-# TODO: vedere se mantenere campo happiness nel caso, migliorare stimatore
 function happiness!(agent)
     agent.happiness = tanh(agent.happiness - agent.param[6] + (agent.status[4] - (agent.status[5] + agent.status[3])))
 end
@@ -142,10 +142,11 @@ function voc!(model::ABM)
     end
 end
 
-function controller!(agent, model::ABM)
-    # TODO: implementare eliminazione di queste policy?
+function control!(agent, model::ABM)
     if agent.status[3] ≥ 1e-3 && model.step % 30 == 0
-        agent.param[6] = controller!(agent.status, agent.param)[1]
+        υ_max = abs(agent.happiness) ≥ 0.01 ? abs(agent.happiness) : 0.01
+        υ_total = 5.0 / υ_max
+        agent.param[6] = controller!(agent.status, agent.param)[1]#; υ_max=υ_max, υ_total=υ_total)[1]
     end
 end
 
@@ -234,15 +235,3 @@ function collect_paramscan!(
 
     return data
 end
-
-modelL = init(; numNodes=6, edgesCoverage=:low)
-plot_system_graph(modelL)
-
-modelM = init(; numNodes=6, edgesCoverage=:medium)
-plot_system_graph(modelM)
-
-modelH = init(; numNodes=6, edgesCoverage=:high)
-plot_system_graph(modelH)
-
-
-modelH.connections

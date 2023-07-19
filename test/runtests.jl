@@ -1,5 +1,5 @@
 # using CovidSim
-using Test
+using Test, Dates
 
 include("../src/CovidSim.jl")
 
@@ -15,20 +15,20 @@ function test_abm()
     model = CovidSim.init()
     CovidSim.save_parameters(
         model.properties,
-        "data/abm/no_control/",
+        "data/abm/no_control/parameters/" * string(today()) * "/",
         "SocialNetworkABM_NO_CONTROL"
     )
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
     CovidSim.save_dataframe(
         d,
-        "data/abm/no_control/",
+        "data/abm/no_control/dataframe/" * string(today()) * "/",
         "SocialNetworkABM_NO_CONTROL"
     )
     plt = CovidSim.plot_model(data)
     CovidSim.save_plot(
         plt,
-        "img/abm/no_control/",
+        "img/abm/no_control/" * string(today()) * "/",
         "SocialNetworkABM_NO_CONTROL",
         "pdf"
     )
@@ -39,20 +39,20 @@ function test_abm_controller()
     model = CovidSim.init(; control=true)
     CovidSim.save_parameters(
         model.properties,
-        "data/abm/control/",
+        "data/abm/control/parameters/" * string(today()) * "/",
         "SocialNetworkABM_CONTROL"
     )
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
     CovidSim.save_dataframe(
         d,
-        "data/abm/control/",
+        "data/abm/control/dataframe/" * string(today()) * "/",
         "SocialNetworkABM_CONTROL"
     )
     plt = CovidSim.plot_model(data)
     CovidSim.save_plot(
         plt,
-        "img/abm/control/",
+        "img/abm/control/" * string(today()) * "/",
         "SocialNetworkABM_CONTROL",
         "pdf"
     )
@@ -65,24 +65,25 @@ function test_ensemble_abm()
     for model in models
         CovidSim.save_parameters(
             model.properties,
-            "data/abm/ensemble/no_control/",
+            "data/abm/ensemble/no_control/parameters/" * string(today()) * "/",
             "SocialNetworkABM_ENSEMBLE_$i"
         )
+        i += 1
     end
-    data = CovidSim.collect!(model)
+    data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
     CovidSim.save_dataframe(
         d,
-        "data/abm/ensemble/no_control/",
+        "data/abm/ensemble/no_control/dataframe/" * string(today()) * "/",
         "SocialNetworkABM_ENSEMBLE"
     )
     i = 1
     for d in data
-        plt = CovidSim.plot_model(data)
+        plt = CovidSim.plot_model(d)
         CovidSim.save_plot(
             plt,
-            "img/abm/ensemble/no_control/",
+            "img/abm/ensemble/no_control/" * string(today()) * "/",
             "SocialNetworkABM_ENSEMBLE_$i",
             "pdf"
         )
@@ -97,24 +98,25 @@ function test_ensemble_abm_controller()
     for model in models
         CovidSim.save_parameters(
             model.properties,
-            "data/abm/ensemble/control/",
+            "data/abm/ensemble/control/parameters/" * string(today()) * "/",
             "SocialNetworkABM_ENSEMBLE_CONTROL_$i"
         )
+        i += 1
     end
-    data = CovidSim.collect!(model)
+    data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
     CovidSim.save_dataframe(
         d,
-        "data/abm/ensemble/control/",
+        "data/abm/ensemble/control/dataframe/" * string(today()) * "/",
         "SocialNetworkABM_ENSEMBLE_CONTROL"
     )
     i = 1
     for d in data
-        plt = CovidSim.plot_model(data)
+        plt = CovidSim.plot_model(d)
         CovidSim.save_plot(
             plt,
-            "img/abm/ensemble/control/",
+            "img/abm/ensemble/control/" * string(today()) * "/",
             "SocialNetworkABM_ENSEMBLE_CONTROL_$i",
             "pdf"
         )
@@ -136,7 +138,7 @@ function test_paramscan_abm()
     d = reduce(vcat, data)
     CovidSim.save_dataframe(
         d,
-        "data/abm/paramscan/",
+        "data/abm/paramscan/" * string(today()) * "/",
         "SocialNetworkABM_PARAMSCAN"
     )
     return true
