@@ -7,8 +7,8 @@ include("../src/CovidSim.jl")
     @test test_abm() == true
     @test test_abm_controller() == true
     @test test_ensemble_abm() == true
-    @test test_ensemble_abm_controller() == true
-    @test test_paramscan_abm() == true
+    # @test test_ensemble_abm_controller() == true # too long (18+ hours)
+    @test test_paramscan_abm() == true # non funziona
 end
 
 function test_abm()

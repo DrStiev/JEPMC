@@ -11,7 +11,7 @@ include("Controller.jl")
     population::Int
     status::Vector{Float64} # S, E, I, R, D
     param::Vector{Float64} # R₀, γ, σ, ω, δ, η, ξ
-    happiness::Float64
+    happiness::Float64 # ∈ [0, 1)
 end
 
 function init(;
@@ -23,7 +23,6 @@ function init(;
     maxTravelingRate::Float64=0.1,  # flusso di persone che si spostano
     tspan::Tuple=(1.0, Inf),
     control::Bool=false,
-    threshold::Float64=1e-3,
     seed::Int=1234
 )
 
@@ -53,8 +52,7 @@ function init(;
 
     for node in 1:numNodes
         status = Is[node] == 1 ? [(population[node] - 1) / population[node], 0, 1 / population[node], 0, 0] : [1.0, 0, 0, 0, 0]
-        happiness = randn(model.rng)
-        happiness = happiness < -1.0 ? -1.0 : happiness > 1.0 ? 1.0 : happiness
+        happiness = rand(model.rng)
         parameters = vcat(param, [0.0, 0.0])
         add_agent!(model, (0, 0), population[node], status, parameters, happiness)
     end
@@ -78,7 +76,7 @@ function model_step!(model::ABM)
     end
     voc!(model)
     # TODO: test wonky behaviour
-    # model.control ? vaccine!(model) : nothing
+    model.control ? vaccine!(model) : nothing
     model.step += 1
 end
 
@@ -86,9 +84,17 @@ function vaccine!(model::ABM)
     if rand(model.rng) < 1 / 365
         R = mean([agent.param[1] for agent in allagents(model)])
         vaccine = (1 - (1 / R)) / rand(model.rng, Normal(0.83, 0.083))
-        vaccine /= mean([agent.param[4] for agent in allagents(model)])
-        for agent in allagents(model)
-            agent.param[7] = vaccine
+        vaccine *= mean([agent.param[4] for agent in allagents(model)])
+        agent = random_agent(model)
+        agent.param[7] = vaccine
+    end
+    for agent in allagents(model)
+        if agent.param[7] > 0.0
+            network = model.migrationMatrix[agent.id, :]
+            tidxs, tweights = findnz(network)
+            id = sample(model.rng, 1:length(tidxs), Weights(tweights))
+            objective = filter(x -> x.id == tidxs[id], [a for a in allagents(model)])[1]
+            objective.param[7] = agent.param[7]
         end
     end
 end
@@ -126,7 +132,8 @@ function migrate!(agent, model::ABM)
 end
 
 function happiness!(agent)
-    agent.happiness = tanh(agent.happiness - agent.param[6] + (agent.status[4] - (agent.status[5] + agent.status[3])))
+    agent.happiness = tanh(agent.happiness - agent.param[6] + (maximum([agent.status[4], agent.status[1]]) - (agent.status[5] + agent.status[3])))
+    agent.happiness = agent.happiness < 0.0 ? 0.0 : agent.happiness
 end
 
 function voc!(model::ABM)
@@ -142,11 +149,12 @@ function voc!(model::ABM)
     end
 end
 
+# TODO: implementare bilanciamento con happiness
 function control!(agent, model::ABM)
     if agent.status[3] ≥ 1e-3 && model.step % 30 == 0
-        υ_max = abs(agent.happiness) ≥ 0.01 ? abs(agent.happiness) : 0.01
+        υ_max = (exp(-3 * agent.status[3]) - 1) / (exp(-3) - 1)
         υ_total = 5.0 / υ_max
-        agent.param[6] = controller!(agent.status, agent.param)[1]#; υ_max=υ_max, υ_total=υ_total)[1]
+        agent.param[6] = controller!(agent.status, agent.param; υ_max=υ_max, υ_total=υ_total, timeframe=(0.0, 30.0))[1]
     end
 end
 
@@ -226,8 +234,8 @@ function collect_paramscan!(
         parameters,
         init;
         adata=adata,
-        (agent_step!)=agent_step!,
-        (model_step!)=model_step!,
+        agent_step!,
+        model_step!,
         n=n,
         showprogress=showprogress,
         parallel=parallel

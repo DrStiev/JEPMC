@@ -1,9 +1,6 @@
 # TODO: https://julialang.org/blog/2019/01/fluxdiffeq/
 # TODO: https://docs.sciml.ai/DiffEqFlux/stable/examples/neural_ode/
 # TODO: https://docs.sciml.ai/DiffEqFlux/stable/examples/GPUs/
-# TODO: https://docs.sciml.ai/DiffEqFlux/stable/examples/collocation/
-# TODO: https://docs.sciml.ai/DiffEqDocs/stable/features/ensemble/
-# TODO: https://docs.sciml.ai/DiffEqDocs/stable/features/callback_functions/
 # TODO: https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
 
 using Lux, DiffEqFlux, DifferentialEquations, Optimization, OptimizationOptimJL
@@ -41,7 +38,7 @@ end
 function F!(du, u, p, t)
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ = p
-    μ = δ / 101
+    μ = δ / 1111
     du[1] = μ * sum(u) - R₀ * γ * S * I + ω * R - μ * S # dS
     du[2] = R₀ * γ * S * I - σ * E - μ * E # dE
     du[3] = σ * E - γ * I - δ * I * μ * I # dI

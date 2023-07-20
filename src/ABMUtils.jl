@@ -63,7 +63,7 @@ end
 function seir!(du, u, p, t)
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ, η, ξ = p
-    μ = δ / 101
+    μ = δ / 1111
     du[1] = μ * sum(u) - R₀ * γ * (1 - η) * S * I + ω * R - ξ * S - μ * S # dS
     du[2] = R₀ * γ * (1 - η) * S * I - σ * E - μ * E # dE
     du[3] = σ * E - γ * I - δ * I - μ * I # dI
@@ -86,9 +86,10 @@ end
 function get_observable_data()
     status(x) = x.status
     happiness(x) = x.happiness
+    vaccine(x) = x.param[7]
     η(x) = x.param[6]
     R₀(x) = x.param[1]
-    return [status, happiness, η, R₀]
+    return [status, happiness, η, vaccine, R₀]
 end
 
 # https://docs.juliaplots.org/stable/#simple-is-beautiful
@@ -136,7 +137,7 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
     errorline!(1:n, y[:, :, 4], errorstyle=:plume, label="R")
     errorline!(1:n, y[:, :, 5], errorstyle=:plume, label="D")
 
-    states = 2
+    states = 3
     y = fill(NaN, n, nodes, states)
     for i = 1:states
         res = []
@@ -148,13 +149,14 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
     end
     p2 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="happiness")
     errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="countermeasures")
+    errorline!(1:n, y[:, :, 3], errorstyle=:plume, label="vaccine")
 
     states = 1
     y = fill(NaN, n, nodes, states)
     for i = 1:states
         res = []
         for d in data
-            push!(res, reduce(hcat, d[:, 6]))
+            push!(res, reduce(hcat, d[:, end]))
         end
         res = reduce(hcat, res)
         y[:, :, i] = res
