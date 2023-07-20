@@ -5,7 +5,11 @@ using Statistics: mean
 
 adapt_R₀!(x) = return 1.1730158534328545 + 0.21570538523224972 * x
 
-function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, maxTravelingRate::Float64)
+function get_migration_matrix(
+    g::SimpleGraph,
+    population::Vector{Int},
+    maxTravelingRate::Float64,
+)
     numNodes = Graphs.nv(g)
     migrationMatrix = zeros(numNodes, numNodes)
 
@@ -17,7 +21,7 @@ function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, maxTravel
 
     migrationMatrix = (migrationMatrix .* maxTravelingRate) ./ maximum(migrationMatrix)
     migrationMatrix[diagind(migrationMatrix)] .= 1.0
-    mmSum = sum(migrationMatrix, dims=2)
+    mmSum = sum(migrationMatrix, dims = 2)
 
     for c = 1:numNodes
         migrationMatrix[c, :] ./= mmSum[c]
@@ -34,7 +38,10 @@ function connected_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
         if coverage == :low
             return trunc(Int, rand(rng, low:floor(Int, (avg + low) / 2)) - low)
         elseif coverage == :medium
-            return trunc(Int, rand(rng, ceil(Int, (avg + low) / 2):floor(Int, (avg + max) / 2)) - low)
+            return trunc(
+                Int,
+                rand(rng, ceil(Int, (avg + low) / 2):floor(Int, (avg + max) / 2)) - low,
+            )
         elseif coverage == :high
             return trunc(Int, rand(rng, ceil(Int, (avg + max) / 2):max) - low)
         end
@@ -52,10 +59,10 @@ function connected_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
 
     g = SimpleGraph(n)
     # Create a tree by adding (N-1) edges
-    for v in 2:n
+    for v = 2:n
         add_edge!(g, v, rand(rng, 1:v-1))
     end
-    add_random_edges!(g, edge_to_add(n, coverage, rng); rng=rng)
+    add_random_edges!(g, edge_to_add(n, coverage, rng); rng = rng)
 
     return g
 end
@@ -71,16 +78,26 @@ function seir!(du, u, p, t)
     du[5] = δ * γ * I # dD
 end
 
-# TODO: https://docs.juliaplots.org/stable/generated/statsplots/
 function plot_system_graph(model::ABM)
-    # utile per plot
     max = maximum([agent.population for agent in allagents(model)])
     status = [a.status for a in allagents(model)]
-    nodefillc = [RGBA(1.0 * (status[i][2] + status[i][3]), 1.0 * status[i][1], 1.0 * status[i][4], 1.0) for i in 1:length(status)]
+    nodefillc = [
+        RGBA(
+            1.0 * (status[i][2] + status[i][3]),
+            1.0 * status[i][1],
+            1.0 * status[i][4],
+            1.0,
+        ) for i = 1:length(status)
+    ]
     nodelabel = [agent.id for agent in allagents(model)]
     perm = sortperm(nodelabel)
     nodesize = [agent.population for agent in allagents(model)] ./ max
-    gplot(model.connections, nodesize=nodesize[perm], nodefillc=nodefillc, nodelabel=sort(nodelabel))
+    gplot(
+        model.connections,
+        nodesize = nodesize[perm],
+        nodefillc = nodefillc,
+        nodelabel = sort(nodelabel),
+    )
 end
 
 function get_observable_data()
@@ -92,9 +109,11 @@ function get_observable_data()
     return [status, happiness, η, vaccine, R₀]
 end
 
-# https://docs.juliaplots.org/stable/#simple-is-beautiful
-
-function plot_model(data::Vector{DataFrame}; cumulative::Bool=true, ensemble::Bool=false)
+function plot_model(
+    data::Vector{DataFrame};
+    cumulative::Bool = true,
+    ensemble::Bool = false,
+)
     # TODO: plot ensemble data
     if ensemble
         # get_cumulative_ensemble_data!(data)
@@ -107,10 +126,7 @@ end
 
 function split_dataset(data::DataFrame)
     states = reduce(hcat, data[:, 3])
-    cm = vcat(
-        reduce(hcat, data[:, 4]),
-        reduce(hcat, data[:, 5])
-    )
+    cm = vcat(reduce(hcat, data[:, 4]), reduce(hcat, data[:, 5]))
     r = reduce(hcat, data[:, 6])
     return states, cm, r
 end
@@ -131,13 +147,13 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p1 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="S")
-    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="E")
-    errorline!(1:n, y[:, :, 3], errorstyle=:plume, label="I")
-    errorline!(1:n, y[:, :, 4], errorstyle=:plume, label="R")
-    errorline!(1:n, y[:, :, 5], errorstyle=:plume, label="D")
+    p1 = errorline(1:n, y[:, :, 1], errorstyle = :plume, label = "S")
+    errorline!(1:n, y[:, :, 2], errorstyle = :plume, label = "E")
+    errorline!(1:n, y[:, :, 3], errorstyle = :plume, label = "I")
+    errorline!(1:n, y[:, :, 4], errorstyle = :plume, label = "R")
+    errorline!(1:n, y[:, :, 5], errorstyle = :plume, label = "D")
 
-    states = 3
+    states = 2
     y = fill(NaN, n, nodes, states)
     for i = 1:states
         res = []
@@ -147,9 +163,15 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p2 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="happiness")
-    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="countermeasures")
-    errorline!(1:n, y[:, :, 3], errorstyle=:plume, label="vaccine")
+    p2 = errorline(1:n, y[:, :, 1], errorstyle = :plume, label = "happiness")
+    errorline!(1:n, y[:, :, 2], errorstyle = :plume, label = "countermeasures")
+    vax = []
+    for d in data
+        push!(vax, findfirst(d[:, 6] .!= 0.0))
+    end
+    v = minimum(vax)
+    plot!(p2, [v - 0.01, v + 0.01], [0.0, 1.0], lw = 2, color = :green, label = nothing)
+    annotate!([(v, 1.0, text("Vaccine \nFound", 6, :center, :top, :black, "Helvetica"))])
 
     states = 1
     y = fill(NaN, n, nodes, states)
@@ -161,12 +183,12 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p3 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="R₀")
+    p3 = errorline(1:n, y[:, :, 1], errorstyle = :plume, label = "R₀")
     plt = plot(
-        plot(p1, title="ABM Dynamics", titlefontsize=10),
-        plot(p2, title="Agents response to η", titlefontsize=10),
-        plot(p3, title="Variant of Concern", titlefontsize=10),
-        layout=l
+        plot(p1, title = "ABM Dynamics", titlefontsize = 10),
+        plot(p2, title = "Agents response to η", titlefontsize = 10),
+        plot(p3, title = "Variant of Concern", titlefontsize = 10),
+        layout = l,
     )
     return plt
 end

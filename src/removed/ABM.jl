@@ -27,35 +27,42 @@ julia> model = init();
 ```
 """
 function init(;
-    numNodes::Int=8,
-    edgesCoverage::Symbol=:low,
-    param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0],
-    avgPopulation::Int=3300,
-    maxTravelingRate::Float64=1e-4,  # flusso di persone che si spostano da un nodo all'altro
-    controller::Bool=false,
-    seed::Int=1234
+    numNodes::Int = 8,
+    edgesCoverage::Symbol = :low,
+    param::Vector{Float64} = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0],
+    avgPopulation::Int = 3300,
+    maxTravelingRate::Float64 = 1e-4,  # flusso di persone che si spostano da un nodo all'altro
+    controller::Bool = false,
+    seed::Int = 1234,
 )
     rng = Xoshiro(seed)
 
-    graph = generate_nearly_complete_graph(numNodes, edgesCoverage; rng=rng)
+    graph = generate_nearly_complete_graph(numNodes, edgesCoverage; rng = rng)
 
     model = StandardABM(
         Person,
         GraphSpace(graph);
-        properties=set_parameters(
+        properties = set_parameters(
             graph,
             param,
             avgPopulation,
             maxTravelingRate,
             controller,
-            rng
+            rng,
         ),
-        rng
+        rng,
     )
 
     variant = uuid1(model.rng)
     for city = 1:numNodes, _ = 1:model.population[city]
-        add_agent!(city, model, :S, UUID("00000000-0000-0000-0000-000000000000"), [UUID("00000000-0000-0000-0000-000000000000")], 0)
+        add_agent!(
+            city,
+            model,
+            :S,
+            UUID("00000000-0000-0000-0000-000000000000"),
+            [UUID("00000000-0000-0000-0000-000000000000")],
+            0,
+        )
     end
 
     Is = [zeros(Int, numNodes)...]
@@ -102,10 +109,10 @@ end
 """
 function controller!(model::StandardABM, ns::Vector{Float64})
     res = predict(model, ns, 30)
-    for i in 1:length(res)
+    for i = 1:length(res)
         if !isnothing(res[i])
-            local_controller!(model, res[i], i, 30; vaccine=model.param[6] > 0.0)
-            vaccine!(model, 0.83; time=365)
+            local_controller!(model, res[i], i, 30; vaccine = model.param[6] > 0.0)
+            vaccine!(model, 0.83; time = 365)
         end
     end
     global_controller!(model, ns, model.η)
@@ -207,12 +214,12 @@ function update!(agent, model::StandardABM)
     end
 end
 
-collect(model; n=100, showprogress=true)
+collect(model; n = 100, showprogress = true)
 
 include("Utils.jl")
 
-model = init(; maxTravelingRate=0.1)
-d = collect(model; n=300, showprogress=true)
+model = init(; maxTravelingRate = 0.1)
+d = collect(model; n = 300, showprogress = true)
 res = split_dataset(d)
 display(split_and_plot(d))
 for r in res

@@ -9,8 +9,8 @@ function download_dataset(path::String, url::String)
     return DataFrame(
         CSV.File(
             Downloads.download(url, path * title[length(title)]),
-            delim=",",
-            header=1,
+            delim = ",",
+            header = 1,
         ),
     )
 end
@@ -33,10 +33,10 @@ function dataset_from_location(df::DataFrame, iso_code::String)
 end
 
 function read_dataset(path::String)
-    return DataFrame(CSV.File(path, delim=",", header=1))
+    return DataFrame(CSV.File(path, delim = ",", header = 1))
 end
 
-function save_parameters(params, path::String, title::String="parameters")
+function save_parameters(params, path::String, title::String = "parameters")
     isdir(path) == false && mkpath(path)
     save(path * title * ".jld2", params)
 end
@@ -44,15 +44,15 @@ end
 load_parameters(path) = load(path)
 
 function load_dataset(path::String)
-    return DataFrame(CSV.File(path, delim=",", header=1))
+    return DataFrame(CSV.File(path, delim = ",", header = 1))
 end
 
-function save_dataframe(data::DataFrame, path::String, title="StandardABM")
+function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
     isdir(path) == false && mkpath(path)
     CSV.write(path * title * ".csv", data)
 end
 
-function save_plot(plot, path="", title="title", format="png")
+function save_plot(plot, path = "", title = "title", format = "png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "." * format)
 end

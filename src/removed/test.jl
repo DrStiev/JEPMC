@@ -8,7 +8,7 @@ using Statistics: mean
 
 gr()
 
-function save_plot(plot, path::String="", title::String="title", format::String="png")
+function save_plot(plot, path::String = "", title::String = "title", format::String = "png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "_" * string(today()) * "." * format)
 end
@@ -54,16 +54,16 @@ function plot_current_situation(path::String, iso_code::String)
     p = plot(
         plot(
             Array(day_info),
-            labels=["Infected" "Tests" "Vaccinations" "Deaths"],
-            title="Detected Dynamics",
+            labels = ["Infected" "Tests" "Vaccinations" "Deaths"],
+            title = "Detected Dynamics",
         ),
         plot(
             Array(total_count),
-            labels=["Susceptible" "Infected" "Deaths" "Tests"],
-            title="Overall Dynamics",
+            labels = ["Susceptible" "Infected" "Deaths" "Tests"],
+            title = "Overall Dynamics",
         ),
-        plot(Array(R₀), labels="R₀", title="Reproduction Rate"),
-        layout=l,
+        plot(Array(R₀), labels = "R₀", title = "Reproduction Rate"),
+        layout = l,
     )
     save_plot(p, "img/data_plot/", "cumulative_plot", "pdf")
 end
@@ -81,15 +81,16 @@ function test_system_identification()
             # se non runno ad ogni try il modello, se fallisce una volta allora
             # fallira' sempre. Ogni try e' associato ad un nuovo modello.
             model = graph.init(; p...)
-            data = graph.collect(model; n=250, showprogress=true)
+            data = graph.collect(model; n = 250, showprogress = true)
             d, _, _ = split_dataset(data)
 
-            eq, (prob, sol) = SysId.system_identification(d; saveplot=true, verbose=true)
+            eq, (prob, sol) =
+                SysId.system_identification(d; saveplot = true, verbose = true)
             p = plot(
                 plot(prob),
                 plot(sol),
-                plot_title="SYSTEM IDENTIFICATION ($i ITERATIONS)",
-                plot_titlefontsize=12,
+                plot_title = "SYSTEM IDENTIFICATION ($i ITERATIONS)",
+                plot_titlefontsize = 12,
             )
             save_plot(p, "img/system_identification/", "SYSTEM IDENTIFICATION", "pdf")
             println("iteration $i of $maxiter successful")
@@ -109,11 +110,11 @@ function test_prediction()
 
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
-    data = graph.collect(model; n=1200, showprogress=true)
+    data = graph.collect(model; n = 1200, showprogress = true)
     ddata, _, _ = split_dataset(data)
     Xₙ = Array(ddata)
     p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007, 0.0, 0.0]
-    for i in 1:5
+    for i = 1:5
         s = (i - 1) * 250 + 1
         n = s + 30
         try
@@ -121,52 +122,56 @@ function test_prediction()
                 ddata[s:n, :],
                 p_true,
                 1200;
-                lossTitle="LOSS_$i",
-                plotLoss=true,
-                maxiters=1000,
-                verbose=false
+                lossTitle = "LOSS_$i",
+                plotLoss = true,
+                maxiters = 1000,
+                verbose = false,
             )
             p1 = plot(
                 Array(Xₙ ./ sum(Xₙ[1, :])),
-                legend=false,
-                labels=["True S" "True E" "True I" "True R" "True D"]
+                legend = false,
+                labels = ["True S" "True E" "True I" "True R" "True D"],
             )
             if isnothing(pred[3])
                 plot!(
                     transpose(pred[1]),
-                    xlabel="t",
-                    legend=false,
-                    labels=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-                    title="NN Approximation",
-                    titlefontsize=10
+                    xlabel = "t",
+                    legend = false,
+                    labels = ["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+                    title = "NN Approximation",
+                    titlefontsize = 10,
                 )
             else
                 plot!(
                     pred[3],
-                    xlabel="t",
-                    legend=false,
-                    labels=["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
-                    title="NN + SINDy Approximation",
-                    titlefontsize=10
+                    xlabel = "t",
+                    legend = false,
+                    labels = ["Estimated S" "Estimated E" "Estimated I" "Estimated R" "Estimated D"],
+                    title = "NN + SINDy Approximation",
+                    titlefontsize = 10,
                 )
             end
             plot!(
                 p1,
                 [s - 0.01, s + 0.01],
                 [0.0, 1.0],
-                lw=2,
-                color=:black,
-                label=nothing,
+                lw = 2,
+                color = :black,
+                label = nothing,
             )
             plot!(
                 p1,
                 [n - 0.01, n + 0.01],
                 [0.0, 1.0],
-                lw=2,
-                color=:black,
-                label=nothing,
+                lw = 2,
+                color = :black,
+                label = nothing,
             )
-            annotate!([(n / 2, 1.0, text("Training \nData", 6, :center, :top, :black, "Helvetica"))])
+            annotate!([(
+                n / 2,
+                1.0,
+                text("Training \nData", 6, :center, :top, :black, "Helvetica"),
+            )])
 
             push!(plt, p1)
             println("Success! [$i/5]")
@@ -177,12 +182,20 @@ function test_prediction()
             open("data/error/log_" * string(today()) * ".txt", "a") do io
                 write(io, catch_backtrace())
             end
-            AgentsIO.save_checkpoint("data/error/abm_checkpoint_" * string(today()) * ".jld2", model)
+            AgentsIO.save_checkpoint(
+                "data/error/abm_checkpoint_" * string(today()) * ".jld2",
+                model,
+            )
             graph.save_dataframe(data, "data/error/", "abm_dataframe")
             i += 1
         end
     end
-    pt = plot(plot(plt...), layout=(3, 2), plot_title="PREDICTION RESULTS", plot_titlefontsize=12)
+    pt = plot(
+        plot(plt...),
+        layout = (3, 2),
+        plot_title = "PREDICTION RESULTS",
+        plot_titlefontsize = 12,
+    )
     save_plot(pt, "img/prediction/", "PREDICTION", "pdf")
 end
 
@@ -192,7 +205,7 @@ function test_abm()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n=1200, showprogress=true)
+    data = graph.collect(model; n = 1200, showprogress = true)
     graph.save_dataframe(data, "data/abm/", "ABM SEIR NO INTERVENTION")
 
     p1, p2, p3 = split_dataset(data)
@@ -203,12 +216,12 @@ function test_abm()
     p = plot(
         plot(
             Array(p1),
-            labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-            title="ABM Dynamics",
+            labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+            title = "ABM Dynamics",
         ),
-        plot(Array(p2), labels=["η" "Happiness"], title="Agents response to η"),
-        plot(Array(p3), labels="R₀", title="Reproduction number"),
-        layout=l,
+        plot(Array(p2), labels = ["η" "Happiness"], title = "Agents response to η"),
+        plot(Array(p3), labels = "R₀", title = "Reproduction number"),
+        layout = l,
     )
     save_plot(p, "img/abm/", "ABM SEIR NO INTERVENTION", "pdf")
 end
@@ -216,10 +229,10 @@ end
 test_abm()
 
 function test_abm_with_controller()
-    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300; controller=true)
+    abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300; controller = true)
     model = graph.init(; abm_parameters...)
 
-    data = graph.collect(model; n=1200, showprogress=true)
+    data = graph.collect(model; n = 1200, showprogress = true)
     graph.save_dataframe(data, "data/abm/", "ABM SEIR WITH CONTROLLER AND INTERVENTION")
 
     p1, p2, p3 = split_dataset(data)
@@ -230,12 +243,12 @@ function test_abm_with_controller()
     p = plot(
         plot(
             Array(p1),
-            labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-            title="ABM Dynamics",
+            labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+            title = "ABM Dynamics",
         ),
-        plot(Array(p2), labels=["η" "Happiness"], title="Agents response to η"),
-        plot(Array(p3), labels="R₀", title="Reproduction number"),
-        layout=l,
+        plot(Array(p2), labels = ["η" "Happiness"], title = "Agents response to η"),
+        plot(Array(p3), labels = "R₀", title = "Reproduction number"),
+        layout = l,
     )
     save_plot(p, "img/abm/", "ABM SEIR WITH CONTROLLER AND INTERVENTION", "pdf")
 end
@@ -244,8 +257,8 @@ test_abm_with_controller()
 
 function test_ensemble()
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
-    models = [graph.init(; seed=i, abm_parameters...) for i in rand(UInt64, 100)]
-    data = graph.ensemble_collect(models; n=1200, showprogress=true, parallel=true)
+    models = [graph.init(; seed = i, abm_parameters...) for i in rand(UInt64, 100)]
+    data = graph.ensemble_collect(models; n = 1200, showprogress = true, parallel = true)
     graph.save_dataframe(data, "data/ensemble/", "ENSEMBLE ABM SEIR NO INTERVENTION")
     ens_data = dataset.read_dataset(
         "data/ensemble/ENSEMBLE ABM SEIR NO INTERVENTION_" * string(today()) * ".csv",
@@ -332,51 +345,51 @@ function test_ensemble()
 
     p1 = plot(
         res_seir[!, :avg_s],
-        ribbon=(res_seir[!, :lb_s], res_seir[!, :ub_s]),
-        labels="Susceptible",
-        title="ABM Dynamics",
+        ribbon = (res_seir[!, :lb_s], res_seir[!, :ub_s]),
+        labels = "Susceptible",
+        title = "ABM Dynamics",
     )
     plot!(
         res_seir[!, :avg_e],
-        ribbon=(res_seir[!, :lb_e], res_seir[!, :ub_e]),
-        labels="Exposed",
+        ribbon = (res_seir[!, :lb_e], res_seir[!, :ub_e]),
+        labels = "Exposed",
     )
     plot!(
         res_seir[!, :avg_i],
-        ribbon=(res_seir[!, :lb_i], res_seir[!, :ub_i]),
-        labels="Infected",
+        ribbon = (res_seir[!, :lb_i], res_seir[!, :ub_i]),
+        labels = "Infected",
     )
     plot!(
         res_seir[!, :avg_r],
-        ribbon=(res_seir[!, :lb_r], res_seir[!, :ub_r]),
-        labels="Recovered",
+        ribbon = (res_seir[!, :lb_r], res_seir[!, :ub_r]),
+        labels = "Recovered",
     )
     plot!(
         res_seir[!, :avg_d],
-        ribbon=(res_seir[!, :lb_d], res_seir[!, :ub_d]),
-        labels="Dead",
+        ribbon = (res_seir[!, :lb_d], res_seir[!, :ub_d]),
+        labels = "Dead",
     )
 
     p2 = plot(
         res_hη[!, :avg_h],
-        ribbon=(res_hη[!, :lb_h], res_hη[!, :ub_h]),
-        labels="happiness",
-        title="Agents response to η",
+        ribbon = (res_hη[!, :lb_h], res_hη[!, :ub_h]),
+        labels = "happiness",
+        title = "Agents response to η",
     )
-    plot!(res_hη[!, :avg_η], ribbon=(res_hη[!, :lb_η], res_hη[!, :ub_η]), labels="η")
+    plot!(res_hη[!, :avg_η], ribbon = (res_hη[!, :lb_η], res_hη[!, :ub_η]), labels = "η")
 
     p3 = plot(
         res_r0[!, :avg_R0],
-        ribbon=(res_r0[!, :lb_R0], res_r0[!, :ub_R0]),
-        labels="R₀",
-        title="Reproduction number",
+        ribbon = (res_r0[!, :lb_R0], res_r0[!, :ub_R0]),
+        labels = "R₀",
+        title = "Reproduction number",
     )
 
     l = @layout [
         grid(1, 1)
         grid(1, 2)
     ]
-    p = plot(p1, p2, p3, layout=l)
+    p = plot(p1, p2, p3, layout = l)
     save_plot(p, "img/ensemble/", "ENSEMBLE SEIR NO INTERVENTION", "pdf")
 end
 
@@ -390,8 +403,8 @@ function test_ode()
 
     p = plot(
         sol,
-        labels=["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
-        title="SEIR Dynamics NO INTERVENTION",
+        labels = ["Susceptible" "Exposed" "Infected" "Recovered" "Dead"],
+        title = "SEIR Dynamics NO INTERVENTION",
     )
     save_plot(p, "img/ode/", "ODE SEIR NO INTERVENTION", "pdf")
 end
@@ -402,26 +415,29 @@ function test_differentR₀_abm()
     plt = []
     abm_parameters = parameters.get_abm_parameters(20, 0.01, 3300)
     x = 1.1:mean(diff([1.1, 5.7]))/15:5.7
-    for i in 1:length(x)
+    for i = 1:length(x)
         abm_parameters[:R₀] = x[i]
         model = graph.init(; abm_parameters...)
         println("get abm solution with R₀ = $(round(abm_parameters[:R₀]; digits=2))")
-        data = graph.collect(model; n=1200, showprogress=true)
+        data = graph.collect(model; n = 1200, showprogress = true)
         y, _, _ = split_dataset(data)
         y = y ./ sum(y[1, :])
         push!(
             plt,
             plot(
                 Array(y),
-                legend=false,
-                xlabel="t",
-                title="R₀ = $(round(abm_parameters[:R₀]; digits=2))",
-                titlefontsize=10
-            )
+                legend = false,
+                xlabel = "t",
+                title = "R₀ = $(round(abm_parameters[:R₀]; digits=2))",
+                titlefontsize = 10,
+            ),
         )
     end
 
-    p = plot(plot(plt...), layout=(round(Int, sqrt(length(plt))), round(Int, sqrt(length(plt)))))
+    p = plot(
+        plot(plt...),
+        layout = (round(Int, sqrt(length(plt))), round(Int, sqrt(length(plt)))),
+    )
     save_plot(p, "img/abm/", "COMPARISON DIFFERENT R₀ VALUE", "pdf")
 end
 
@@ -432,7 +448,7 @@ function test_differentR₀_ode()
     u, p, t = parameters.get_ode_parameters(20, 3300)
     x = 1.1:mean(diff([1.1, 5.7]))/15:5.7
     # x = 5.7:mean(diff([5.7, 18.3]))/15:18.3
-    for i in 1:length(x)
+    for i = 1:length(x)
         p[1] = x[i]
         println("get ode solution with R₀ = $(round(p[1]; digits=2))")
         prob = ode.get_ode_problem(ode.seir!, u, t, p)
@@ -441,14 +457,17 @@ function test_differentR₀_ode()
             plt,
             plot(
                 sol,
-                legend=false,
-                title="R₀ = $(round(p[1]; digits=2))",
-                titlefontsize=10
-            )
+                legend = false,
+                title = "R₀ = $(round(p[1]; digits=2))",
+                titlefontsize = 10,
+            ),
         )
     end
 
-    p = plot(plot(plt...), layout=(round(Int, sqrt(length(plt))), round(Int, sqrt(length(plt)))))
+    p = plot(
+        plot(plt...),
+        layout = (round(Int, sqrt(length(plt))), round(Int, sqrt(length(plt)))),
+    )
     save_plot(p, "img/ode/", "COMPARISON DIFFERENT R₀ VALUE", "pdf")
 end
 
@@ -466,33 +485,27 @@ function test_fit_abm_ode()
     res_a = []
     res_b = []
 
-    for i in 1:length(y)
+    for i = 1:length(y)
         p[1] = y[i]
         println("get ode solution with R₀ = $(round(p[1]; digits=2))")
         prob = ode.get_ode_problem(ode.seir!, u, t, p)
         sol = ode.get_ode_solution(prob)
-        push!(
-            res_ode,
-            sol
-        )
+        push!(res_ode, sol)
     end
 
-    for i in 1:length(x)
+    for i = 1:length(x)
         abm_parameters[:R₀] = x[i]
         model = graph.init(; abm_parameters...)
         println("get abm solution with R₀ = $(round(abm_parameters[:R₀]; digits=2))")
-        data = graph.collect(model; n=1199, showprogress=true)
+        data = graph.collect(model; n = 1199, showprogress = true)
         ddata, _, _ = split_dataset(data)
         ddata = ddata ./ sum(ddata[1, :])
-        push!(
-            res_abm,
-            Array(ddata)'
-        )
+        push!(res_abm, Array(ddata)')
     end
 
-    for i in 1:length(res_abm)
+    for i = 1:length(res_abm)
         temp = []
-        for j in 1:length(res_ode)
+        for j = 1:length(res_ode)
             push!(temp, mean(abs2, res_abm[i] .- res_ode[j]))
         end
         push!(res_a, x[i])
@@ -500,16 +513,23 @@ function test_fit_abm_ode()
     end
     res_a = float.(res_a)
     res_b = float.(res_b)
-    plt = scatter(res_b, res_a, xlabel="ODE R₀", ylabel="ABM R₀", title="ABM vs ODE R₀", label="R₀")
+    plt = scatter(
+        res_b,
+        res_a,
+        xlabel = "ODE R₀",
+        ylabel = "ABM R₀",
+        title = "ABM vs ODE R₀",
+        label = "R₀",
+    )
 
     f = Polynomials.fit(res_b, res_a, 1)
-    plot!(f, extrema(res_b)..., label="Linear Fit")
+    plot!(f, extrema(res_b)..., label = "Linear Fit")
 
     f1 = Polynomials.fit(res_b, res_a, 2)
-    plot!(f1, extrema(res_b)..., label="Quadratic Fit")
+    plot!(f1, extrema(res_b)..., label = "Quadratic Fit")
 
     fn = Polynomials.fit(res_b, res_a)
-    plot!(fn, extrema(res_b)..., label="Nth-Grade Fit")
+    plot!(fn, extrema(res_b)..., label = "Nth-Grade Fit")
 
     save_plot(plt, "img/abm_ode/", "ABM vs ODE R₀", "pdf")
     return (f, f1, fn)

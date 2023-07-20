@@ -52,23 +52,27 @@ function set_parameters(
         0,
         happiness,
         DataFrame(
-            susceptible=Int[],
-            exposed=Int[],
-            infected=Int[],
-            recovered=Int[],
-            dead=Int[],
-            R0=Float64[],
-            active_countermeasures=Float64[],
-            happiness=Float64[],
-            node=Int[],
+            susceptible = Int[],
+            exposed = Int[],
+            infected = Int[],
+            recovered = Int[],
+            dead = Int[],
+            R0 = Float64[],
+            active_countermeasures = Float64[],
+            happiness = Float64[],
+            node = Int[],
         ),
-        1
+        1,
     )
 
     return res
 end
 
-function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, maxTravelingRate::Float64)
+function get_migration_matrix(
+    g::SimpleGraph,
+    population::Vector{Int},
+    maxTravelingRate::Float64,
+)
     numNodes = Graphs.nv(g)
     migrationMatrix = zeros(numNodes, numNodes)
 
@@ -80,7 +84,7 @@ function get_migration_matrix(g::SimpleGraph, population::Vector{Int}, maxTravel
 
     migrationMatrix = (migrationMatrix .* maxTravelingRate) ./ maximum(migrationMatrix)
     migrationMatrix[diagind(migrationMatrix)] .= 1.0
-    mmSum = sum(migrationMatrix, dims=2)
+    mmSum = sum(migrationMatrix, dims = 2)
 
     for c = 1:numNodes
         migrationMatrix[c, :] ./= mmSum[c]
@@ -97,7 +101,10 @@ function generate_nearly_complete_graph(n::Int, coverage::Symbol; rng::AbstractR
         if coverage == :low
             return trunc(Int, max - rand(rng, low:floor(Int, (avg + low) / 2)))
         elseif coverage == :medium
-            return trunc(Int, max - rand(rng, ceil(Int, (avg + low) / 2):floor(Int, (avg + max) / 2)))
+            return trunc(
+                Int,
+                max - rand(rng, ceil(Int, (avg + low) / 2):floor(Int, (avg + max) / 2)),
+            )
         elseif coverage == :high
             return trunc(Int, max - rand(rng, ceil(Int, (avg + max) / 2):max))
         end
@@ -134,9 +141,7 @@ end
 function happiness!(model::StandardABM)
     for n = 1:model.numNodes
         agents = filter(x -> x.pos == n, [a for a in allagents(model)])
-        dead =
-            (length(agents) - model.population[n]) /
-            model.population[n]
+        dead = (length(agents) - model.population[n]) / model.population[n]
         infects = filter(x -> x.status == :I, agents)
         infects = length(infects) / length(agents)
         recovered = filter(x -> x.status == :R, agents)
@@ -173,9 +178,12 @@ function voc!(model::StandardABM)
     if rand(model.rng) ≤ 8E-3
         variant = uuid1(model.rng)
         model.param[1] = rand(model.rng, Uniform(3.3, 5.7))
-        model.param[2] = round(Int, rand(model.rng, Normal(model.param[2], model.param[2] / 10)))
-        model.param[3] = round(Int, rand(model.rng, Normal(model.param[3], model.param[3] / 10)))
-        model.param[4] = round(Int, rand(model.rng, Normal(model.param[4], model.param[4] / 10)))
+        model.param[2] =
+            round(Int, rand(model.rng, Normal(model.param[2], model.param[2] / 10)))
+        model.param[3] =
+            round(Int, rand(model.rng, Normal(model.param[3], model.param[3] / 10)))
+        model.param[4] =
+            round(Int, rand(model.rng, Normal(model.param[4], model.param[4] / 10)))
         model.param[5] = rand(model.rng, Normal(model.param[5], model.param[5] / 10))
 
         push!(model.all_variants, variant)
@@ -210,10 +218,10 @@ end
 
 function collect(
     model::StandardABM;
-    astep=agent_step!,
-    mstep=model_step!,
-    n::Int=100,
-    showprogress::Bool=true
+    astep = agent_step!,
+    mstep = model_step!,
+    n::Int = 100,
+    showprogress::Bool = true,
 )
     adata, mdata = get_observable_data()
 
@@ -222,26 +230,38 @@ function collect(
         astep,
         mstep,
         n;
-        adata=adata,
-        mdata=mdata,
-        showprogress=showprogress
+        adata = adata,
+        mdata = mdata,
+        showprogress = showprogress,
     )
     # AgentsIO.save_checkpoint("data/abm/checkpoint_" * string(today()) * ".jld2", model)
     # AgentsIO.load_checkpoint("data/abm/checkpoint_"*string(today())*".jld2")
     res = hcat(select(ad, Not([:step])), select(md, Not([:step])))
-    rename!(res, [:susceptible, :exposed, :infected, :recovered, :dead, :R0, :active_countermeasures, :happiness])
+    rename!(
+        res,
+        [
+            :susceptible,
+            :exposed,
+            :infected,
+            :recovered,
+            :dead,
+            :R0,
+            :active_countermeasures,
+            :happiness,
+        ],
+    )
     return res
     # return model.outresults
 end
 
 function ensemble_collect(
     models;
-    astep=agent_step!,
-    mstep=model_step!,
-    n::Int=100,
-    showprogress::Bool=false,
-    parallel::Bool=false,
-    split_result::Bool=true
+    astep = agent_step!,
+    mstep = model_step!,
+    n::Int = 100,
+    showprogress::Bool = false,
+    parallel::Bool = false,
+    split_result::Bool = true,
 )
 
     adata, mdata = get_observable_data()
@@ -251,15 +271,15 @@ function ensemble_collect(
         astep,
         mstep,
         n;
-        adata=adata,
-        mdata=mdata,
-        showprogress=showprogress,
-        parallel=parallel
+        adata = adata,
+        mdata = mdata,
+        showprogress = showprogress,
+        parallel = parallel,
     )
     res = hcat(
         select(ad, Not([:step, :ensemble])),
         select(md, Not([:step])),
-        makeunique=true,
+        makeunique = true,
     )
     if split_result
         return [filter(:ensemble => ==(i), res) for i in unique(res[!, :ensemble])]

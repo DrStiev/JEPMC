@@ -22,11 +22,7 @@ julia> vaccine!(model)
 
 ```
 """
-function vaccine!(
-    model::StandardABM,
-    avg_effectiveness::Float64=0.83;
-    time::Int=365
-)
+function vaccine!(model::StandardABM, avg_effectiveness::Float64 = 0.83; time::Int = 365)
     if rand(model.rng) < 1 / time
         v =
             (1 - (1 / model.R₀ᵢ)) /
@@ -65,7 +61,7 @@ julia> get_node_status(model, 1)
 
 ```
 """
-function get_node_status(model::StandardABM, pos::Int; mininfects::Int=2)
+function get_node_status(model::StandardABM, pos::Int; mininfects::Int = 2)
     agents = filter(x -> x.pos == pos, [a for a in allagents(model)])
     infects = filter(x -> x.status == :I, agents)
     if length(infects) > mininfects
@@ -85,9 +81,9 @@ function local_controller!(
     data::Matrix,
     node::Int,
     step::Int;
-    mininfects::Int=1,
-    vaccine::Bool=false,
-    check_happiness::Bool=true
+    mininfects::Int = 1,
+    vaccine::Bool = false,
+    check_happiness::Bool = true,
 )
 
     rate = slope(data[:, (end-step)+1:end])
@@ -111,15 +107,14 @@ end
 function global_controller!(
     model::StandardABM,
     ns::Vector{Float64},
-    restriction::Vector{Float64}
+    restriction::Vector{Float64},
 )
     appo = ns .> 0.0
-    for i in 1:length(appo)
+    for i = 1:length(appo)
         if appo[i] == true
             model.migration_rate[i, :] -= model.migration_rate[i, :] * restriction[i]
             model.migration_rate[:, i] -= model.migration_rate[:, i] * restriction[i]
-            model.migration_rate[i, i] +=
-                (1 - model.migration_rate[i, i]) * restriction[i]
+            model.migration_rate[i, i] += (1 - model.migration_rate[i, i]) * restriction[i]
             model.migration_rate[model.migration_rate.<0.0] .= 0.0
             model.migration_rate[model.migration_rate.>1.0] .= 1.0
         end
@@ -151,10 +146,15 @@ end
 """
     predict(model=StandardABM, nodes=Vector{Float64}, tspan=Int; [traindata_size=Int])
 """
-function predict(model::StandardABM, nodes::Vector{Float64}, tspan::Int; traindata_size::Int=30)
+function predict(
+    model::StandardABM,
+    nodes::Vector{Float64},
+    tspan::Int;
+    traindata_size::Int = 30,
+)
     # TODO: predico andamento del nodo più brutto e uso quella predizione per gli altri
     pred = []
-    for n in 1:length(nodes)
+    for n = 1:length(nodes)
         if nodes[n] ≠ 0.0
             p_true = [model.R₀, model.γ, model.σ, model.ω, model.δ, model.η[n], model.ξ]
             df = filter(:node => ==(n), model.outresults)
@@ -165,7 +165,11 @@ function predict(model::StandardABM, nodes::Vector{Float64}, tspan::Int; trainda
             traindata_size = min(l, traindata_size)
             res = nothing
             try
-                res = udePredict.ude_prediction(data[:, l-trainingdata_size+1:l], p_true, tspan)
+                res = udePredict.ude_prediction(
+                    data[:, l-trainingdata_size+1:l],
+                    p_true,
+                    tspan,
+                )
             catch ex
                 isdir("data/error/") == false && mkpath("data/error/")
                 joinpath("data/error/", "log_" * string(today()) * ".txt")
@@ -173,7 +177,10 @@ function predict(model::StandardABM, nodes::Vector{Float64}, tspan::Int; trainda
                 open("data/error/log_" * string(today()) * ".txt", "a") do io
                     write(io, log)
                 end
-                AgentsIO.save_checkpoint("data/error/abm_checkpoint_" * string(today()) * ".jld2", model)
+                AgentsIO.save_checkpoint(
+                    "data/error/abm_checkpoint_" * string(today()) * ".jld2",
+                    model,
+                )
                 save_dataframe(data, "data/error/", "abm_dataframe")
             finally
                 push!(pred, res)

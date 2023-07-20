@@ -16,57 +16,57 @@ function test_abm()
     CovidSim.save_parameters(
         model.properties,
         "data/abm/no_control/parameters/" * string(today()) * "/",
-        "SocialNetworkABM_NO_CONTROL"
+        "SocialNetworkABM_NO_CONTROL",
     )
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
     CovidSim.save_dataframe(
         d,
         "data/abm/no_control/dataframe/" * string(today()) * "/",
-        "SocialNetworkABM_NO_CONTROL"
+        "SocialNetworkABM_NO_CONTROL",
     )
     plt = CovidSim.plot_model(data)
     CovidSim.save_plot(
         plt,
         "img/abm/no_control/" * string(today()) * "/",
         "SocialNetworkABM_NO_CONTROL",
-        "pdf"
+        "pdf",
     )
     return true
 end
 
 function test_abm_controller()
-    model = CovidSim.init(; control=true)
+    model = CovidSim.init(; control = true)
     CovidSim.save_parameters(
         model.properties,
         "data/abm/control/parameters/" * string(today()) * "/",
-        "SocialNetworkABM_CONTROL"
+        "SocialNetworkABM_CONTROL",
     )
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
     CovidSim.save_dataframe(
         d,
         "data/abm/control/dataframe/" * string(today()) * "/",
-        "SocialNetworkABM_CONTROL"
+        "SocialNetworkABM_CONTROL",
     )
     plt = CovidSim.plot_model(data)
     CovidSim.save_plot(
         plt,
         "img/abm/control/" * string(today()) * "/",
         "SocialNetworkABM_CONTROL",
-        "pdf"
+        "pdf",
     )
     return true
 end
 
 function test_ensemble_abm()
-    models = [CovidSim.init(; seed=abs(i)) for i in rand(Int64, 10)]
+    models = [CovidSim.init(; seed = abs(i)) for i in rand(Int64, 10)]
     i = 1
     for model in models
         CovidSim.save_parameters(
             model.properties,
             "data/abm/ensemble/no_control/parameters/" * string(today()) * "/",
-            "SocialNetworkABM_ENSEMBLE_$i"
+            "SocialNetworkABM_ENSEMBLE_$i",
         )
         i += 1
     end
@@ -76,7 +76,7 @@ function test_ensemble_abm()
     CovidSim.save_dataframe(
         d,
         "data/abm/ensemble/no_control/dataframe/" * string(today()) * "/",
-        "SocialNetworkABM_ENSEMBLE"
+        "SocialNetworkABM_ENSEMBLE",
     )
     i = 1
     for d in data
@@ -85,7 +85,7 @@ function test_ensemble_abm()
             plt,
             "img/abm/ensemble/no_control/" * string(today()) * "/",
             "SocialNetworkABM_ENSEMBLE_$i",
-            "pdf"
+            "pdf",
         )
         i += 1
     end
@@ -93,13 +93,13 @@ function test_ensemble_abm()
 end
 
 function test_ensemble_abm_controller()
-    models = [CovidSim.init(; control=true, seed=abs(i)) for i in rand(Int64, 10)]
+    models = [CovidSim.init(; control = true, seed = abs(i)) for i in rand(Int64, 10)]
     i = 1
     for model in models
         CovidSim.save_parameters(
             model.properties,
             "data/abm/ensemble/control/parameters/" * string(today()) * "/",
-            "SocialNetworkABM_ENSEMBLE_CONTROL_$i"
+            "SocialNetworkABM_ENSEMBLE_CONTROL_$i",
         )
         i += 1
     end
@@ -109,7 +109,7 @@ function test_ensemble_abm_controller()
     CovidSim.save_dataframe(
         d,
         "data/abm/ensemble/control/dataframe/" * string(today()) * "/",
-        "SocialNetworkABM_ENSEMBLE_CONTROL"
+        "SocialNetworkABM_ENSEMBLE_CONTROL",
     )
     i = 1
     for d in data
@@ -118,7 +118,7 @@ function test_ensemble_abm_controller()
             plt,
             "img/abm/ensemble/control/" * string(today()) * "/",
             "SocialNetworkABM_ENSEMBLE_CONTROL_$i",
-            "pdf"
+            "pdf",
         )
         i += 1
     end
@@ -139,7 +139,7 @@ function test_paramscan_abm()
     CovidSim.save_dataframe(
         d,
         "data/abm/paramscan/" * string(today()) * "/",
-        "SocialNetworkABM_PARAMSCAN"
+        "SocialNetworkABM_PARAMSCAN",
     )
     return true
 end
