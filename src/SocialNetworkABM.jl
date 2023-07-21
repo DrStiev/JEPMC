@@ -83,7 +83,6 @@ function model_step!(model::ABM)
         agent.status = model.integrator[agent.id].u
     end
     voc!(model)
-    # TODO: test wonky behaviour
     model.control ? vaccine!(model) : nothing
     model.step += 1
 end
@@ -166,7 +165,6 @@ function voc!(model::ABM)
     end
 end
 
-# TODO: implementare bilanciamento con happiness
 function control!(agent, model::ABM)
     if agent.status[3] ≥ 1e-3 && model.step % 30 == 0
         υ_max = (exp(-3 * agent.status[3]) - 1) / (exp(-3) - 1)
@@ -238,10 +236,10 @@ function collect_paramscan!(
         :numNodes => Base.collect(1:10:101),
         :avgPopulation => Base.collect(1000:1000:100000),
     ),
-    init = init();
+    init = init;
     adata = get_observable_data(),
-    (agent_step!) = agent_step!,
-    (model_step!) = model_step!,
+    agent_step = agent_step!,
+    model_step = model_step!,
     n = 1200,
     showprogress = true,
     parallel = true,
@@ -250,9 +248,9 @@ function collect_paramscan!(
     data = paramscan(
         parameters,
         init;
-        adata = adata,
-        agent_step!,
-        model_step!,
+        adata,
+        agent_step,
+        model_step,
         n = n,
         showprogress = showprogress,
         parallel = parallel,

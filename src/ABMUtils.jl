@@ -21,7 +21,7 @@ function get_migration_matrix(
 
     migrationMatrix = (migrationMatrix .* maxTravelingRate) ./ maximum(migrationMatrix)
     migrationMatrix[diagind(migrationMatrix)] .= 1.0
-    mmSum = sum(migrationMatrix, dims = 2)
+    mmSum = sum(migrationMatrix, dims=2)
 
     for c = 1:numNodes
         migrationMatrix[c, :] ./= mmSum[c]
@@ -62,7 +62,7 @@ function connected_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
     for v = 2:n
         add_edge!(g, v, rand(rng, 1:v-1))
     end
-    add_random_edges!(g, edge_to_add(n, coverage, rng); rng = rng)
+    add_random_edges!(g, edge_to_add(n, coverage, rng); rng=rng)
 
     return g
 end
@@ -94,9 +94,9 @@ function plot_system_graph(model::ABM)
     nodesize = [agent.population for agent in allagents(model)] ./ max
     gplot(
         model.connections,
-        nodesize = nodesize[perm],
-        nodefillc = nodefillc,
-        nodelabel = sort(nodelabel),
+        nodesize=nodesize[perm],
+        nodefillc=nodefillc,
+        nodelabel=sort(nodelabel),
     )
 end
 
@@ -111,8 +111,8 @@ end
 
 function plot_model(
     data::Vector{DataFrame};
-    cumulative::Bool = true,
-    ensemble::Bool = false,
+    cumulative::Bool=true,
+    ensemble::Bool=false
 )
     # TODO: plot ensemble data
     if ensemble
@@ -147,11 +147,11 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p1 = errorline(1:n, y[:, :, 1], errorstyle = :plume, label = "S")
-    errorline!(1:n, y[:, :, 2], errorstyle = :plume, label = "E")
-    errorline!(1:n, y[:, :, 3], errorstyle = :plume, label = "I")
-    errorline!(1:n, y[:, :, 4], errorstyle = :plume, label = "R")
-    errorline!(1:n, y[:, :, 5], errorstyle = :plume, label = "D")
+    p1 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="S")
+    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="E")
+    errorline!(1:n, y[:, :, 3], errorstyle=:plume, label="I")
+    errorline!(1:n, y[:, :, 4], errorstyle=:plume, label="R")
+    errorline!(1:n, y[:, :, 5], errorstyle=:plume, label="D")
 
     states = 2
     y = fill(NaN, n, nodes, states)
@@ -163,15 +163,18 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p2 = errorline(1:n, y[:, :, 1], errorstyle = :plume, label = "happiness")
-    errorline!(1:n, y[:, :, 2], errorstyle = :plume, label = "countermeasures")
+    p2 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="happiness")
+    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="countermeasures")
     vax = []
     for d in data
         push!(vax, findfirst(d[:, 6] .!= 0.0))
     end
-    v = minimum(vax)
-    plot!(p2, [v - 0.01, v + 0.01], [0.0, 1.0], lw = 2, color = :green, label = nothing)
-    annotate!([(v, 1.0, text("Vaccine \nFound", 6, :center, :top, :black, "Helvetica"))])
+    vax = filter(x -> !isnothing(x), vax)
+    if !isempty(vax)
+        v = minimum(vax)
+        plot!(p2, [v - 0.01, v + 0.01], [0.0, 1.0], lw=2, color=:green, label=nothing)
+        annotate!([(v, 1.0, text("Vaccine \nFound", 6, :center, :top, :black, "Helvetica"))])
+    end
 
     states = 1
     y = fill(NaN, n, nodes, states)
@@ -183,12 +186,12 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p3 = errorline(1:n, y[:, :, 1], errorstyle = :plume, label = "R₀")
+    p3 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="R₀")
     plt = plot(
-        plot(p1, title = "ABM Dynamics", titlefontsize = 10),
-        plot(p2, title = "Agents response to η", titlefontsize = 10),
-        plot(p3, title = "Variant of Concern", titlefontsize = 10),
-        layout = l,
+        plot(p1, title="ABM Dynamics", titlefontsize=10),
+        plot(p2, title="Agents response to η", titlefontsize=10),
+        plot(p3, title="Variant of Concern", titlefontsize=10),
+        layout=l,
     )
     return plt
 end
