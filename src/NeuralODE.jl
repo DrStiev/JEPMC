@@ -46,13 +46,19 @@ function F!(du, u, p, t)
     du[5] = δ * γ * I # dD
 end
 
-rng = Xoshiro(1234)
+rng = Xoshiro(42)
 u = [0.99, 0.0, 0.01, 0.0, 0.0]
-p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.0007]
-tspan = (0.0, 30.0)
+p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
+tspan = 0.0:1.0:30.0
 
-prob = ODEProblem(F!, u, tspan, p_true)
-solution = solve(prob, OrdinaryDiffEq.Vern7(), abstol = 1e-12, reltol = 1e-12, saveat = 1)
+prob = ODEProblem(F!, u, (tspan[1], tspan[end]), p_true)
+solution = solve(
+    prob,
+    OrdinaryDiffEq.Vern7(; thread = OrdinaryDiffEq.True()),
+    abstol = 1e-12,
+    reltol = 1e-12,
+    saveat = 1,
+)
 X = Array(solution)
 t = solution.t
 
@@ -62,14 +68,14 @@ plot(solution, label = ["True S" "True E" "True I" "True R" "True D"])
 scatter!(noisy_data', label = ["Noisy S" "Noisy E" "Noisy I" "Noisy R" "Noisy D"])
 
 # Multilayer FeedForward
-U = Lux.Chain(Lux.Dense(3, 64, relu), Lux.Dense(64, 64, relu), Lux.Dense(64, 1))
+U = Lux.Chain(Lux.Dense(5, 64, relu), Lux.Dense(64, 1))
 # Get the initial parameters and state variables of the model
 p, st = Lux.setup(rng, U)
 
 function sir_ude!(du, u, p, t, p_true)
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ = p_true
-    λ = U([S, I, D], p, st)[1]
+    λ = U(u, p, st)[1]
     μ = δ / 1111
     du[1] = μ * sum(u) - λ[1] * S - μ * S # dS
     du[2] = λ[1] * S - σ * E - μ * E # dE
@@ -79,14 +85,14 @@ function sir_ude!(du, u, p, t, p_true)
 end
 
 nn_dynamics!(du, u, p, t) = sir_ude!(du, u, p, t, p_true)
-prob_nn = ODEProblem(nn_dynamics!, noisy_data[:, 1], tspan, p)
+prob_nn = ODEProblem(nn_dynamics!, noisy_data[:, 1], (tspan[1], tspan[end]), p)
 
-function predict(θ, X = noisy_data[:, 1], T = t)
+function predict(θ, X = noisy_data[:, 1], T = tspan)
     _prob = remake(prob_nn, u0 = X, tspan = (T[1], T[end]), p = θ)
     Array(
         solve(
             _prob,
-            OrdinaryDiffEq.Vern7(),
+            OrdinaryDiffEq.Vern7(; thread = OrdinaryDiffEq.True()),
             saveat = T,
             abstol = 1e-6,
             reltol = 1e-6,
@@ -98,7 +104,10 @@ end
 # poisson loss as we are comparing our model against counts of new cases
 function loss(θ)
     pred = predict(θ)
-    # println("$(size(pred))")
+    # something is wrong but idk why
+    # pred:(5, 31), data:(5, 31)
+    # pred:(5, 9), data:(5, 31)
+    # println("pred: $(size(pred)), data: $(size(noisy_data))")
     mean(abs2, noisy_data .- pred)
 end
 
@@ -117,13 +126,7 @@ optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
 # DimensionMismatch: arrays could not be broadcast to a common size;
 maxiters = 1000
-res1 = Optimization.solve(
-    optprob,
-    ADAM(),
-    callback = callback,
-    maxiters = maxiters,
-    allow_f_increases = false,
-)
+res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = maxiters)
 println("Training loss after $(length(losses)) iterations: $(losses[end])")
 optprob2 = Optimization.OptimizationProblem(optf, res1.u)
 # DimensionMismatch: arrays could not be broadcast to a common size;
@@ -132,9 +135,24 @@ res2 = Optimization.solve(
     Optim.LBFGS(),
     callback = callback,
     maxiters = trunc(Int, maxiters / 5),
-    allow_f_increases = false,
 )
 println("Final training loss after $(length(losses)) iterations: $(losses[end])")
+
+ts = first(t):(mean(diff(t))/2):last(t)
+X̂ = predict(res2.u, noisy_data[:, 1], ts)
+Ŷ = U(X̂, res2.u, st)[1]
+plot(
+    ts,
+    transpose(X̂),
+    xlabel = "t",
+    ylabel = "percentage",
+    label = ["S UDE Approximation" "E UDE Approximation" "I UDE Approximation" "R UDE Approximation" "D UDE Approximation"],
+)
+scatter!(
+    solution.t,
+    transpose(noisy_data),
+    label = ["S Measurements" "E Measurements" "I Measurements" "R Measurements" "D Measurements"],
+)
 
 plt = plot_loss(losses, ["ADAM", "LBFGS"], maxiters)
 include("Utils.jl")
@@ -142,12 +160,8 @@ save_plot(plt, "img/loss/" * string(today()) * "/", "UDE_LOSS", "pdf")
 
 # LoadError: UndefVarError: `@variables` not defined
 @variables u[1:3]
-b = polynomial_basis(u)
+b = polynomial_basis(u, 4)
 basis = Basis(b, u);
-
-ts = first(t):(mean(diff(t))/2):last(t)
-X̂ = predict(res2.u, noisy_data[:, 1], ts)
-Ŷ = U(X̂, res2.u, st)[1]
 
 nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
 λ = exp10.(-3:0.01:3)
@@ -186,7 +200,8 @@ end
 recovered_dynamics!(du, u, p, t) = recovered_dynamics!(du, u, p, t, p_true)
 
 estimation_prob = ODEProblem(recovered_dynamics!, u, tspan, get_parameter_values(nn_eqs))
-estimate = solve(estimation_prob, Tsit5(), saveat = solution.t)
+estimate =
+    solve(estimation_prob, Tsit5(; thread = OrdinaryDiffEq.True()), saveat = solution.t)
 
 # Plot
 plot(solution)
@@ -204,9 +219,10 @@ parameter_res = Optimization.solve(optprob, Optim.LBFGS(), maxiters = 1000)
 # Look at long term prediction
 t_long = (0.0, tspan[2] * 2)
 estimation_prob = ODEProblem(recovered_dynamics!, u, t_long, parameter_res)
-estimate_long = solve(estimation_prob, Tsit5(), saveat = 1) # Using higher tolerances here results in exit of julia
+estimate_long = solve(estimation_prob, Tsit5(; thread = OrdinaryDiffEq.True()), saveat = 1) # Using higher tolerances here results in exit of julia
 plot(estimate_long)
 
 true_prob = ODEProblem(F!, u, t_long, p_true)
-true_solution_long = solve(true_prob, Tsit5(), saveat = estimate_long.t)
+true_solution_long =
+    solve(true_prob, Tsit5(; thread = OrdinaryDiffEq.True()), saveat = estimate_long.t)
 plot!(true_solution_long)
