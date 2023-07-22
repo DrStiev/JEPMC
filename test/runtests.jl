@@ -3,12 +3,13 @@ using Test, Dates
 
 include("../src/CovidSim.jl")
 
+# add test with 8000 nodes and avgPopulation=7000 (w/ and wout/ control)
 @testset "CovidSim.jl" begin
     @test test_abm() == true
     @test test_abm_controller() == true
     @test test_ensemble_abm() == true
     @test test_ensemble_abm_controller() == true # requires lot of time (4+ hours)
-    @test test_paramscan_abm() == true # non funziona
+    @test test_paramscan_abm() == true # requires lot of time (4+ hours)
 end
 
 function test_abm()
@@ -60,7 +61,7 @@ function test_abm_controller()
 end
 
 function test_ensemble_abm()
-    models = [CovidSim.init(; seed = abs(i)) for i in rand(Int64, 10)]
+    models = [CovidSim.init(; seed = abs(i)) for i in rand(Int8, 10)]
     i = 1
     for model in models
         CovidSim.save_parameters(
@@ -93,7 +94,7 @@ function test_ensemble_abm()
 end
 
 function test_ensemble_abm_controller()
-    models = [CovidSim.init(; control = true, seed = abs(i)) for i in rand(Int64, 10)]
+    models = [CovidSim.init(; control = true, seed = abs(i)) for i in rand(Int8, 10)]
     i = 1
     for model in models
         CovidSim.save_parameters(
@@ -126,15 +127,7 @@ function test_ensemble_abm_controller()
 end
 
 function test_paramscan_abm()
-    parameters = Dict(
-        :maxTravelingRate => Base.collect(0.01:0.01:0.1),
-        :edgesCoverage => [:high, :medium, :low],
-        :numNodes => Base.collect(1:10:101),
-        :avgPopulation => Base.collect(1000:1000:100000),
-        :control => [true, false],
-    )
-
-    data = CovidSim.collect_paramscan!(parameters, CovidSim.init())
+    data = CovidSim.collect_paramscan!()
     d = reduce(vcat, data)
     CovidSim.save_dataframe(
         d,
