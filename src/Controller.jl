@@ -10,9 +10,10 @@ function controller!(
     initial_condition::Vector{Float64},
     parameters::Vector{Float64};
     C₀::Float64 = 0.0,
-    υ_max::Float64 = 0.5, # υ_max e υ_total sono inversamente proporzionali
-    υ_total::Float64 = 10.0,
-    timeframe::Tuple{Float64,Float64} = (0.0, 100.0), # anche il tempo potrebbe essere importante
+    υ_max::Float64 = 0.6, # υ_max e υ_total sono inversamente proporzionali
+    υ_total::Float64 = 70.0,
+    I_max::Float64 = 0.1,
+    timeframe::Tuple{Float64,Float64} = (0.0, 30.0), # anche il tempo potrebbe essere importante
     δt::Float64 = 0.1,
     showplot::Bool = false,
 )
@@ -30,7 +31,7 @@ function controller!(
 
     @variable(model, S ≥ 0, Infinite(t))
     @variable(model, E ≥ 0, Infinite(t))
-    @variable(model, I ≥ 0, Infinite(t))
+    @variable(model, 0 ≤ I ≤ I_max, Infinite(t))
     @variable(model, R ≥ 0, Infinite(t))
     @variable(model, D ≥ 0, Infinite(t))
     @variable(model, C ≥ 0, Infinite(t))
@@ -98,8 +99,9 @@ function controller!(
         plot!(ts, I_opt, label = "I")
         plot!(ts, R_opt, label = "R")
         plot!(ts, D_opt, label = "D")
-        plot!(ts, C_opt, label = "C")
+        # plot!(ts, C_opt, label="C")
         plot!(ts, υ_opt, label = "Optimized υ")
+        hline!([I_max], label = "Threshold I")
     end
     return (mean(υ_opt_t), plt)
 end

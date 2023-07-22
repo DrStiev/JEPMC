@@ -18,12 +18,12 @@ function init(;
     numNodes::Int = 50,
     edgesCoverage::Symbol = :high,
     initialNodeInfected::Int = 1,
-    param::Vector{Float64} = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.007],
+    param::Vector{Float64} = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
     avgPopulation::Int = 10000,
     maxTravelingRate::Float64 = 0.1,  # flusso di persone che si spostano
     tspan::Tuple = (1.0, Inf),
     control::Bool = false,
-    seed::Int = 1234,
+    seed::Int = 42,
 )
 
     rng = Xoshiro(seed)
@@ -64,8 +64,11 @@ function init(;
         OrdinaryDiffEq.ODEProblem(seir!, a.status, tspan, a.param) for a in allagents(model)
     ]
     integrator = [
-        OrdinaryDiffEq.init(p, OrdinaryDiffEq.Tsit5(); advance_to_tstop = true) for
-        p in prob
+        OrdinaryDiffEq.init(
+            p,
+            OrdinaryDiffEq.Tsit5(; thread = OrdinaryDiffEq.True());
+            advance_to_tstop = true,
+        ) for p in prob
     ]
     model.properties[:integrator] = integrator
 
@@ -165,16 +168,24 @@ function voc!(model::ABM)
     end
 end
 
-function control!(agent, model::ABM)
-    if agent.status[3] ≥ 1e-3 && model.step % 30 == 0
-        υ_max = (exp(-3 * agent.status[3]) - 1) / (exp(-3) - 1)
-        υ_total = 5.0 / υ_max
+function control!(
+    agent,
+    model::ABM;
+    k::Float64 = -4.5,
+    tolerance::Float64 = 1e-3,
+    dt::Float64 = 30.0,
+    I_max::Float64 = 0.1,
+)
+    if agent.status[3] ≥ tolerance && model.step % dt == 0
+        υ_max = (exp(k * agent.status[3]) - 1) / (exp(k) - 1)
+        υ_total = 42.0 / υ_max
         agent.param[6] = controller!(
             agent.status,
             agent.param;
+            I_max = I_max,
             υ_max = υ_max,
             υ_total = υ_total,
-            timeframe = (0.0, 30.0),
+            timeframe = (0.0, dt),
         )[1]
     end
 end
@@ -234,7 +245,9 @@ function collect_paramscan!(
         :maxTravelingRate => Base.collect(0.01:0.01:0.1),
         :edgesCoverage => [:high, :medium, :low],
         :numNodes => Base.collect(1:10:101),
-        :avgPopulation => Base.collect(1000:1000:100000),
+        :avgPopulation => Base.collect(1000:10_000:100_000),
+        :control => [false, true],
+        :initialNodeInfected => Base.collect(1:1:10),
     ),
     init = init;
     adata = get_observable_data(),
@@ -249,8 +262,8 @@ function collect_paramscan!(
         parameters,
         init;
         adata,
-        agent_step,
-        model_step,
+        (agent_step!) = agent_step,
+        (model_step!) = model_step,
         n = n,
         showprogress = showprogress,
         parallel = parallel,
