@@ -101,7 +101,6 @@ function predict(θ, X = noisy_data[:, 1], T = tspan)
     )
 end
 
-# poisson loss as we are comparing our model against counts of new cases
 function loss(θ)
     pred = predict(θ)
     # something is wrong but idk why

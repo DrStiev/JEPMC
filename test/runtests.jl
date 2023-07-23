@@ -1,20 +1,32 @@
 # using CovidSim
 using Test, Dates, Distributed, DataFrames, Plots
 
-addprocs(15)
-@everywhere include("../src/CovidSim.jl")
+include("../src/CovidSim.jl")
 
-@testset "CovidSim.jl" begin
+@testset "singlerun" begin
     path = "results/" * string(today()) * "/"
     isdir(path) == false && mkpath(path)
+
     @test test_abm(path) == true
     @test test_abm_controller(path) == true
     @test test_abm_vaccine(path) == true
     @test test_abm_all(path) == true
+end
+
+@testset "ensemblerun" begin
+    path = "results/" * string(today()) * "/"
+    isdir(path) == false && mkpath(path)
+
     @test test_ensemble_abm(path) == true
     @test test_ensemble_abm_controller(path) == true # requires lot of time (4+ hours)
     @test test_ensemble_abm_vaccine(path) == true
     @test test_ensemble_abm_all(path) == true # requires lot of time (4+ hours)
+end
+
+@testset "paramscanrun" begin
+    path = "results/" * string(today()) * "/"
+    isdir(path) == false && mkpath(path)
+
     @test test_paramscan_abm(path) == true # requires lot of time (4+ hours)
 end
 
@@ -102,7 +114,7 @@ function test_abm_vaccine(path::String)
 end
 
 function test_abm_all(path::String)
-    model = CovidSim.init(; vaccine=true, controll=true)
+    model = CovidSim.init(; vaccine=true, control=true)
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
     plt = CovidSim.plot_model(data)
