@@ -1,6 +1,7 @@
 using Agents, Graphs, Random, Distributions, DataFrames
 using SparseArrays: findnz
 using StatsBase: sample, Weights
+using DrWatson: @dict
 
 import OrdinaryDiffEq, DiffEqCallbacks
 
@@ -8,21 +9,10 @@ include("ABMUtils.jl")
 include("Controller.jl")
 
 @agent Node ContinuousAgent{2} begin
-    population::Int
+    population::Int64
     status::Vector{Float64} # S, E, I, R, D
     param::Vector{Float64} # R₀, γ, σ, ω, δ, η, ξ
     happiness::Float64 # ∈ [0, 1)
-end
-
-Base.@kwdef mutable struct Parameters
-    numNodes::Int
-    param::Vector{Float64}
-    connections::SimpleGraph
-    migrationMatrix
-    step::Int
-    control::Bool
-    vaccine::Bool
-    integrator
 end
 
 function init(;
@@ -30,12 +20,12 @@ function init(;
     edgesCoverage::Symbol=:high,
     initialNodeInfected::Int=1,
     param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
-    avgPopulation::Int=10000,
-    maxTravelingRate::Float64=0.1,  # flusso di persone che si spostano
+    avgPopulation::Int=10_000,
+    maxTravelingRate::Float64=0.001,  # flusso di persone che si spostano
     tspan::Tuple=(1.0, Inf),
     control::Bool=false,
     vaccine::Bool=false,
-    seed::Int=42
+    seed::Int=1234
 )
 
     rng = Xoshiro(seed)
@@ -43,15 +33,8 @@ function init(;
     graph = connected_graph(numNodes, edgesCoverage; rng=rng)
     migrationMatrix = get_migration_matrix(graph, population, maxTravelingRate)
 
-    properties = Parameters(
-        numNodes,
-        param,
-        graph,
-        migrationMatrix,
-        0,
-        control,
-        vaccine,
-        nothing
+    properties = @dict(
+        numNodes, param, graph, migrationMatrix, step = 0, control, vaccine, integrator = nothing
     )
 
     model = ABM(
@@ -82,11 +65,11 @@ function init(;
     integrator = [
         OrdinaryDiffEq.init(
             p,
-            OrdinaryDiffEq.Tsit5(; thread=OrdinaryDiffEq.True());
+            OrdinaryDiffEq.Tsit5();
             advance_to_tstop=true
         ) for p in prob
     ]
-    model.properties.integrator = integrator
+    model.integrator = integrator
 
     return model
 end
@@ -102,7 +85,7 @@ function model_step!(model::ABM)
         agent.status = model.integrator[agent.id].u
     end
     voc!(model)
-    model.control ? vaccine!(model) : nothing
+    model.vaccine ? vaccine!(model) : nothing
     model.step += 1
 end
 
@@ -118,8 +101,8 @@ function vaccine!(model::ABM)
         if agent.param[7] > 0.0
             network = model.migrationMatrix[agent.id, :]
             tidxs, tweights = findnz(network)
-            id = sample(model.rng, 1:length(tidxs), Weights(tweights))
-            objective = filter(x -> x.id == tidxs[id], [a for a in allagents(model)])[1]
+            id = sample(model.rng, tidxs, Weights(tweights))
+            objective = filter(x -> x.id == id, [a for a in allagents(model)])[1]
             objective.param[7] = agent.param[7]
         end
     end
@@ -128,7 +111,7 @@ end
 function agent_step!(agent, model::ABM)
     migrate!(agent, model)
     happiness!(agent)
-    model.vaccine ? control!(agent, model) : nothing
+    model.control ? control!(agent, model) : nothing
 end
 
 function migrate!(agent, model::ABM)
@@ -136,30 +119,16 @@ function migrate!(agent, model::ABM)
     tidxs, tweights = findnz(network)
 
     for i = 1:length(tidxs)
-        try
-            people_traveling_out = map(
-                (x) -> round(Int, x),
-                agent.status .* tweights[i] .* agent.population .* (1 - agent.param[6]),
-            )
-            dead = people_traveling_out[end]
-            people_traveling_out[end] = 0.0
+        out = agent.status .* tweights[i] .* agent.population .* (1 - agent.param[6])
+        new_population = agent.population - sum(out)
+        out[end] = 0.0
+        agent.status = (agent.status .* agent.population - out) ./ new_population
+        agent.population = round(Int64, new_population)
 
-            new_population = agent.population - (sum(people_traveling_out) + dead)
-            agent.status =
-                (agent.status .* agent.population - people_traveling_out) ./ new_population
-            agent.population = new_population
-            agent.population = map((x) -> round(Int, x), agent.population)
-
-            objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
-            new_population = objective.population + sum(people_traveling_out)
-            objective.status =
-                (objective.status .* objective.population + people_traveling_out) ./
-                new_population
-            objective.population = new_population
-            objective.population = map((x) -> round(Int, x), objective.population)
-        catch ex
-            @debug "Something was odd: " exception = (ex, catch_backtrace())
-        end
+        objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
+        new_population = objective.population + sum(out)
+        objective.status = (objective.status .* objective.population + out) ./ new_population
+        objective.population = round(Int64, new_population)
     end
 end
 
@@ -172,7 +141,7 @@ function happiness!(agent)
 end
 
 function voc!(model::ABM)
-    if rand(model.rng) ≤ 8e-3
+    if rand(model.rng) ≤ 1e-4
         agent = random_agent(model)
         if agent.status[3] ≠ 0.0
             agent.param[1] = rand(model.rng, Uniform(3.3, 5.7))

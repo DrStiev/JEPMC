@@ -31,57 +31,21 @@ end
 end
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
-    # FIXME
-    try
-        CovidSim.save_parameters(
-            p,
-            path * "parameters/",
-            "SocialNetworkABM",
-        )
-    catch ex
-        @debug ex
-    end
-    CovidSim.save_dataframe(
-        d,
-        path * "dataframe/",
-        "SocialNetworkABM",
-    )
-    CovidSim.save_plot(
-        plt,
-        path * "plot/",
-        "SocialNetworkABM",
-        "pdf",
-    )
+    CovidSim.save_parameters(p, path * "parameters/", "SocialNetworkABM")
+    CovidSim.save_dataframe(d, path * "dataframe/", "SocialNetworkABM")
+    CovidSim.save_plot(plt, path * "plot/", "SocialNetworkABM", "pdf")
 end
 
 function save_results(path::String, properties::Vector, d::DataFrame, plts::Vector)
-    # FIXME
-    try
-        i = 1
-        for p in properties
-            CovidSim.save_parameters(
-                p,
-                path * "parameters/",
-                "SocialNetworkABM_$i",
-            )
-            i += 1
-        end
-    catch ex
-        @debug ex
+    i = 1
+    for p in properties
+        CovidSim.save_parameters(p, path * "parameters/", "SocialNetworkABM_$i")
+        i += 1
     end
-    CovidSim.save_dataframe(
-        d,
-        path * "dataframe/",
-        "SocialNetworkABM",
-    )
+    CovidSim.save_dataframe(d, path * "dataframe/", "SocialNetworkABM")
     i = 1
     for plt in plts
-        CovidSim.save_plot(
-            plt,
-            path * "plot/",
-            "SocialNetworkABM_$i",
-            "pdf",
-        )
+        CovidSim.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
         i += 1
     end
 end
@@ -156,7 +120,10 @@ function test_ensemble_abm_vaccine(path::String)
 end
 
 function test_ensemble_abm_all(path::String)
-    models = [CovidSim.init(; control=true, vaccine=true, seed=Int64(abs(i))) for i in rand(Int8, 10)]
+    models = [
+        CovidSim.init(; control=true, vaccine=true, seed=Int64(abs(i))) for
+        i in rand(Int8, 10)
+    ]
     properties = [model.properties for model in models]
     data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
@@ -169,10 +136,6 @@ end
 function test_paramscan_abm(path::String)
     data = CovidSim.collect_paramscan!()
     d = reduce(vcat, data)
-    CovidSim.save_dataframe(
-        d,
-        path * "paramscanrun/dataframe/",
-        "SocialNetworkABM",
-    )
+    CovidSim.save_dataframe(d, path * "paramscanrun/dataframe/", "SocialNetworkABM")
     return true
 end

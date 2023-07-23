@@ -1,9 +1,5 @@
 using JuMP, Ipopt, Plots, InfiniteOpt
 using Statistics: mean
-# TODO: https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_ftc_jump/function_map_ftc_jump.md
-# TODO: https://github.com/epirecipes/sir-julia/blob/master/markdown/function_map_vaccine_jump/function_map_vaccine_jump.md
-# questo esempio potrebbe essere buono per la NeuralODE
-# TODO: https://github.com/epirecipes/sir-julia/blob/master/markdown/ode_lockdown_optimization/ode_lockdown_optimization.md
 
 # https://github.com/epirecipes/sir-julia
 function controller!(
