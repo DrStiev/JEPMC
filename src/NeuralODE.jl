@@ -7,12 +7,9 @@ using Lux, Optimization, OptimizationOptimJL, DifferentialEquations
 using SciMLSensitivity, ComponentArrays, OptimizationOptimisers
 using OrdinaryDiffEq, ModelingToolkit, DataDrivenDiffEq, DataDrivenSparse
 using Distributions, Random, Plots, LinearAlgebra, Statistics, Zygote
-using Dates
+using Dates, DiffEqFlux
 
 gr()
-
-using DiffEqFlux
-
 
 function plot_loss(losses::Vector{Float64}, label::Vector{String}, iter::Int)
     plt = plot(
@@ -62,7 +59,7 @@ function get_data(;
         OrdinaryDiffEq.Vern7(),
         abstol=1e-12,
         reltol=1e-12,
-        saveat=3
+        saveat=1
     )
     X = Array(solution)
     t = solution.t
@@ -72,19 +69,32 @@ function get_data(;
     return noisy_data, t
 end
 
-# rng = Xoshiro(42)
-# u = [0.999, 0.0, 0.001, 0.0, 0.0]
-# p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
-# tspan = (0.0, 42.0)
-# X, t = get_data(; u=u, p=p_true, tspan=tspan, rng=rng)
+rng = Xoshiro(42)
+u = [0.999, 0.0, 0.001, 0.0, 0.0]
+p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
+tspan = (0.0, 150.0)
+X, t = get_data(; u=u, p=p_true, tspan=tspan, rng=rng)
+
+X
+t
+t[1:22]
+X[:, 1]
+size(X, 2)
+x, y, plt = nn_ode(X[:, 1], X[:, 1:22], (0.0, 51.0); saveat=t[1:22])
+
+x
+y
+
+# TODO: capire come fare predizioni
 
 function nn_ode(
+    u::Vector{Float64},
     data::Array,
-    tspan::Tuple,
+    tspan::Tuple;
     activation_function=relu,
     maxiters=1000,
     doplot::Bool=false,
-    saveat::Vector{Float64}=[0.0:1.0:42.0],
+    saveat::Vector{Float64}=[0.0:1.0:size(data, 2)],
     seed::Int=42
 )
     rng = Xoshiro(seed)
@@ -112,8 +122,8 @@ function nn_ode(
         end
         # plot current prediction against data
         if doplot
-            plt = scatter(t, data', label=["S Measurements" "E Measurements" "I Measurements" "R Measurements" "D Measurements"])
-            plot!(plt, t, pred', label=["S Prediction" "E Prediction" "I Prediction" "R Prediction" "D Prediction"])
+            plt = scatter(saveat, data', label=["S Measurements" "E Measurements" "I Measurements" "R Measurements" "D Measurements"])
+            plot!(plt, saveat, pred', lw=3, label=["S Prediction" "E Prediction" "I Prediction" "R Prediction" "D Prediction"])
             display(plot(plt))
         end
         return false
@@ -123,118 +133,26 @@ function nn_ode(
     adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> loss_neuralode(x), adtype)
 
-    try
-        optprob = Optimization.OptimizationProblem(optf, pinit)
-        result_neuralode = Optimization.solve(
-            optprob,
-            ADAM(0.05),
-            callback=callback,
-            maxiters=trunc(Int, maxiters * 4 / 5)
-        )
-        optprob2 = remake(optprob, u0=result_neuralode.u)
-        result_neuralode2 = Optimization.solve(
-            optprob2,
-            Optim.BFGS(initial_stepnorm=0.01),
-            callback=callback,
-            maxiters=trunc(Int, maxiters / 5)
-        )
-    catch ex
-        @debug ex
-    end
+    optprob = Optimization.OptimizationProblem(optf, pinit)
+    result_neuralode = Optimization.solve(
+        optprob,
+        ADAM(0.05),
+        callback=callback,
+        maxiters=trunc(Int, maxiters * 4 / 5)
+    )
+    callback(result_neuralode.u, loss_neuralode(result_neuralode.u)...; doplot=true)
 
-    callback(result_neuralode2.u, loss_neuralode(result_neuralode2.u)...; doplot=doplot)
+    optprob2 = remake(optprob, u0=result_neuralode.u)
+    result_neuralode2 = Optimization.solve(
+        optprob2,
+        Optim.BFGS(initial_stepnorm=0.01),
+        callback=callback,
+        maxiters=trunc(Int, maxiters / 5)
+    )
+    callback(result_neuralode2.u, loss_neuralode(result_neuralode2.u)...; doplot=true)
+
     plt = doplot ? plot_loss(losses, ["ADAM", "BFGS"], maxiters) : nothing
     X̂ = predict_neuralode(result_neuralode2.u)
     Ŷ = U(X̂, result_neuralode2.u, st)[1]
     return X̂, Ŷ, plt
-end
-
-# LoadError: UndefVarError: `@variables` not defined
-function sindy_like(
-    X̂::Matrix,
-    Ŷ::Matrix,
-    tspan::StepRangeLen;
-    p_true::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
-    opt=ADMM,
-    λ=exp10.(-3:0.01:3),
-    optimizers::Vector=[Optim.BFGS],
-    seed::Int=42
-)
-
-    rng = Xoshiro(seed)
-
-    @variables u[1:3]
-    b = polynomial_basis(u, 5)
-    basis = Basis(b, u)
-
-    nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
-    opt = opt(λ)
-
-    options = DataDrivenCommonOptions(
-        maxiters=10_000,
-        normalize=DataNormalization(ZScoreTransform),
-        selector=bic,
-        digits=1,
-        data_processing=DataProcessing(
-            split=0.9,
-            batchsize=30,
-            shuffle=true,
-            rng=rng,
-        ),
-    )
-
-    nn_res = solve(nn_problem, basis, opt, options=options)
-    nn_eqs = get_basis(nn_res)
-    println(nn_res)
-
-    # Define the recovered, hybrid model
-    function recovered_dynamics!(du, u, p, t, p_true)
-        û = nn_eqs(u, p) # Recovered equations
-        S, E, I, R, D = u
-        R₀, γ, σ, ω, δ = p_true
-        μ = δ / 1111
-        du[1] = -û[1] * S # dS
-        du[2] = û[1] * S - σ * E # dE
-        du[3] = σ * E - γ * I - δ * I # dI
-        du[4] = (1 - δ) * γ * I - ω * R # dR
-        du[5] = δ * γ * I # dD
-    end
-
-    recovered_dynamics!(du, u, p, t) = recovered_dynamics!(du, u, p, t, p_true)
-
-    estimation_prob = ODEProblem(
-        recovered_dynamics!,
-        u,
-        (tspan[1], tspan[end]),
-        get_parameter_values(nn_eqs),
-    )
-    estimate =
-        solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=solution.t)
-
-    # Plot
-    # plot(solution)
-    # plot!(estimate)
-
-    function parameter_loss(p)
-        Y = reduce(hcat, map(Base.Fix2(nn_eqs, p), eachcol(X̂)))
-        sum(abs2, Ŷ .- Y)
-    end
-
-    optf = Optimization.OptimizationFunction((x, p) -> parameter_loss(x), adtype)
-    optprob = Optimization.OptimizationProblem(optf, get_parameter_values(nn_eqs))
-    parameter_res = Optimization.solve(optprob, Optim.BFGS(), maxiters=1000)
-
-    # Look at long term prediction
-    t_long = (0.0, tspan[2] * 2)
-    estimation_prob = ODEProblem(recovered_dynamics!, u, t_long, parameter_res)
-    estimate_long =
-        solve(estimation_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=1) # Using higher tolerances here results in exit of julia
-    # plot(estimate_long)
-
-    # true_prob = ODEProblem(F!, u, t_long, p_true)
-    # true_solution_long =
-    #     solve(true_prob, Tsit5(; thread=OrdinaryDiffEq.True()), saveat=estimate_long.t)
-    # plot!(true_solution_long)
-
-    return estimate_long
 end
