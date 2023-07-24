@@ -119,16 +119,20 @@ function migrate!(agent, model::ABM)
     tidxs, tweights = findnz(network)
 
     for i = 1:length(tidxs)
-        out = agent.status .* tweights[i] .* agent.population .* (1 - agent.param[6])
-        new_population = agent.population - sum(out)
-        out[end] = 0.0
-        agent.status = (agent.status .* agent.population - out) ./ new_population
-        agent.population = round(Int64, new_population)
+        try
+            out = agent.status .* tweights[i] .* agent.population .* (1 - agent.param[6])
+            new_population = agent.population - sum(out)
+            out[end] = 0.0
+            agent.status = (agent.status .* agent.population - out) ./ new_population
+            agent.population = round(Int64, new_population)
 
-        objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
-        new_population = objective.population + sum(out)
-        objective.status = (objective.status .* objective.population + out) ./ new_population
-        objective.population = round(Int64, new_population)
+            objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
+            new_population = objective.population + sum(out)
+            objective.status = (objective.status .* objective.population + out) ./ new_population
+            objective.population = round(Int64, new_population)
+        catch ex
+            @debug ex
+        end
     end
 end
 
