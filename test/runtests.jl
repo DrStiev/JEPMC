@@ -3,33 +3,6 @@ using Test, Dates, Distributed, DataFrames, Plots
 
 include("../src/CovidSim.jl")
 
-@testset "singlerun" begin
-    path = "results/" * string(today()) * "/"
-    isdir(path) == false && mkpath(path)
-
-    @test test_abm(path) == true
-    @test test_abm_controller(path) == true
-    @test test_abm_vaccine(path) == true
-    @test test_abm_all(path) == true
-end
-
-@testset "ensemblerun" begin
-    path = "results/" * string(today()) * "/"
-    isdir(path) == false && mkpath(path)
-
-    @test test_ensemble_abm(path) == true
-    @test test_ensemble_abm_controller(path) == true # requires lot of time (4+ hours)
-    @test test_ensemble_abm_vaccine(path) == true
-    @test test_ensemble_abm_all(path) == true # requires lot of time (4+ hours)
-end
-
-@testset "paramscanrun" begin
-    path = "results/" * string(today()) * "/"
-    isdir(path) == false && mkpath(path)
-
-    @test test_paramscan_abm(path) == true # requires lot of time (4+ hours)
-end
-
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
     CovidSim.save_parameters(p, path * "parameters/", "SocialNetworkABM")
     CovidSim.save_dataframe(d, path * "dataframe/", "SocialNetworkABM")
@@ -48,6 +21,25 @@ function save_results(path::String, properties::Vector, d::DataFrame, plts::Vect
         CovidSim.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
         i += 1
     end
+end
+
+function test_gif_animation(path::String)
+    model = CovidSim.init()
+    anim = @animate for i ∈ 1:1200
+        CovidSim.collect!(model; n=1)
+        if i % 7 == 0
+            CovidSim.plot_system_graph(model)
+        end
+    end
+    gif(anim, path * "gif/animation.gif", fps=30)
+    return true
+end
+
+@testset "gif_animation" begin
+    path = "results/" * string(today()) * "/"
+    isdir(path) == false && mkpath(path)
+
+    @test test_gif_animation(path) == true
 end
 
 function test_abm(path::String)
@@ -84,6 +76,16 @@ function test_abm_all(path::String)
     plt = CovidSim.plot_model(data)
     save_results(path * "singlerun/all/", model.properties, d, plt)
     return true
+end
+
+@testset "singlerun" begin
+    path = "results/" * string(today()) * "/"
+    isdir(path) == false && mkpath(path)
+
+    @test test_abm(path) == true
+    @test test_abm_controller(path) == true
+    @test test_abm_vaccine(path) == true
+    @test test_abm_all(path) == true
 end
 
 function test_ensemble_abm(path::String)
@@ -133,9 +135,26 @@ function test_ensemble_abm_all(path::String)
     return true
 end
 
+@testset "ensemblerun" begin
+    path = "results/" * string(today()) * "/"
+    isdir(path) == false && mkpath(path)
+
+    @test test_ensemble_abm(path) == true
+    @test test_ensemble_abm_controller(path) == true # requires lot of time (4+ hours)
+    @test test_ensemble_abm_vaccine(path) == true
+    @test test_ensemble_abm_all(path) == true # requires lot of time (4+ hours)
+end
+
 function test_paramscan_abm(path::String)
     data = CovidSim.collect_paramscan!()
     d = reduce(vcat, data)
     CovidSim.save_dataframe(d, path * "paramscanrun/dataframe/", "SocialNetworkABM")
     return true
+end
+
+@testset "paramscanrun" begin
+    path = "results/" * string(today()) * "/"
+    isdir(path) == false && mkpath(path)
+
+    @test test_paramscan_abm(path) == true # requires lot of time (4+ hours)
 end

@@ -65,26 +65,26 @@ end
 
 # TODO: capire come fare predizioni
 
-rng = Xoshiro(42)
-u = [0.99, 0.0, 0.01, 0.0, 0.0]
-p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
-tspan = (0.0, 100.0)
-X, t = get_data(; u=u, p=p_true, tspan=tspan, rng=rng)
+# rng = Xoshiro(42)
+# u = [0.99, 0.0, 0.01, 0.0, 0.0]
+# p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
+# tspan = (0.0, 100.0)
+# X, t = get_data(; u=u, p=p_true, tspan=tspan, rng=rng)
 
-X
-t
-t[1:22]
-X[:, 21:42]
-x, y, plt = nn_ode(X[:, 21:42], (0.0, 51.0); saveat=t[1:22], maxiters=2000)
+# X
+# t
+# t[1:22]
+# X[:, 21:42]
+# x, y, plt = nn_ode(X[:, 21:42], (0.0, 51.0); saveat=t[1:22], maxiters=2000)
 
-x
-y
-plt
+# x
+# y
+# plt
 
-x, y, plt = nn_ode_gpu(X[:, 21:42], (0.0, 51.0); saveat=t[1:22], maxiters=2000, doplot=true)
-x
-y
-plt
+# x, y, plt = nn_ode_gpu(X[:, 21:42], (0.0, 51.0); saveat=t[1:22], maxiters=2000, doplot=true)
+# x
+# y
+# plt
 
 function nn_ode_gpu(
     data::Array,
