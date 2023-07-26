@@ -67,12 +67,12 @@ function get_data(;
 end
 
 # TODO: capire come fare predizioni
-rng = Xoshiro(42)
-u = [0.99, 0.0, 0.01, 0.0, 0.0]
-p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
-tspan = (0.0, 100.0)
-X, t = get_data(; u=u, p=p_true, tspan=tspan, rng=rng, doplot=true)
-x, y, plt = nn_ode(X[:, 21:51], (0.0, 51.0); saveat=t[1:31], maxiters=5000, doplot=true)
+# rng = Xoshiro(42)
+# u = [0.99, 0.0, 0.01, 0.0, 0.0]
+# p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
+# tspan = (0.0, 100.0)
+# X, t = get_data(; u=u, p=p_true, tspan=tspan, rng=rng, doplot=true)
+# x, y, plt = nn_ode(X[:, 21:51], (0.0, 51.0); saveat=t[1:31], maxiters=5000, doplot=true)
 
 function forecast(
     data::Array,
@@ -98,7 +98,7 @@ function sindy_forecast(
     maxiters::Int=1000,
     doplot::Bool=false
 )
-    @variables u[1:5]
+    ModelingToolkit.@variables u[1:5]
     b = polynomial_basis(u)
     basis = Basis(b, u)
 

@@ -31,12 +31,12 @@ function test_gif_animation(path::String)
             CovidSim.plot_system_graph(model)
         end
     end
-    gif(anim, path * "gif/animation.gif", fps=30)
+    gif(anim, path * "animation.gif", fps=30)
     return true
 end
 
 @testset "gif_animation" begin
-    path = "results/" * string(today()) * "/"
+    path = "results/" * string(today()) * "/gif/"
     isdir(path) == false && mkpath(path)
 
     @test test_gif_animation(path) == true
