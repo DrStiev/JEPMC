@@ -145,7 +145,7 @@ function happiness!(agent)
 end
 
 function voc!(model::ABM)
-    if rand(model.rng) ≤ 1e-4
+    if rand(model.rng) ≤ 8e-3
         agent = random_agent(model)
         if agent.status[3] ≠ 0.0
             agent.param[1] = rand(model.rng, Uniform(3.3, 5.7))

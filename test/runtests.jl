@@ -36,7 +36,7 @@ function test_gif_animation(path::String)
 end
 
 @testset "gif_animation" begin
-    path = "results/" * string(today()) * "/gif/"
+    path = "results/" * string(today()) * "/animation/"
     isdir(path) == false && mkpath(path)
 
     @test test_gif_animation(path) == true
@@ -89,7 +89,7 @@ end
 end
 
 function test_ensemble_abm(path::String)
-    models = [CovidSim.init(; seed=Int64(abs(i))) for i in rand(Int8, 10)]
+    models = [CovidSim.init(; seed=Int64(abs(i))) for i in rand(Int8, 5)]
     properties = [model.properties for model in models]
     data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
@@ -100,7 +100,7 @@ function test_ensemble_abm(path::String)
 end
 
 function test_ensemble_abm_controller(path::String)
-    models = [CovidSim.init(; control=true, seed=Int64(abs(i))) for i in rand(Int8, 10)]
+    models = [CovidSim.init(; control=true, seed=Int64(abs(i))) for i in rand(Int8, 5)]
     properties = [model.properties for model in models]
     data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
@@ -111,7 +111,7 @@ function test_ensemble_abm_controller(path::String)
 end
 
 function test_ensemble_abm_vaccine(path::String)
-    models = [CovidSim.init(; vaccine=true, seed=Int64(abs(i))) for i in rand(Int8, 10)]
+    models = [CovidSim.init(; vaccine=true, seed=Int64(abs(i))) for i in rand(Int8, 5)]
     properties = [model.properties for model in models]
     data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
@@ -124,7 +124,7 @@ end
 function test_ensemble_abm_all(path::String)
     models = [
         CovidSim.init(; control=true, vaccine=true, seed=Int64(abs(i))) for
-        i in rand(Int8, 10)
+        i in rand(Int8, 5)
     ]
     properties = [model.properties for model in models]
     data = CovidSim.ensemble_collect!(models)

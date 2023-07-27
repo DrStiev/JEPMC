@@ -3,6 +3,8 @@ using Distributions, GraphPlot, Colors, GraphRecipes, StatsPlots
 using LinearAlgebra: diagind
 using Statistics: mean
 
+gr()
+
 adapt_R₀!(x) = return 1.1730158534328545 + 0.21570538523224972 * x
 
 function get_migration_matrix(
@@ -105,10 +107,10 @@ end
 function get_observable_data()
     status(x) = x.status
     happiness(x) = x.happiness
-    vaccine(x) = x.param[7]
+    υ(x) = x.param[7]
     η(x) = x.param[6]
     R₀(x) = x.param[1]
-    return [status, happiness, η, vaccine, R₀]
+    return [status, happiness, η, υ, R₀]
 end
 
 function plot_model(
