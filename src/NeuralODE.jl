@@ -7,7 +7,7 @@ using Lux, Optimization, OptimizationOptimJL, DifferentialEquations
 using SciMLSensitivity, ComponentArrays, OptimizationOptimisers
 using OrdinaryDiffEq, ModelingToolkit, DataDrivenDiffEq, DataDrivenSparse
 using Distributions, Random, Plots, LinearAlgebra, Statistics, Zygote
-using Dates, DiffEqFlux, CUDA
+using Dates, DiffEqFlux, CUDA, JLD2, BSON
 
 gr()
 
@@ -66,13 +66,14 @@ function get_data(;
     return noisy_data, t
 end
 
-# TODO: capire come fare predizioni
-# rng = Xoshiro(42)
-# u = [0.99, 0.0, 0.01, 0.0, 0.0]
-# p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
-# tspan = (0.0, 100.0)
-# X, t = get_data(; u=u, p=p_true, tspan=tspan, rng=rng, doplot=true)
-# x, y, plt = nn_ode(X[:, 21:51], (0.0, 51.0); saveat=t[1:31], maxiters=5000, doplot=true)
+rng = Xoshiro(42)
+u = [0.99, 0.0, 0.01, 0.0, 0.0]
+p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
+tspan = (0.0, 100.0)
+X, t = get_data(; u=u, p=p_true, tspan=tspan, rng=rng, doplot=true)
+x, y, plt = nn_ode(X[:, 21:51], (0.0, 30.0); saveat=t[1:31], maxiters=5000, doplot=true)
+# broken -> need fix, maybe not
+res, plt = sindy_forecast(x, y, (0.0, 30.0), 30; u0=X[:, 21], doplot=true)
 
 function forecast(
     data::Array,
@@ -98,8 +99,8 @@ function sindy_forecast(
     maxiters::Int=1000,
     doplot::Bool=false
 )
-    ModelingToolkit.@variables u[1:5]
-    b = polynomial_basis(u)
+    Symbolics.@variables u[1:5]
+    b = polynomial_basis(u, 5)
     basis = Basis(b, u)
 
     nn_problem = DirectDataDrivenProblem(X̂, Ŷ)
@@ -112,7 +113,8 @@ function sindy_forecast(
             batchsize=30,
             shuffle=true,
             rng=rng))
-
+    # I do not write this code so i don't know why it broken up like this
+    # ERROR: DimensionMismatch: arrays could not be broadcast to a common size
     nn_res = solve(nn_problem, basis, opt, options=options)
     nn_eqs = get_basis(nn_res)
     println(nn_res)
@@ -159,6 +161,7 @@ function nn_ode(
     saveat::Vector{Float64}=[0.0:1.0:size(data, 2)],
     seed::Int=42
 )
+    @info "GPU backend is functional? " CUDA.functional()
     CUDA.allowscalar(false) # Makes sure no slow operations are occuring
     rng = Xoshiro(seed)
     u = data[:, 1] |> Lux.gpu_device()
@@ -172,7 +175,7 @@ function nn_ode(
     prob_neuralode = NeuralODE(U, tspan, Tsit5(), saveat=saveat)
 
     function predict_neuralode(p)
-        Lux.gpu(first(prob_neuralode(u, p, st)))
+        first(prob_neuralode(u, p, st)) |> Lux.gpu_device()
     end
 
     function loss_neuralode(p)
@@ -201,7 +204,7 @@ function nn_ode(
     optprob = Optimization.OptimizationProblem(optf, p)
     result_neuralode = Optimization.solve(
         optprob,
-        ADAM(0.05),
+        ADAM(0.1),
         callback=callback,
         maxiters=trunc(Int, maxiters * 4 / 5)
     )
@@ -217,8 +220,13 @@ function nn_ode(
     callback(result_neuralode2.u, loss_neuralode(result_neuralode2.u)...; doplot=true)
 
     plt = doplot ? plot_loss(losses, ["ADAM", "BFGS"], trunc(Int, maxiters * 4 / 5)) : nothing
-
     X̂ = predict_neuralode(result_neuralode2.u)
     Ŷ = U(X̂, result_neuralode2.u, st)[1]
     return X̂, Ŷ, plt
+end
+
+function save_model!(model, path::String)
+    model = model |> Lux.cpu_device()
+    BSON.@save path model
+    return true
 end

@@ -1,7 +1,8 @@
 # using CovidSim
 using Test, Dates, Distributed, DataFrames, Plots
 
-include("../src/CovidSim.jl")
+addprocs(Sys.CPU_THREADS)
+@everywhere include("../src/CovidSim.jl")
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
     CovidSim.save_parameters(p, path * "parameters/", "SocialNetworkABM")
