@@ -1,8 +1,8 @@
 module CovidSim
 using Pkg
 Pkg.activate(".")
-# Pkg.status()
-# Pkg.update()
+Pkg.status()
+Pkg.update()
 # Pkg.precompile()
 # Pkg.instantiate()
 # Pkg.resolve()
