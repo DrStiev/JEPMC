@@ -17,7 +17,7 @@ include("NeuralODE.jl")
 export init, collect!, ensemble_collect!, collect_paramscan!, plot_system_graph
 export plot_system_graph, plot_model
 export save_dataframe, save_plot, save_parameters, read_dataset, load_parameters
-export plot_loss, forecast
+export plot_loss, forecast, save_model!
 
 # using JuliaFormatter
 # format(".")

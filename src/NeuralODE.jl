@@ -3,19 +3,22 @@
 # TODO: https://docs.sciml.ai/DiffEqFlux/stable/examples/GPUs/
 # TODO: https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
 
-using Lux, Optimization, OptimizationOptimisers, Zygote, OrdinaryDiffEq,
-    Plots, CUDA, SciMLSensitivity, Random, ComponentArrays, BSON, OptimizationOptimJL,
-    ModelingToolkit, DataDrivenDiffEq, DataDrivenSparse
+using Lux, Optimization, OptimizationOptimisers, Zygote, OrdinaryDiffEq
+using Plots, CUDA, SciMLSensitivity, Random, ComponentArrays, BSON, OptimizationOptimJL
+using ModelingToolkit, DataDrivenDiffEq, DataDrivenSparse, LuxCUDA
 import DiffEqFlux: NeuralODE
+import Statistics: mean
+
+# https://docs.sciml.ai/SciMLSensitivity/stable/examples/sde/SDE_control/
 
 gr()
-
 function set_backend!()
     try
         Lux.gpu_backend!(CUDA)
         @info "GPU backend set"
     catch ex
         @error ex
+        @info "GPU backend not set"
     end
 end
 
@@ -75,20 +78,6 @@ function get_data(;
     return noisy_data, t
 end
 
-rng = Xoshiro(42)
-u = [0.99, 0.0, 0.01, 0.0, 0.0]
-p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
-tspan = (0.0, 100.0)
-datasize = Int(tspan[end])
-X, t = get_data(; u=u, p=p_true, tspan=tspan, datasize=datasize, rng=rng, doplot=true)
-
-X1 = X[:, 1:21]
-x, y, plt = nn_ode(X1, tspan; maxiters=1000, doplot=true, saveat=0.0:1.0:20.0)
-plt
-
-# broken
-res, plt = sindy_forecast(x, y, tspan, datasize; u0=X1[:, 1], doplot=true, saveat=0.0:1.0:20.0)
-
 function forecast(
     data::Array,
     tspan::Tuple,
@@ -125,27 +114,37 @@ function nn_ode(
     seed::Int=42
 )
     CUDA.allowscalar(false) # Makes sure no slow operations are occuring
+    device = CUDA.functional() ? Lux.gpu_device() : Lux.cpu_device()
+    device = Lux.cpu_device()
     rng = Xoshiro(seed)
 
-    u = data[:, 1] |> Lux.gpu_device()
-    data = data |> Lux.gpu_device()
+    data = Float32.(data)
+    tspan = Float32.(tspan)
+    saveat = Float32.(saveat)
+    u = data[:, 1] |> device
+    data = data |> device
 
     # Multilayer FeedForward
     U = Lux.Chain(Lux.Dense(5, 64, activation_function), Lux.Dense(64, 5))
     # Get the initial parameters and state variables of the model
     p, st = Lux.setup(rng, U)
-    p = p |> ComponentArray |> Lux.gpu_device()
-    st = st |> Lux.gpu_device()
+    p = p |> ComponentArray |> device
+    st = st |> device
 
     prob_neuralode = NeuralODE(U, tspan, Tsit5(), saveat=saveat)
     function predict_neuralode(p)
-        first(prob_neuralode(u, p, st)) |> Lux.gpu_device()
+        first(prob_neuralode(u, p, st)) |> device
     end
 
     function loss_neuralode(p)
         pred = predict_neuralode(p)
-        loss = sum(abs2, data .- pred)
-        return loss, pred
+        # handling Zygote's behaviour for zero gradients
+        if size(pred) == size(data)
+            loss = mean(abs2, data .- pred)
+            return loss, pred
+        else
+            return Inf, pred
+        end
     end
 
     losses = Float32[]
@@ -168,7 +167,7 @@ function nn_ode(
     optprob = Optimization.OptimizationProblem(optf, p)
     result_neuralode = Optimization.solve(
         optprob,
-        ADAM(0.05),
+        Adam(),
         callback=callback,
         maxiters=trunc(Int, maxiters * 4 / 5)
     )
@@ -258,3 +257,17 @@ function sindy_forecast(
     plt = doplot ? plot(estimate_long) : nothing
     return estimate_long, plt
 end
+
+rng = Xoshiro(42)
+u = [0.99, 0.0, 0.01, 0.0, 0.0]
+p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
+tspan = (0.0, 100.0)
+datasize = Int(tspan[end])
+X, t = get_data(; u=u, p=p_true, tspan=tspan, datasize=datasize, rng=rng, doplot=true)
+
+X1 = X[:, 31:61]
+x, y, plt = nn_ode(X1, tspan; maxiters=1000, doplot=true, saveat=0.0:1.0:30.0)
+plt
+
+# broken
+res, plt = sindy_forecast(x, y, tspan, datasize; u0=X1[:, 1], doplot=true, saveat=0.0:1.0:30.0)
