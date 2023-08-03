@@ -1,7 +1,7 @@
 # using CovidSim
 using Test, Dates, Distributed, DataFrames, Plots
 
-addprocs(Sys.CPU_THREADS)
+addprocs(Sys.CPU_THREADS-1)
 @everywhere include("../src/CovidSim.jl")
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
