@@ -1,5 +1,6 @@
 using Graphs, Random, Agents, DataFrames, Dates, CSV, Plots
 using Distributions, GraphPlot, Colors, GraphRecipes, StatsPlots
+using DifferentialEquations, SciMLSensitivity
 using LinearAlgebra: diagind
 using Statistics: mean
 
@@ -202,4 +203,29 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         layout=l,
     )
     return plt
+end
+
+function sensitivity_analisys(f, u0::Vector{Float64}, tspan::Tuple{Float64,Float64}, p::Vector{Float64}; doplot::Bool=true)
+    prob = ODEForwardSensitivityProblem(seir!, u0, tspan, p)
+    sol = solve(prob, Tsit5())
+    x, dp = extract_local_sensitivities(sol)
+    pltout = nothing
+    if doplot
+        dR₀ = dp[1]
+        dγ = dp[2]
+        dσ = dp[3]
+        dω = dp[4]
+        dδ = dp[5]
+        dη = dp[6]
+        plt = []
+        push!(plt, plot(sol_, lw=2, title="Data", titlefontsize=10, legend=false))
+        push!(plt, plot(sol.t, dR₀', lw=2, title="Sensitivity to R₀", titlefontsize=10, legend=false))
+        push!(plt, plot(sol.t, dγ', lw=2, title="Sensitivity to γ", titlefontsize=10, legend=false))
+        push!(plt, plot(sol.t, dσ', lw=2, title="Sensitivity to σ", titlefontsize=10, legend=false))
+        push!(plt, plot(sol.t, dω', lw=2, title="Sensitivity to ω", titlefontsize=10, legend=false))
+        push!(plt, plot(sol.t, dδ', lw=2, title="Sensitivity to δ", titlefontsize=10, legend=false))
+        push!(plt, plot(sol.t, dη', lw=2, title="Sensitivity to η", titlefontsize=10, legend=false))
+        pltout = plot(plt...)
+    end
+    return x, dp, pltout
 end
