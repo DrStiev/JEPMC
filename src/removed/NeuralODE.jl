@@ -73,6 +73,11 @@ function F!(du, u, p, t)
     du[4] = (1 - δ) * γ * I - ω * R + ξ * S - μ * R # dR
     du[5] = δ * γ * I # dD
 end
+u = [0.999, 0.0, 0.001, 0.0, 0.0],
+p = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01, 0.0, 0.0],
+tspan = (0.0, 30.0),
+prob = ODEProblem(F!, u, tspan, p)
+sol = solve(prob, Tsit5())
 
 function get_data(;
     u::Vector{Float64}=[0.999, 0.0, 0.001, 0.0, 0.0],

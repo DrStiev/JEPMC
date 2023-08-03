@@ -1,7 +1,7 @@
 using DifferentialEquations, Optimization
 using Zygote, OptimizationOptimJL, OptimizationPolyalgorithms
 using Lux, OptimizationOptimisers, OrdinaryDiffEq
-using SciMLSensitivity, Random, ComponentArrays, Plots
+using SciMLSensitivity, Random, ComponentArrays
 using Statistics: mean
 
 function controller!(
