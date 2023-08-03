@@ -162,20 +162,30 @@ function control!(
     model::ABM;
     k::Float64=-4.5,
     tolerance::Float64=1e-3,
-    dt::Float64=30.0,
-    I_max::Float64=0.1
+    dt::Float64=21.0,
+    maxiters::Int=100,
+    #I_max::Float64=0.1
 )
     if agent.status[3] ≥ tolerance && model.step % dt == 0
         υ_max = (exp(k * agent.status[3]) - 1) / (exp(k) - 1)
-        υ_total = 42.0 / υ_max
+        # υ_total = 42.0 / υ_max
+        # agent.param[6] = controller!(
+        #     agent.status,
+        #     agent.param;
+        #     I_max=I_max,
+        #     υ_max=υ_max,
+        #     υ_total=υ_total,
+        #     timeframe=(0.0, dt)
+        # )[1]
         agent.param[6] = controller!(
             agent.status,
-            agent.param;
-            I_max=I_max,
-            υ_max=υ_max,
-            υ_total=υ_total,
-            timeframe=(0.0, dt)
-        )[1]
+            agent.param,
+            agent.happiness,
+            (0.0, dt),
+            maxiters;
+            loss_step=Int(maxiters/10),
+            rng=model.rng
+        )
     end
 end
 
