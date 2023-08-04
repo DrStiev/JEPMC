@@ -137,11 +137,8 @@ function migrate!(agent, model::ABM)
 end
 
 function happiness!(agent)
-    agent.happiness = tanh(
-        agent.happiness - agent.param[6] +
-        (agent.status[4] - (agent.status[5] + agent.status[3])),
-    )
-    agent.happiness = agent.happiness < 0.0 ? 0.0 : agent.happiness
+    agent.happiness = agent.happiness - (agent.status[3] + agent.status[5]) + tanh(agent.status[4]) - agent.param[6]
+    agent.happiness = agent.happiness < 0.0 ? 0.0 : agent.happiness > 1.0 ? 1.0 : agent.happiness
 end
 
 function voc!(model::ABM)
@@ -162,28 +159,19 @@ function control!(
     model::ABM;
     k::Float64=-4.5,
     tolerance::Float64=1e-3,
-    dt::Float64=21.0,
-    maxiters::Int=100,
-    #I_max::Float64=0.1
+    dt::Float64=30.0,
+    maxiters::Int=100
 )
     if agent.status[3] ≥ tolerance && model.step % dt == 0
         υ_max = (exp(k * agent.status[3]) - 1) / (exp(k) - 1)
-        # υ_total = 42.0 / υ_max
-        # agent.param[6] = controller!(
-        #     agent.status,
-        #     agent.param;
-        #     I_max=I_max,
-        #     υ_max=υ_max,
-        #     υ_total=υ_total,
-        #     timeframe=(0.0, dt)
-        # )[1]
-        agent.param[6] = controller!(
+        agent.param[6] = controller(
             agent.status,
-            agent.param,
+            agent.param[1:5],
             agent.happiness,
             (0.0, dt),
             maxiters;
-            loss_step=Int(maxiters/10),
+            loss_step=Int(maxiters / 10),
+            υ_max=υ_max,
             rng=model.rng
         )
     end
@@ -241,13 +229,13 @@ end
 
 function collect_paramscan!(
     parameters::Dict=Dict(
-        :maxTravelingRate => Base.collect(0.001:0.01:0.1),
+        :maxTravelingRate => Base.collect(0.001:0.02:0.1),
         :edgesCoverage => [:high, :medium, :low],
-        :numNodes => Base.collect(10:10:100),
-        :avgPopulation => Base.collect(1000:10_000:100_000),
+        :numNodes => Base.collect(10:20:100),
+        :avgPopulation => Base.collect(1000:20_000:100_000),
         :control => [false, true],
         :vaccine => [false, true],
-        :initialNodeInfected => Base.collect(1:1:10),
+        :initialNodeInfected => Base.collect(1:2:10),
     ),
     init=init;
     adata=get_observable_data(),

@@ -8,11 +8,12 @@ rng = Xoshiro(1234)
 tspan = (0.0f0, 1200.0f0)
 ann = Lux.Chain(Lux.Dense(6, 16, swish), Lux.Dense(16, 16, swish), Lux.Dense(16, 1, tanh))
 parameters, state = Lux.setup(rng, ann)
+υ_max = 0.5
 
 # https://medium.com/swlh/neural-ode-for-reinforcement-learning-and-nonlinear-optimal-control-cartpole-problem-revisited-5408018b8d71
 h = rand()
 function dudt_(du, u, p, t, p_true)
-    η = ann(u, p, state)[1]
+    η = abs.(ann(u, p, state)[1])[1] ≤ υ_max ? abs.(ann(u, p, state)[1]) : υ_max
     S, E, I, R, D, h = u
     R₀, γ, σ, ω, δ = p_true
     μ = δ / 1111
@@ -21,12 +22,9 @@ function dudt_(du, u, p, t, p_true)
     du[3] = σ * E - γ * I - δ * I - μ * I # dI
     du[4] = (1 - δ) * γ * I - ω * R - μ * R # dR
     du[5] = δ * γ * I # dD
-    du[6] = -tanh(-du[3] + du[4]) * (1 - η[1]) # dH
-    # println("time: $t, eta: $(tanh(η[1])), h: $(du[6])")
+    du[6] = -tanh((du[3] + du[5])*3) * (1 - η[1]) # dH
 end
 dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
-# da capire
-ann(u0, parameters, state)[1]
 
 u0 = [0.999, 0.0, 0.001, 0.0, 0.0, h]
 p_true = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
@@ -34,6 +32,7 @@ ts = Float32.(collect(0.0:7.0:tspan[end]))
 prob = ODEProblem(dudt_, u0, tspan, parameters)
 sol = solve(prob, Tsit5())
 plot(sol)
+abs.(first(ann(u0, res1.u, state)))[1]
 
 function predict(p)
     _prob = remake(prob, u0=u0, tspan=tspan, p=p)
@@ -42,15 +41,18 @@ end
 
 function loss(p)
     pred = predict(p)
-    sum(pred[3, :]) + sum(pred[5, :]) / sum(pred[6, :])
+    sum(abs2, pred[3, :]) + sum(abs2, pred[5, :]) / sum(abs2, pred[6, :])
 end
 
-l = loss(parameters)
-i = 0
+losses = Float64[]
 callback = function (p, l; iter=10)
-    global i += 1
-    if i % iter == 0
-        println(l)
+    push!(losses, l)
+    if length(losses) > 1 && (losses[end-1] - losses[end]) == 0.0
+        # early stopping if not improving
+        return true
+    end
+    if length(losses) % iter == 0
+        @info "Current loss after $(length(losses)) iterations: $(losses[end])"
         p = plot(solve(remake(prob, p=p), Tsit5()))
         display(p)
     end
@@ -67,4 +69,5 @@ res1 = Optimization.solve(
     callback=callback,
     maxiters=100
 )
-ann(u0, res1.u, state)[1]
+losses
+res = abs.(ann(u0, res1.u, state)[1])[1] ≤ υ_max ? abs.(ann(u0, res1.u, state)[1])[1] : υ_max

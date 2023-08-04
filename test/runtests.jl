@@ -1,8 +1,9 @@
 # using CovidSim
 using Test, Dates, Distributed, DataFrames, Plots
 
-addprocs(Sys.CPU_THREADS-1)
+addprocs(Int(Sys.CPU_THREADS / 4))
 @everywhere include("../src/CovidSim.jl")
+# include("../src/CovidSim.jl")
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
     CovidSim.save_parameters(p, path * "parameters/", "SocialNetworkABM")
@@ -22,25 +23,6 @@ function save_results(path::String, properties::Vector, d::DataFrame, plts::Vect
         CovidSim.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
         i += 1
     end
-end
-
-function test_gif_animation(path::String)
-    model = CovidSim.init()
-    anim = @animate for i ∈ 1:1200
-        CovidSim.collect!(model; n=1)
-        if i % 7 == 0
-            CovidSim.plot_system_graph(model)
-        end
-    end
-    gif(anim, path * "animation.gif", fps=30)
-    return true
-end
-
-@testset "gif_animation" begin
-    path = "results/" * string(today()) * "/animation/"
-    isdir(path) == false && mkpath(path)
-
-    @test test_gif_animation(path) == true
 end
 
 function test_abm(path::String)
@@ -87,6 +69,64 @@ end
     @test test_abm_controller(path) == true
     @test test_abm_vaccine(path) == true
     @test test_abm_all(path) == true
+end
+
+function test_gif_animation_no_control(path::String)
+    model = CovidSim.init()
+    anim = @animate for i ∈ 1:1200
+        CovidSim.collect!(model; n=1)
+        if i % 7 == 0
+            CovidSim.plot_system_graph(model)
+        end
+    end
+    gif(anim, path * "animation_no_control.gif", fps=30)
+    return true
+end
+
+function test_gif_animation_control(path::String)
+    model = CovidSim.init(; control=true)
+    anim = @animate for i ∈ 1:1200
+        CovidSim.collect!(model; n=1)
+        if i % 7 == 0
+            CovidSim.plot_system_graph(model)
+        end
+    end
+    gif(anim, path * "animation_control.gif", fps=30)
+    return true
+end
+
+function test_gif_animation_vaccine(path::String)
+    model = CovidSim.init(; vaccine=true)
+    anim = @animate for i ∈ 1:1200
+        CovidSim.collect!(model; n=1)
+        if i % 7 == 0
+            CovidSim.plot_system_graph(model)
+        end
+    end
+    gif(anim, path * "animation_vaccine.gif", fps=30)
+    return true
+end
+
+function test_gif_animation_all(path::String)
+    model = CovidSim.init(; vaccine=true, control=true)
+    anim = @animate for i ∈ 1:1200
+        CovidSim.collect!(model; n=1)
+        if i % 7 == 0
+            CovidSim.plot_system_graph(model)
+        end
+    end
+    gif(anim, path * "animation_all_control.gif", fps=30)
+    return true
+end
+
+@testset "gif_animation" begin
+    path = "results/" * string(today()) * "/animation/"
+    isdir(path) == false && mkpath(path)
+
+    @test test_gif_animation_no_control(path) == true
+    @test test_gif_animation_control(path) == true
+    @test test_gif_animation_vaccine(path) == true
+    @test test_gif_animation_all(path) == true
 end
 
 function test_ensemble_abm(path::String)
