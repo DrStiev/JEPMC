@@ -8,21 +8,21 @@ rng = Xoshiro(1234)
 tspan = (0.0f0, 1200.0f0)
 ann = Lux.Chain(Lux.Dense(6, 16, swish), Lux.Dense(16, 16, swish), Lux.Dense(16, 1, tanh))
 parameters, state = Lux.setup(rng, ann)
-υ_max = 0.5
 
 # https://medium.com/swlh/neural-ode-for-reinforcement-learning-and-nonlinear-optimal-control-cartpole-problem-revisited-5408018b8d71
 h = rand()
 function dudt_(du, u, p, t, p_true)
-    η = abs.(ann(u, p, state)[1])[1] ≤ υ_max ? abs.(ann(u, p, state)[1]) : υ_max
     S, E, I, R, D, h = u
     R₀, γ, σ, ω, δ = p_true
+    υ_max = (exp(-4.5 * I) - 1) / (exp(-4.5) - 1)
+    η = abs.(ann(u, p, state)[1])[1] ≤ υ_max ? abs.(ann(u, p, state)[1]) : υ_max
     μ = δ / 1111
     du[1] = μ * sum(u) - R₀ * γ * (1 - η[1]) * S * I + ω * R - μ * S # dS
     du[2] = R₀ * γ * (1 - η[1]) * S * I - σ * E - μ * E # dE
     du[3] = σ * E - γ * I - δ * I - μ * I # dI
     du[4] = (1 - δ) * γ * I - ω * R - μ * R # dR
     du[5] = δ * γ * I # dD
-    du[6] = -tanh((du[3] + du[5])*3) * (1 - η[1]) # dH
+    du[6] = -(du[3] + du[5]) * 3 + (du[4] * (1 - η[1])) # dH
 end
 dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
 
@@ -65,9 +65,18 @@ optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(parame
 
 res1 = Optimization.solve(
     optprob,
-    ADAM(),
+    ADAM(0.01),
     callback=callback,
     maxiters=100
 )
 losses
-res = abs.(ann(u0, res1.u, state)[1])[1] ≤ υ_max ? abs.(ann(u0, res1.u, state)[1])[1] : υ_max
+res = abs.(ann(u0, res1.u, state)[1])[1]
+
+optprob2 = remake(optprob, u0=res1.u)
+res2 = Optimization.solve(
+    optprob2,
+    Optim.BFGS(initial_stepnorm=0.01),
+    callback=callback,
+    maxiters=100
+)
+res = abs.(ann(u0, res2.u, state)[1])[1]

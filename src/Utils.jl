@@ -3,14 +3,18 @@ using JLD2, FileIO, Dates, Distributions
 using LinearAlgebra: diagind
 using DrWatson: @dict
 
+"""
+    download_dataset(path::String, url::String)
+    Download dataset from an URL string into a specific path
+"""
 function download_dataset(path::String, url::String)
     title = split(url, "/")
     isdir(path) == false && mkpath(path)
     return DataFrame(
         CSV.File(
             Downloads.download(url, path * title[length(title)]),
-            delim = ",",
-            header = 1,
+            delim=",",
+            header=1,
         ),
     )
 end
@@ -32,27 +36,43 @@ function dataset_from_location(df::DataFrame, iso_code::String)
     select(df, [:reproduction_rate])
 end
 
+"""
+    read_dataset(path::String)
+    Read a dataset from a specific path and return a DataFrame Object
+"""
 function read_dataset(path::String)
-    return DataFrame(CSV.File(path, delim = ",", header = 1))
+    return DataFrame(CSV.File(path, delim=",", header=1))
 end
 
-function save_parameters(params, path::String, title::String = "parameters")
+"""
+    save_parameters(params::Dict, path::String, [title::String])
+    Save a dictionary of parameters into a specific path. If no title is provided then a default one is used.
+"""
+function save_parameters(params, path::String, title::String="parameters")
     isdir(path) == false && mkpath(path)
     save(path * title * ".jld2", params)
 end
 
+"""
+    load_parameters(path::String)
+    Load a dictionary of parameters from a specific path
+"""
 load_parameters(path) = load(path)
 
-function load_dataset(path::String)
-    return DataFrame(CSV.File(path, delim = ",", header = 1))
-end
-
-function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
+"""
+    save_dataframe(data::DataFrame, path::String, [title::String])
+    Save a DataFrame into a specific path. If no title is provided then a default one is used.
+"""
+function save_dataframe(data::DataFrame, path::String, title="StandardABM")
     isdir(path) == false && mkpath(path)
     CSV.write(path * title * ".csv", data)
 end
 
-function save_plot(plot, path = "", title = "title", format = "png")
+"""
+    save_plot(plot, path::String, [title::String], [format::String])
+    Save a plot into a specific path. If no title is provided then a default one is used. If no format is specified then .png is used
+"""
+function save_plot(plot, path="", title="title", format="png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "." * format)
 end

@@ -137,7 +137,7 @@ function migrate!(agent, model::ABM)
 end
 
 function happiness!(agent)
-    agent.happiness = agent.happiness - (agent.status[3] + agent.status[5]) + tanh(agent.status[4]) - agent.param[6]
+    agent.happiness = agent.happiness - (agent.status[3] + agent.status[5]) * 3 + (agent.status[4] * (1 - agent.param[6]))
     agent.happiness = agent.happiness < 0.0 ? 0.0 : agent.happiness > 1.0 ? 1.0 : agent.happiness
 end
 
@@ -157,13 +157,11 @@ end
 function control!(
     agent,
     model::ABM;
-    k::Float64=-4.5,
     tolerance::Float64=1e-3,
     dt::Float64=30.0,
     maxiters::Int=100
 )
     if agent.status[3] ≥ tolerance && model.step % dt == 0
-        υ_max = (exp(k * agent.status[3]) - 1) / (exp(k) - 1)
         agent.param[6] = controller(
             agent.status,
             agent.param[1:5],
@@ -171,7 +169,7 @@ function control!(
             (0.0, dt),
             maxiters;
             loss_step=Int(maxiters / 10),
-            υ_max=υ_max,
+            k=-4.5,
             rng=model.rng
         )
     end

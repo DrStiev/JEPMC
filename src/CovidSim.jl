@@ -12,7 +12,6 @@ include("SocialNetworkABM.jl")
 include("ABMUtils.jl")
 include("Utils.jl")
 include("Controller.jl")
-# include("NeuralODE.jl")
 
 export init, collect!, ensemble_collect!, collect_paramscan!, plot_system_graph
 export plot_system_graph, plot_model
