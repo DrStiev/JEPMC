@@ -117,7 +117,8 @@ end
 function plot_model(
     data::Vector{DataFrame};
     cumulative::Bool=true,
-    ensemble::Bool=false
+    ensemble::Bool=false,
+    errorstyle=:plume
 )
     # TODO: plot ensemble data
     if ensemble
@@ -125,7 +126,7 @@ function plot_model(
     end
 
     if cumulative
-        get_cumulative_plot(data, length(data), length(data[1][!, 1]))
+        get_cumulative_plot(data, length(data), length(data[1][!, 1]); errorstyle=errorstyle)
     end
 end
 
@@ -136,7 +137,12 @@ function split_dataset(data::DataFrame)
     return states, cm, r
 end
 
-function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
+function get_cumulative_plot(
+    data::Vector{DataFrame},
+    nodes::Int,
+    n::Int;
+    errorstyle=:plume
+)
     l = @layout [
         RecipesBase.grid(1, 1)
         RecipesBase.grid(1, 2)
@@ -152,11 +158,11 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p1 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="S")
-    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="E")
-    errorline!(1:n, y[:, :, 3], errorstyle=:plume, label="I")
-    errorline!(1:n, y[:, :, 4], errorstyle=:plume, label="R")
-    errorline!(1:n, y[:, :, 5], errorstyle=:plume, label="D")
+    p1 = errorline(1:n, y[:, :, 1], errorstyle=errorstyle, label="S")
+    errorline!(1:n, y[:, :, 2], errorstyle=errorstyle, label="E")
+    errorline!(1:n, y[:, :, 3], errorstyle=errorstyle, label="I")
+    errorline!(1:n, y[:, :, 4], errorstyle=errorstyle, label="R")
+    errorline!(1:n, y[:, :, 5], errorstyle=errorstyle, label="D")
 
     states = 2
     y = fill(NaN, n, nodes, states)
@@ -168,8 +174,8 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p2 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="happiness")
-    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="countermeasures")
+    p2 = errorline(1:n, y[:, :, 1], errorstyle=errorstyle, label="happiness")
+    errorline!(1:n, y[:, :, 2], errorstyle=errorstyle, label="countermeasures")
     vax = []
     for d in data
         push!(vax, findfirst(d[:, 6] .!= 0.0))
@@ -177,7 +183,7 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
     vax = filter(x -> !isnothing(x), vax)
     if !isempty(vax)
         v = minimum(vax)
-        plot!(p2, [v - 0.01, v + 0.01], [0.0, 1.0], lw=2, color=:green, label=nothing)
+        plot!(p2, [v - 0.01, v + 0.01], [0.0, 1.0], lw=3, color=:green, label=nothing)
         annotate!([(
             v,
             1.0,
@@ -195,7 +201,7 @@ function get_cumulative_plot(data::Vector{DataFrame}, nodes::Int, n::Int)
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p3 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="R₀")
+    p3 = errorline(1:n, y[:, :, 1], errorstyle=errorstyle, label="R₀")
     plt = plot(
         plot(p1, title="ABM Dynamics", titlefontsize=10),
         plot(p2, title="Agents response to η", titlefontsize=10),

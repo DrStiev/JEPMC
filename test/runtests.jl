@@ -29,7 +29,7 @@ function test_abm(path::String)
     model = CovidSim.init()
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data)
+    plt = CovidSim.plot_model(data; errorstyle=:ribbon)
     save_results(path * "singlerun/no_control/", model.properties, d, plt)
     return true
 end
@@ -38,7 +38,7 @@ function test_abm_controller(path::String)
     model = CovidSim.init(; control=true)
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data)
+    plt = CovidSim.plot_model(data; errorstyle=:ribbon)
     save_results(path * "singlerun/control/", model.properties, d, plt)
     return true
 end
@@ -47,7 +47,7 @@ function test_abm_vaccine(path::String)
     model = CovidSim.init(; vaccine=true)
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data)
+    plt = CovidSim.plot_model(data; errorstyle=:ribbon)
     save_results(path * "singlerun/vaccine/", model.properties, d, plt)
     return true
 end
@@ -56,7 +56,7 @@ function test_abm_all(path::String)
     model = CovidSim.init(; vaccine=true, control=true)
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data)
+    plt = CovidSim.plot_model(data; errorstyle=:ribbon)
     save_results(path * "singlerun/all/", model.properties, d, plt)
     return true
 end
@@ -135,7 +135,7 @@ function test_ensemble_abm(path::String)
     data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
-    plts = [CovidSim.plot_model(d) for d in data]
+    plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
     save_results(path * "ensemblerun/no_control/", properties, d, plts)
     return true
 end
@@ -146,7 +146,7 @@ function test_ensemble_abm_controller(path::String)
     data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
-    plts = [CovidSim.plot_model(d) for d in data]
+    plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
     save_results(path * "ensemblerun/control/", properties, d, plts)
     return true
 end
@@ -157,7 +157,7 @@ function test_ensemble_abm_vaccine(path::String)
     data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
-    plts = [CovidSim.plot_model(d) for d in data]
+    plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
     save_results(path * "ensemblerun/vaccine/", properties, d, plts)
     return true
 end
@@ -171,7 +171,7 @@ function test_ensemble_abm_all(path::String)
     data = CovidSim.ensemble_collect!(models)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
-    plts = [CovidSim.plot_model(d) for d in data]
+    plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
     save_results(path * "ensemblerun/all/", properties, d, plts)
     return true
 end

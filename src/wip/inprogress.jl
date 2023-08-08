@@ -22,7 +22,7 @@ function dudt_(du, u, p, t, p_true)
     du[3] = σ * E - γ * I - δ * I - μ * I # dI
     du[4] = (1 - δ) * γ * I - ω * R - μ * R # dR
     du[5] = δ * γ * I # dD
-    du[6] = -(du[3] + du[5]) * 3 + (du[4] * (1 - η[1])) # dH
+    du[6] = -(du[3] + du[5]) + (du[4] * (1 - η[1])) # dH
 end
 dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
 
