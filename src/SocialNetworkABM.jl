@@ -257,3 +257,7 @@ function collect_paramscan!(
 
     return data
 end
+
+# x, dp, plt = sensitivity_analisys(seir!, [0.9999, 0.0, 0.0001, 0.0, 0.0], (0.0, 1200.0), [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01, 0.0, 0.0])
+# save_plot(plt, "results/" * string(today()) * "/sensitivity_analisys/", "sa", "pdf")
+# plt

@@ -158,11 +158,11 @@ function get_cumulative_plot(
         res = reduce(hcat, res)
         y[:, :, i] = res
     end
-    p1 = errorline(1:n, y[:, :, 1], errorstyle=errorstyle, label="S")
-    errorline!(1:n, y[:, :, 2], errorstyle=errorstyle, label="E")
-    errorline!(1:n, y[:, :, 3], errorstyle=errorstyle, label="I")
-    errorline!(1:n, y[:, :, 4], errorstyle=errorstyle, label="R")
-    errorline!(1:n, y[:, :, 5], errorstyle=errorstyle, label="D")
+    p1 = errorline(1:n, y[:, :, 1], errorstyle=:plume, label="S")
+    errorline!(1:n, y[:, :, 2], errorstyle=:plume, label="E")
+    errorline!(1:n, y[:, :, 3], errorstyle=:plume, label="I")
+    errorline!(1:n, y[:, :, 4], errorstyle=:plume, label="R")
+    errorline!(1:n, y[:, :, 5], errorstyle=:plume, label="D")
 
     states = 2
     y = fill(NaN, n, nodes, states)
@@ -212,7 +212,7 @@ function get_cumulative_plot(
 end
 
 function sensitivity_analisys(f, u0::Vector{Float64}, tspan::Tuple{Float64,Float64}, p::Vector{Float64}; doplot::Bool=true)
-    prob = ODEForwardSensitivityProblem(seir!, u0, tspan, p)
+    prob = ODEForwardSensitivityProblem(f, u0, tspan, p)
     sol = solve(prob, Tsit5())
     x, dp = extract_local_sensitivities(sol)
     pltout = nothing
@@ -223,14 +223,20 @@ function sensitivity_analisys(f, u0::Vector{Float64}, tspan::Tuple{Float64,Float
         dω = dp[4]
         dδ = dp[5]
         dη = dp[6]
+        dξ = dp[7]
         plt = []
-        push!(plt, plot(sol_, lw=2, title="Data", titlefontsize=10, legend=false))
+        truesol = solve(
+            ODEProblem(f, u0, tspan, p),
+            Tsit5(),
+        )
+        push!(plt, plot(truesol, lw=2, title="Data", titlefontsize=10, legend=false))
         push!(plt, plot(sol.t, dR₀', lw=2, title="Sensitivity to R₀", titlefontsize=10, legend=false))
         push!(plt, plot(sol.t, dγ', lw=2, title="Sensitivity to γ", titlefontsize=10, legend=false))
         push!(plt, plot(sol.t, dσ', lw=2, title="Sensitivity to σ", titlefontsize=10, legend=false))
         push!(plt, plot(sol.t, dω', lw=2, title="Sensitivity to ω", titlefontsize=10, legend=false))
         push!(plt, plot(sol.t, dδ', lw=2, title="Sensitivity to δ", titlefontsize=10, legend=false))
         push!(plt, plot(sol.t, dη', lw=2, title="Sensitivity to η", titlefontsize=10, legend=false))
+        push!(plt, plot(sol.t, dξ', lw=2, title="Sensitivity to ξ", titlefontsize=10, legend=false))
         pltout = plot(plt...)
     end
     return x, dp, pltout
