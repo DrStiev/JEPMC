@@ -115,19 +115,17 @@ function get_observable_data()
 end
 
 function plot_model(
-    data::Vector{DataFrame};
-    cumulative::Bool=true,
-    ensemble::Bool=false,
-    errorstyle=:plume
+    data;
+    errorstyle=:ribbon,
+    title::String=""
 )
-    # TODO: plot ensemble data
-    if ensemble
-        # get_cumulative_ensemble_data!(data)
-    end
-
-    if cumulative
-        get_cumulative_plot(data, length(data), length(data[1][!, 1]); errorstyle=errorstyle)
-    end
+    get_cumulative_plot(
+        data,
+        length(data),
+        length(data[1][!, 1]);
+        errorstyle=errorstyle,
+        title=title
+    )
 end
 
 function split_dataset(data::DataFrame)
@@ -141,7 +139,8 @@ function get_cumulative_plot(
     data::Vector{DataFrame},
     nodes::Int,
     n::Int;
-    errorstyle=:plume
+    errorstyle=:plume,
+    title::String=""
 )
     l = @layout [
         RecipesBase.grid(1, 1)
@@ -203,7 +202,7 @@ function get_cumulative_plot(
     end
     p3 = errorline(1:n, y[:, :, 1], errorstyle=errorstyle, label="R₀")
     plt = plot(
-        plot(p1, title="ABM Dynamics", titlefontsize=10),
+        plot(p1, title="ABM Dynamics " * title, titlefontsize=10),
         plot(p2, title="Agents response to η", titlefontsize=10),
         plot(p3, title="Variant of Concern", titlefontsize=10),
         layout=l,

@@ -187,7 +187,58 @@ end
 end
 
 function test_paramscan_abm(path::String)
-    data = CovidSim.collect_paramscan!()
+    properties = Dict(
+        :edgesCoverage => [:high, :medium, :low],
+        :numNodes => Base.collect(4:8:20),
+        :control => [false, true],
+        :vaccine => [false, true],
+        :initialNodeInfected => Base.collect(1:1:3),
+    )
+    data = CovidSim.collect_paramscan!(properties)
+    plt = []
+    for i in 1:size(data[2], 1)
+        function complex_filter(x, y, z, w, k, j, h)
+            x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5] && j == val[6] && h == val[7]
+        end
+
+        function complex_filter(x, y, z, w, k, j)
+            x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5] && j == val[6]
+        end
+
+        function complex_filter(x, y, z, w, k)
+            x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5]
+        end
+
+        function complex_filter(x, y, z, w)
+            x == val[1] && y == val[2] && z == val[3] && w == val[4]
+        end
+
+        function complex_filter(x, y, z)
+            x == val[1] && y == val[2] && z == val[3]
+        end
+
+        function complex_filter(x, y)
+            x == val[1] && y == val[2]
+        end
+
+        function complex_filter(x)
+            x == val[1]
+        end
+
+        namesz = names(data[2][i, :])
+        val = data[2][i, :]
+        # hardcoded but functional
+        df = filter(namesz => complex_filter, data[1])
+        select!(df, Not(namesz))
+        dd = [filter(:id => ==(i), df) for i in unique(df[!, :id])]
+        r = []
+        for i in 1:size(names(val), 1)
+            push!(r, names(val)[i] * ": " * string(val[i]))
+        end
+        j = join(r, ", ")
+        push!(plt, plot_model(dd; title=j))
+    end
+    save_results(path * "paramscan/", collect(properties), data[1], plt)
     d = reduce(vcat, data)
     CovidSim.save_dataframe(d, path * "paramscanrun/dataframe/", "SocialNetworkABM")
     return true

@@ -21,7 +21,7 @@ function init(;
     initialNodeInfected::Int=1,
     param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
     avgPopulation::Int=10_000,
-    maxTravelingRate::Float64=0.001,  # flusso di persone che si spostano
+    maxTravelingRate::Float64=0.001,  # type instability if > 0.001
     tspan::Tuple=(1.0, Inf),
     control::Bool=false,
     vaccine::Bool=false,
@@ -227,13 +227,11 @@ end
 
 function collect_paramscan!(
     parameters::Dict=Dict(
-        :maxTravelingRate => Base.collect(0.001:0.02:0.1),
         :edgesCoverage => [:high, :medium, :low],
-        :numNodes => Base.collect(10:20:100),
-        :avgPopulation => Base.collect(1000:20_000:100_000),
+        :numNodes => Base.collect(4:8:20),
         :control => [false, true],
         :vaccine => [false, true],
-        :initialNodeInfected => Base.collect(1:2:10),
+        :initialNodeInfected => Base.collect(1:1:3),
     ),
     init=init;
     adata=get_observable_data(),
@@ -258,6 +256,4 @@ function collect_paramscan!(
     return data
 end
 
-# x, dp, plt = sensitivity_analisys(seir!, [0.9999, 0.0, 0.0001, 0.0, 0.0], (0.0, 1200.0), [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01, 0.0, 0.0])
-# save_plot(plt, "results/" * string(today()) * "/sensitivity_analisys/", "sa", "pdf")
-# plt
+data = collect_paramscan!()
