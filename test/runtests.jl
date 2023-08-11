@@ -181,9 +181,9 @@ end
     isdir(path) == false && mkpath(path)
 
     @test test_ensemble_abm(path) == true
-    @test test_ensemble_abm_controller(path) == true # requires lot of time (4+ hours)
+    @test test_ensemble_abm_controller(path) == true
     @test test_ensemble_abm_vaccine(path) == true
-    @test test_ensemble_abm_all(path) == true # requires lot of time (4+ hours)
+    @test test_ensemble_abm_all(path) == true
 end
 
 function test_paramscan_abm(path::String)
@@ -195,7 +195,7 @@ function test_paramscan_abm(path::String)
         :initialNodeInfected => Base.collect(1:1:3),
     )
     data = CovidSim.collect_paramscan!(properties)
-    plt = []
+    plts = []
     for i in 1:size(data[2], 1)
         function complex_filter(x, y, z, w, k, j, h)
             x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5] && j == val[6] && h == val[7]
@@ -236,11 +236,14 @@ function test_paramscan_abm(path::String)
             push!(r, names(val)[i] * ": " * string(val[i]))
         end
         j = join(r, ", ")
-        push!(plt, plot_model(dd; title=j))
+        push!(plts, CovidSim.plot_model(dd; title=j))
     end
-    save_results(path * "paramscan/", collect(properties), data[1], plt)
-    d = reduce(vcat, data)
-    CovidSim.save_dataframe(d, path * "paramscanrun/dataframe/", "SocialNetworkABM")
+    CovidSim.save_dataframe(data[1], path * "paramscanrun/dataframe/", "SocialNetworkABM")
+    i = 1
+    for plt in plts
+        CovidSim.save_plot(plt, path * "paramscanrun/dataframe/plot/", "SocialNetworkABM_$i", "pdf")
+        i += 1
+    end
     return true
 end
 
@@ -248,5 +251,5 @@ end
     path = "results/" * string(today()) * "/"
     isdir(path) == false && mkpath(path)
 
-    @test test_paramscan_abm(path) == true # requires lot of time (4+ hours)
+    @test test_paramscan_abm(path) == true
 end

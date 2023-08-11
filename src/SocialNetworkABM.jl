@@ -255,5 +255,3 @@ function collect_paramscan!(
 
     return data
 end
-
-data = collect_paramscan!()
