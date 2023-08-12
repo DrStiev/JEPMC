@@ -188,11 +188,10 @@ end
 
 function test_paramscan_abm(path::String)
     properties = Dict(
+        :maxTravelingRate => Base.collect(0.001:0.003:0.01),
         :edgesCoverage => [:high, :medium, :low],
-        :numNodes => Base.collect(4:8:20),
-        :control => [false, true],
-        :vaccine => [false, true],
-        :initialNodeInfected => Base.collect(1:1:3),
+        :numNodes => Base.collect(4:8:40),
+        :initialNodeInfected => Base.collect(1:1:4),
     )
     data = CovidSim.collect_paramscan!(properties)
     plts = []

@@ -21,7 +21,7 @@ function init(;
     initialNodeInfected::Int=1,
     param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
     avgPopulation::Int=10_000,
-    maxTravelingRate::Float64=0.001,  # type instability if > 0.001
+    maxTravelingRate::Float64=0.001,
     tspan::Tuple=(1.0, Inf),
     control::Bool=false,
     vaccine::Bool=false,
@@ -120,15 +120,23 @@ function migrate!(agent, model::ABM)
 
     for i = 1:length(tidxs)
         try
-            out = agent.status .* tweights[i] .* agent.population .* (1 - agent.param[6])
-            new_population = agent.population - sum(out)
-            out[end] = 0.0
-            agent.status = (agent.status .* agent.population - out) ./ new_population
+            ap = deepcopy(agent.population)
+            as = deepcopy(agent.status)
+
+            out = as .* tweights[i] .* (1 - deepcopy(agent.param[6]))
+            outp = out .* ap
+            new_status = as - out
+            new_population = sum(new_status .* ap)
+            agent.status = new_status .* ap ./ new_population
             agent.population = round(Int64, new_population)
 
             objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
-            new_population = objective.population + sum(out)
-            objective.status = (objective.status .* objective.population + out) ./ new_population
+            os = deepcopy(objective.status)
+            op = deepcopy(objective.population)
+
+            new_status = (os .* op) + outp
+            new_population = sum(new_status)
+            objective.status = new_status ./ new_population
             objective.population = round(Int64, new_population)
         catch ex
             @debug ex
@@ -227,11 +235,10 @@ end
 
 function collect_paramscan!(
     parameters::Dict=Dict(
+        :maxTravelingRate => Base.collect(0.001:0.003:0.01),
         :edgesCoverage => [:high, :medium, :low],
-        :numNodes => Base.collect(4:8:20),
-        :control => [false, true],
-        :vaccine => [false, true],
-        :initialNodeInfected => Base.collect(1:1:3),
+        :numNodes => Base.collect(4:8:40),
+        :initialNodeInfected => Base.collect(1:1:4),
     ),
     init=init;
     adata=get_observable_data(),
