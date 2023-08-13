@@ -240,7 +240,7 @@ function test_paramscan_abm(path::String)
     CovidSim.save_dataframe(data[1], path * "paramscanrun/dataframe/", "SocialNetworkABM")
     i = 1
     for plt in plts
-        CovidSim.save_plot(plt, path * "paramscanrun/dataframe/plot/", "SocialNetworkABM_$i", "pdf")
+        CovidSim.save_plot(plt, path * "paramscanrun/plot/", "SocialNetworkABM_$i", "pdf")
         i += 1
     end
     return true
