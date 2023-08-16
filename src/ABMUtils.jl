@@ -86,10 +86,10 @@ function plot_system_graph(model::ABM)
     status = [a.status for a in allagents(model)]
     nodefillc = [
         RGBA(
-            1.0 * (status[i][2] + status[i][3] + status[i][5]),
-            1.0 * status[i][1],
-            1.0 * status[i][4],
-            1.0,
+            1.0 * (status[i][2] + status[i][3]), # R
+            1.0 * status[i][1], # G
+            1.0 * status[i][4], # B
+            1.0 * (1.0 - status[i][5]), # se aumenta troppo il numero di morti, il nodo "scompare"
         ) for i = 1:length(status)
     ]
     nodelabel = [agent.id for agent in allagents(model)]
