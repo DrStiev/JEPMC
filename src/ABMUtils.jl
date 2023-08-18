@@ -199,7 +199,7 @@ function get_cumulative_plot(
     end
     p3 = errorline(1:n, y[:, :, 1], errorstyle=errorstyle, label="R₀")
     plt = plot(
-        plot(p1, title="ABM Dynamics " * title, titlefontsize=8),
+        plot(p1, title="ABM Dynamics " * title, titlefontsize=10),
         plot(p2, title="Agents response to η", titlefontsize=10),
         plot(p3, title="Variant of Concern", titlefontsize=10),
         layout=l,

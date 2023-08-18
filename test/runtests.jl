@@ -29,7 +29,7 @@ function test_abm(path::String)
     model = CovidSim.init()
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data; errorstyle=:ribbon)
+    plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="no control")
     save_results(path * "singlerun/no_control/", model.properties, d, plt)
     return true
 end
@@ -38,7 +38,7 @@ function test_abm_controller(path::String)
     model = CovidSim.init(; control=true)
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data; errorstyle=:ribbon)
+    plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="no pharmaceutical control")
     save_results(path * "singlerun/control/", model.properties, d, plt)
     return true
 end
@@ -47,7 +47,7 @@ function test_abm_vaccine(path::String)
     model = CovidSim.init(; vaccine=true)
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data; errorstyle=:ribbon)
+    plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="pharmaceutical control")
     save_results(path * "singlerun/vaccine/", model.properties, d, plt)
     return true
 end
@@ -56,7 +56,7 @@ function test_abm_all(path::String)
     model = CovidSim.init(; vaccine=true, control=true)
     data = CovidSim.collect!(model)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data; errorstyle=:ribbon)
+    plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="all type of control")
     save_results(path * "singlerun/all/", model.properties, d, plt)
     return true
 end
@@ -186,46 +186,43 @@ end
     @test test_ensemble_abm_all(path) == true
 end
 
-function test_paramscan_abm(path::String)
-    properties = Dict(
-        :maxTravelingRate => Base.collect(0.001:0.003:0.01),
-        :edgesCoverage => [:high, :medium, :low],
-        :numNodes => Base.collect(4:8:40),
-        :initialNodeInfected => Base.collect(1:1:4),
-    )
+function complex_filter(x, y, z, w, k, j, h)
+    x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5] && j == val[6] && h == val[7]
+end
+
+function complex_filter(x, y, z, w, k, j)
+    x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5] && j == val[6]
+end
+
+function complex_filter(x, y, z, w, k)
+    x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5]
+end
+
+function complex_filter(x, y, z, w)
+    x == val[1] && y == val[2] && z == val[3] && w == val[4]
+end
+
+function complex_filter(x, y, z)
+    x == val[1] && y == val[2] && z == val[3]
+end
+
+function complex_filter(x, y)
+    x == val[1] && y == val[2]
+end
+
+function complex_filter(x)
+    x == val[1]
+end
+
+val = nothing
+
+function test_paramscan_abm(path::String, properties)
     data = CovidSim.collect_paramscan!(properties)
     plts = []
+    global val = nothing
     for i in 1:size(data[2], 1)
-        function complex_filter(x, y, z, w, k, j, h)
-            x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5] && j == val[6] && h == val[7]
-        end
-
-        function complex_filter(x, y, z, w, k, j)
-            x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5] && j == val[6]
-        end
-
-        function complex_filter(x, y, z, w, k)
-            x == val[1] && y == val[2] && z == val[3] && w == val[4] && k == val[5]
-        end
-
-        function complex_filter(x, y, z, w)
-            x == val[1] && y == val[2] && z == val[3] && w == val[4]
-        end
-
-        function complex_filter(x, y, z)
-            x == val[1] && y == val[2] && z == val[3]
-        end
-
-        function complex_filter(x, y)
-            x == val[1] && y == val[2]
-        end
-
-        function complex_filter(x)
-            x == val[1]
-        end
-
         namesz = names(data[2][i, :])
-        val = data[2][i, :]
+        global val = data[2][i, :]
         # hardcoded but functional
         df = filter(namesz => complex_filter, data[1])
         select!(df, Not(namesz))
@@ -237,18 +234,35 @@ function test_paramscan_abm(path::String)
         j = join(r, ", ")
         push!(plts, CovidSim.plot_model(dd; title=j))
     end
-    CovidSim.save_dataframe(data[1], path * "paramscanrun/dataframe/", "SocialNetworkABM")
+    CovidSim.save_dataframe(data[1], path * "dataframe/", "SocialNetworkABM")
     i = 1
     for plt in plts
-        CovidSim.save_plot(plt, path * "paramscanrun/plot/", "SocialNetworkABM_$i", "pdf")
+        CovidSim.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
         i += 1
     end
     return true
 end
 
 @testset "paramscanrun" begin
-    path = "results/" * string(today()) * "/"
+    properties = Dict(
+        :maxTravelingRate => Base.collect(0.001:0.003:0.01),
+        :edgesCoverage => [:high, :medium, :low],
+        :numNodes => Base.collect(5:25:80),
+        :initialNodeInfected => Base.collect(1:3:10),
+    )
+    path = "results/" * string(today()) * "/paramscanrun/"
     isdir(path) == false && mkpath(path)
 
-    @test test_paramscan_abm(path) == true
+    @test test_paramscan_abm(path * "maxTravelingRate/",
+        Dict(:maxTravelingRate => Base.collect(0.001:0.003:0.01))
+    ) == true
+    @test test_paramscan_abm(path * "edgesCoverage/",
+        Dict(:edgesCoverage => [:high, :medium, :low])
+    ) == true
+    @test test_paramscan_abm(path * "numNodes/",
+        Dict(:numNodes => Base.collect(5:25:80))
+    ) == true
+    @test test_paramscan_abm(path * "initialNodeInfected/",
+        Dict(:initialNodeInfected => Base.collect(1:3:10))
+    ) == true
 end

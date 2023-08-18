@@ -43,7 +43,7 @@ function controller(
 
     function loss(p)
         pred = predict(p)
-        (sum(abs2, pred[3, :]) + sum(abs2, pred[5, :])) / sum(abs2, pred[6, :])
+        sum(abs2, pred[3, :]) / sum(abs2, pred[6, :])
     end
 
     losses = Float64[]
