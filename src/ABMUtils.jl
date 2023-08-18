@@ -39,14 +39,11 @@ function connected_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
         max = n * (n - 1) / 2
         avg = (n * (n - 1) / 2 + (n - 1)) / 2
         if coverage == :low
-            return trunc(Int, rand(rng, low:floor(Int, (avg + low) / 2)) - low)
+            return trunc(Int, rand(rng, low:(avg+low)/2))
         elseif coverage == :medium
-            return trunc(
-                Int,
-                rand(rng, ceil(Int, (avg + low) / 2):floor(Int, (avg + max) / 2)) - low,
-            )
+            return trunc(Int, rand(rng, (avg+low)/2:(avg+max)/2))
         elseif coverage == :high
-            return trunc(Int, rand(rng, ceil(Int, (avg + max) / 2):max) - low)
+            return trunc(Int, rand(rng, (avg+max)/2:max))
         end
     end
 
