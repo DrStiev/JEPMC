@@ -86,14 +86,15 @@ function plot_system_graph(model::ABM)
             1.0 * (status[i][2] + status[i][3]), # R
             1.0 * status[i][1], # G
             1.0 * status[i][4], # B
-            1.0 * (1.0 - status[i][5]), # se aumenta troppo il numero di morti, il nodo "scompare"
+            1.0 - status[i][5], # se aumenta troppo il numero di morti, il nodo "scompare"
         ) for i = 1:length(status)
     ]
     nodelabel = [agent.id for agent in allagents(model)]
     perm = sortperm(nodelabel)
-    nodesize = [agent.population for agent in allagents(model)] ./ max
-    return graphplot(
+    nodesize = [agent.population / max for agent in allagents(model)]
+    return GraphRecipes.graphplot(
         model.graph,
+        method=:shell,
         markersize=0.2,
         node_weights=nodesize,
         names=sort(nodelabel),

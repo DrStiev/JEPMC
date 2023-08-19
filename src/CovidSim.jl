@@ -1,12 +1,12 @@
 module CovidSim
 using Pkg
 Pkg.activate(".")
-# Pkg.status()
-# Pkg.update()
+Pkg.status()
+Pkg.update()
 # Pkg.precompile()
 # Pkg.instantiate()
 # Pkg.resolve()
-# Pkg.gc()
+Pkg.gc()
 
 include("SocialNetworkABM.jl")
 include("ABMUtils.jl")
