@@ -188,7 +188,7 @@ function collect!(
     agent_step=agent_step!,
     model_step=model_step!,
     n=1200,
-    showprogress=true,
+    showprogress=false,
     split_result=true,
     adata=get_observable_data()
 )
@@ -206,7 +206,7 @@ function ensemble_collect!(
     agent_step=agent_step!,
     model_step=model_step!,
     n=1200,
-    showprogress=true,
+    showprogress=false,
     parallel=true,
     adata=get_observable_data(),
     split_result=true
@@ -245,7 +245,7 @@ function collect_paramscan!(
     agent_step=agent_step!,
     model_step=model_step!,
     n=1200,
-    showprogress=true,
+    showprogress=false,
     parallel=true
 )
 

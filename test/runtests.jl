@@ -1,9 +1,9 @@
 # using CovidSim
 using Test, Dates, Distributed, DataFrames, Plots
 
-addprocs(Int(Sys.CPU_THREADS / 4))
-@everywhere include("../src/CovidSim.jl")
-# include("../src/CovidSim.jl")
+# addprocs(Int(Sys.CPU_THREADS / 4))
+# @everywhere include("../src/CovidSim.jl")
+include("../src/CovidSim.jl")
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
     CovidSim.save_parameters(p, path * "parameters/", "SocialNetworkABM")
@@ -72,50 +72,58 @@ end
 end
 
 function test_gif_animation_no_control(path::String)
-    model = CovidSim.init()
-    anim = @animate for i ∈ 1:1200
-        CovidSim.collect!(model; n=1)
-        if i % 7 == 0
-            CovidSim.plot_system_graph(model)
+    model = CovidSim.init(; numNodes=20)
+    data = CovidSim.collect!(model; n=1)
+    anim = @animate for _ ∈ 1:1200-1
+        tmp = CovidSim.collect!(model; n=1)
+        for j in 1:size(tmp, 1)
+            push!(data[j], tmp[j][end, :])
         end
+        plot(CovidSim.plot_system_graph(model), CovidSim.plot_model(data))
     end
-    gif(anim, path * "animation_no_control.gif", fps=30)
+    gif(anim, path * "demo_no_control.gif", fps=20)
     return true
 end
 
 function test_gif_animation_control(path::String)
-    model = CovidSim.init(; control=true)
-    anim = @animate for i ∈ 1:1200
-        CovidSim.collect!(model; n=1)
-        if i % 7 == 0
-            CovidSim.plot_system_graph(model)
+    model = CovidSim.init(; numNodes=20, control=true)
+    data = CovidSim.collect!(model; n=1)
+    anim = @animate for _ ∈ 1:1200-1
+        tmp = CovidSim.collect!(model; n=1)
+        for j in 1:size(tmp, 1)
+            push!(data[j], tmp[j][end, :])
         end
+        plot(CovidSim.plot_system_graph(model), CovidSim.plot_model(data))
     end
-    gif(anim, path * "animation_control.gif", fps=30)
+    gif(anim, path * "demo_control.gif", fps=20)
     return true
 end
 
 function test_gif_animation_vaccine(path::String)
-    model = CovidSim.init(; vaccine=true)
-    anim = @animate for i ∈ 1:1200
-        CovidSim.collect!(model; n=1)
-        if i % 7 == 0
-            CovidSim.plot_system_graph(model)
+    model = CovidSim.init(; numNodes=20, vaccine=true)
+    data = CovidSim.collect!(model; n=1)
+    anim = @animate for _ ∈ 1:1200-1
+        tmp = CovidSim.collect!(model; n=1)
+        for j in 1:size(tmp, 1)
+            push!(data[j], tmp[j][end, :])
         end
+        plot(CovidSim.plot_system_graph(model), CovidSim.plot_model(data))
     end
-    gif(anim, path * "animation_vaccine.gif", fps=30)
+    gif(anim, path * "demo_vaccine.gif", fps=20)
     return true
 end
 
 function test_gif_animation_all(path::String)
-    model = CovidSim.init(; vaccine=true, control=true)
-    anim = @animate for i ∈ 1:1200
-        CovidSim.collect!(model; n=1)
-        if i % 7 == 0
-            CovidSim.plot_system_graph(model)
+    model = CovidSim.init(; numNodes=20, control=true, vaccine=true)
+    data = CovidSim.collect!(model; n=1)
+    anim = @animate for _ ∈ 1:1200-1
+        tmp = CovidSim.collect!(model; n=1)
+        for j in 1:size(tmp, 1)
+            push!(data[j], tmp[j][end, :])
         end
+        plot(CovidSim.plot_system_graph(model), CovidSim.plot_model(data))
     end
-    gif(anim, path * "animation_all_control.gif", fps=30)
+    gif(anim, path * "demo_all_control.gif", fps=20)
     return true
 end
 

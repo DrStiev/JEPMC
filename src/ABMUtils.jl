@@ -83,9 +83,9 @@ function plot_system_graph(model::ABM)
     status = [a.status for a in allagents(model)]
     nodefillc = [
         RGBA(
-            1.0 * (status[i][2] + status[i][3]), # R
-            1.0 * status[i][1], # G
-            1.0 * status[i][4], # B
+            status[i][2] + status[i][3], # R
+            status[i][1], # G
+            status[i][4], # B
             1.0 - status[i][5], # se aumenta troppo il numero di morti, il nodo "scompare"
         ) for i = 1:length(status)
     ]
@@ -94,7 +94,7 @@ function plot_system_graph(model::ABM)
     nodesize = [agent.population / max for agent in allagents(model)]
     return GraphRecipes.graphplot(
         model.graph,
-        method=:shell,
+        method=:shell, # otherwise it change everytime it's been plot
         markersize=0.2,
         node_weights=nodesize,
         names=sort(nodelabel),
@@ -124,13 +124,6 @@ function plot_model(
         errorstyle=errorstyle,
         title=title
     )
-end
-
-function split_dataset(data::DataFrame)
-    states = reduce(hcat, data[:, 3])
-    cm = vcat(reduce(hcat, data[:, 4]), reduce(hcat, data[:, 5]))
-    r = reduce(hcat, data[:, 6])
-    return states, cm, r
 end
 
 function get_cumulative_plot(
