@@ -31,7 +31,9 @@ function controller(
         du[6] = -(du[3] + du[5]) + (du[4] * (1 - η[1])) # dH
     end
     dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
-    ts = Float32.(collect(0.0:7.0:timeframe[end]))
+    step = trunc(timeframe[end] / 4.0) # weekly over 30 days
+    step = step < 1.0 ? 1.0 : step
+    ts = Float32.(collect(0.0:step:timeframe[end]))
     ic = deepcopy(initial_condition)
     push!(ic, h)
     prob = ODEProblem(dudt_, ic, timeframe, p)

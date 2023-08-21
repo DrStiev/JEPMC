@@ -94,7 +94,7 @@ function plot_system_graph(model::ABM)
     nodesize = [agent.population / max for agent in allagents(model)]
     return GraphRecipes.graphplot(
         model.graph,
-        method=:shell, # otherwise it change everytime it's been plot
+        method=:shell, # otherwise it change position everytime it's been plot
         markersize=0.2,
         node_weights=nodesize,
         names=sort(nodelabel),
