@@ -1,9 +1,10 @@
 # using CovidSim
-using Test, Dates, Distributed, DataFrames, Plots
+using Distributed
+addprocs(Int(Sys.CPU_THREADS / 4))
+@everywhere include("../src/CovidSim.jl")
 
-# addprocs(Int(Sys.CPU_THREADS / 4))
-# @everywhere include("../src/CovidSim.jl")
-include("../src/CovidSim.jl")
+using Test, Dates, DataFrames, Plots
+# include("../src/CovidSim.jl")
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
     CovidSim.save_parameters(p, path * "parameters/", "SocialNetworkABM")
@@ -27,7 +28,7 @@ end
 
 function test_abm(path::String)
     model = CovidSim.init()
-    data = CovidSim.collect!(model)
+    data = CovidSim.collect!(model; showprogress=true)
     d = reduce(vcat, data)
     plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="no control")
     save_results(path * "singlerun/no_control/", model.properties, d, plt)
@@ -36,7 +37,7 @@ end
 
 function test_abm_controller(path::String)
     model = CovidSim.init(; control=true)
-    data = CovidSim.collect!(model)
+    data = CovidSim.collect!(model; showprogress=true)
     d = reduce(vcat, data)
     plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="no pharmaceutical control")
     save_results(path * "singlerun/control/", model.properties, d, plt)
@@ -45,7 +46,7 @@ end
 
 function test_abm_vaccine(path::String)
     model = CovidSim.init(; vaccine=true)
-    data = CovidSim.collect!(model)
+    data = CovidSim.collect!(model; showprogress=true)
     d = reduce(vcat, data)
     plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="pharmaceutical control")
     save_results(path * "singlerun/vaccine/", model.properties, d, plt)
@@ -54,7 +55,7 @@ end
 
 function test_abm_all(path::String)
     model = CovidSim.init(; vaccine=true, control=true)
-    data = CovidSim.collect!(model)
+    data = CovidSim.collect!(model; showprogress=true)
     d = reduce(vcat, data)
     plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="all type of control")
     save_results(path * "singlerun/all/", model.properties, d, plt)
@@ -140,7 +141,7 @@ end
 function test_ensemble_abm(path::String)
     models = [CovidSim.init(; seed=Int64(abs(i))) for i in rand(Int8, 5)]
     properties = [model.properties for model in models]
-    data = CovidSim.ensemble_collect!(models)
+    data = CovidSim.ensemble_collect!(models; showprogress=true)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
     plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
@@ -151,7 +152,7 @@ end
 function test_ensemble_abm_controller(path::String)
     models = [CovidSim.init(; control=true, seed=Int64(abs(i))) for i in rand(Int8, 5)]
     properties = [model.properties for model in models]
-    data = CovidSim.ensemble_collect!(models)
+    data = CovidSim.ensemble_collect!(models; showprogress=true)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
     plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
@@ -162,7 +163,7 @@ end
 function test_ensemble_abm_vaccine(path::String)
     models = [CovidSim.init(; vaccine=true, seed=Int64(abs(i))) for i in rand(Int8, 5)]
     properties = [model.properties for model in models]
-    data = CovidSim.ensemble_collect!(models)
+    data = CovidSim.ensemble_collect!(models; showprogress=true)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
     plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
@@ -176,7 +177,7 @@ function test_ensemble_abm_all(path::String)
         i in rand(Int8, 5)
     ]
     properties = [model.properties for model in models]
-    data = CovidSim.ensemble_collect!(models)
+    data = CovidSim.ensemble_collect!(models; showprogress=true)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
     plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
@@ -225,7 +226,7 @@ end
 val = nothing
 
 function test_paramscan_abm(path::String, properties)
-    data = CovidSim.collect_paramscan!(properties)
+    data = CovidSim.collect_paramscan!(properties; showprogress=true)
     plts = []
     global val = nothing
     for i in 1:size(data[2], 1)

@@ -99,7 +99,7 @@ function plot_system_graph(model::ABM)
         node_weights=nodesize,
         names=sort(nodelabel),
         nodeshape=:circle,
-        markercolor=nodefillc,
+        markercolor=nodefillc
     )
 end
 

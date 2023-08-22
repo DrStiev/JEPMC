@@ -11,24 +11,24 @@ function controller(
     timeframe::Tuple{Float64,Float64}=(0.0, 30.0),
     maxiters::Int=100;
     loss_step::Int=10,
-    k::Float64=-4.5,
+    υ_max::Float64=1.0,
     rng::AbstractRNG=Random.default_rng()
 )
-    ann = Lux.Chain(Lux.Dense(6, 16, swish), Lux.Dense(16, 16, swish), Lux.Dense(16, 1, tanh))
+    ann = Lux.Chain(Lux.Dense(6, 64, swish), Lux.Dense(64, 64, swish), Lux.Dense(64, 1, tanh))
     p, state = Lux.setup(rng, ann)
 
     function dudt_(du, u, p, t, p_true)
         S, E, I, R, D, h = u
-        R₀, γ, σ, ω, δ = p_true
-        υ_max = (exp(k * I) - 1) / (exp(k) - 1)
-        η = abs.(ann(u, p, state)[1])[1] ≤ υ_max ? abs.(ann(u, p, state)[1]) : υ_max
+        R₀, γ, σ, ω, δ, ξ = p_true
+        η = abs.(ann(u, p, state)[1])[1]
+        η = η ≤ υ_max ? η : υ_max
         μ = δ / 1111
-        du[1] = μ * sum(u) - R₀ * γ * (1 - η[1]) * S * I + ω * R - μ * S # dS
-        du[2] = R₀ * γ * (1 - η[1]) * S * I - σ * E - μ * E # dE
+        du[1] = μ * sum(u[1:5]) - R₀ * γ * (1 - η) * S * I + ω * R - ξ * S - μ * S # dS
+        du[2] = R₀ * γ * (1 - η) * S * I - σ * E - μ * E # dE
         du[3] = σ * E - γ * I - δ * I - μ * I # dI
-        du[4] = (1 - δ) * γ * I - ω * R - μ * R # dR
+        du[4] = (1 - δ) * γ * I - ω * R + ξ * S - μ * R # dR
         du[5] = δ * γ * I # dD
-        du[6] = -(du[3] + du[5]) + (du[4] * (1 - η[1])) # dH
+        du[6] = -(du[3] + du[5]) + (du[4] * (1 - η)) # dH
     end
     dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
     step = trunc(timeframe[end] / 4.0) # weekly over 30 days
@@ -40,7 +40,16 @@ function controller(
 
     function predict(p)
         _prob = remake(prob, u0=ic, tspan=timeframe, p=p)
-        Array(solve(_prob, Tsit5(), saveat=ts, abstol=1e-10, reltol=1e-10, verbose=false))
+        Array(
+            solve(
+                _prob,
+                Tsit5(),
+                saveat=ts,
+                abstol=1e-10,
+                reltol=1e-10,
+                verbose=false
+            )
+        )
     end
 
     function loss(p)
@@ -51,8 +60,8 @@ function controller(
     losses = Float64[]
     callback = function (p, l; loss_step=loss_step)
         push!(losses, l)
-        if length(losses) > 1 && (losses[end-1] - losses[end]) == 0.0
-            # exit early if not improving
+        # exit early if not improving
+        if length(losses) > 1 && (abs(losses[end-1] - losses[end])) < eps()
             return true
         end
         if length(losses) % loss_step == 0
@@ -63,7 +72,6 @@ function controller(
     adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
-
     res1 = Optimization.solve(
         optprob,
         ADAM(0.01),

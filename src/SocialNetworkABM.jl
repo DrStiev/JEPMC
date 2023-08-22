@@ -172,12 +172,12 @@ function control!(
     if agent.status[3] ≥ tolerance && model.step % dt == 0
         agent.param[6] = controller(
             agent.status,
-            agent.param[1:5],
+            vcat(agent.param[1:5], agent.param[7]),
             agent.happiness,
             (0.0, dt),
             maxiters;
             loss_step=Int(maxiters / 10),
-            k=-4.5,
+            υ_max=Distributions.cdf(Distributions.Beta(2, 5), agent.status[3]),
             rng=model.rng
         )
     end
