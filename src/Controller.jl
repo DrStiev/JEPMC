@@ -67,7 +67,7 @@ function controller(initial_condition::Vector{Float64},
         sum(abs2, pred[3, :]) / sum(abs2, pred[6, :])
     end
 
-    
+
     losses = Float64[]
     callback = function (p, l; loss_step = loss_step)
         push!(losses, l)
@@ -81,7 +81,7 @@ function controller(initial_condition::Vector{Float64},
         end
         return false
     end
-    
+
     adtype = Optimization.AutoZygote()
     optf =
         Optimization.OptimizationFunction((x, p) -> loss(x), adtype)

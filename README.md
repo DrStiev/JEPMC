@@ -1,4 +1,4 @@
-# JEPMC
+# JEPMC (Julia EPidemiology Model and Control)
 
 A library and tools to explore epidemic models and their controls.
 

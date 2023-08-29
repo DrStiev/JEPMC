@@ -1,63 +1,63 @@
-# using CovidSim
+# using JEPMC
 using Distributed
 addprocs(Int(Sys.CPU_THREADS / 4))
-@everywhere include("../src/CovidSim.jl")
+@everywhere include("../src/JEPMC.jl")
 
 using Test, Dates, DataFrames, Plots
-# include("../src/CovidSim.jl")
+# include("../src/JEPMC.jl")
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
-    CovidSim.save_parameters(p, path * "parameters/", "SocialNetworkABM")
-    CovidSim.save_dataframe(d, path * "dataframe/", "SocialNetworkABM")
-    CovidSim.save_plot(plt, path * "plot/", "SocialNetworkABM", "pdf")
+    JEPMC.save_parameters(p, path * "parameters/", "SocialNetworkABM")
+    JEPMC.save_dataframe(d, path * "dataframe/", "SocialNetworkABM")
+    JEPMC.save_plot(plt, path * "plot/", "SocialNetworkABM", "pdf")
 end
 
 function save_results(path::String, properties::Vector, d::DataFrame, plts::Vector)
     i = 1
     for p in properties
-        CovidSim.save_parameters(p, path * "parameters/", "SocialNetworkABM_$i")
+        JEPMC.save_parameters(p, path * "parameters/", "SocialNetworkABM_$i")
         i += 1
     end
-    CovidSim.save_dataframe(d, path * "dataframe/", "SocialNetworkABM")
+    JEPMC.save_dataframe(d, path * "dataframe/", "SocialNetworkABM")
     i = 1
     for plt in plts
-        CovidSim.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
+        JEPMC.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
         i += 1
     end
 end
 
 function test_abm(path::String)
-    model = CovidSim.init()
-    data = CovidSim.collect!(model; showprogress=true)
+    model = JEPMC.init()
+    data = JEPMC.collect!(model; showprogress=true)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="no control")
+    plt = JEPMC.plot_model(data; errorstyle=:ribbon, title="no control")
     save_results(path * "singlerun/no_control/", model.properties, d, plt)
     return true
 end
 
 function test_abm_controller(path::String)
-    model = CovidSim.init(; control=true)
-    data = CovidSim.collect!(model; showprogress=true)
+    model = JEPMC.init(; control=true)
+    data = JEPMC.collect!(model; showprogress=true)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="no pharmaceutical control")
+    plt = JEPMC.plot_model(data; errorstyle=:ribbon, title="no pharmaceutical control")
     save_results(path * "singlerun/control/", model.properties, d, plt)
     return true
 end
 
 function test_abm_vaccine(path::String)
-    model = CovidSim.init(; vaccine=true)
-    data = CovidSim.collect!(model; showprogress=true)
+    model = JEPMC.init(; vaccine=true)
+    data = JEPMC.collect!(model; showprogress=true)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="pharmaceutical control")
+    plt = JEPMC.plot_model(data; errorstyle=:ribbon, title="pharmaceutical control")
     save_results(path * "singlerun/vaccine/", model.properties, d, plt)
     return true
 end
 
 function test_abm_all(path::String)
-    model = CovidSim.init(; vaccine=true, control=true)
-    data = CovidSim.collect!(model; showprogress=true)
+    model = JEPMC.init(; vaccine=true, control=true)
+    data = JEPMC.collect!(model; showprogress=true)
     d = reduce(vcat, data)
-    plt = CovidSim.plot_model(data; errorstyle=:ribbon, title="all type of control")
+    plt = JEPMC.plot_model(data; errorstyle=:ribbon, title="all type of control")
     save_results(path * "singlerun/all/", model.properties, d, plt)
     return true
 end
@@ -73,56 +73,56 @@ end
 end
 
 function test_gif_animation_no_control(path::String)
-    model = CovidSim.init(; numNodes=20)
-    data = CovidSim.collect!(model; n=1)
+    model = JEPMC.init(; numNodes=20)
+    data = JEPMC.collect!(model; n=1)
     anim = @animate for _ ∈ 1:1200-1
-        tmp = CovidSim.collect!(model; n=1)
+        tmp = JEPMC.collect!(model; n=1)
         for j in 1:size(tmp, 1)
             push!(data[j], tmp[j][end, :])
         end
-        plot(CovidSim.plot_system_graph(model), CovidSim.plot_model(data))
+        plot(JEPMC.plot_system_graph(model), JEPMC.plot_model(data))
     end
     gif(anim, path * "demo_no_control.gif", fps=20)
     return true
 end
 
 function test_gif_animation_control(path::String)
-    model = CovidSim.init(; numNodes=20, control=true)
-    data = CovidSim.collect!(model; n=1)
+    model = JEPMC.init(; numNodes=20, control=true)
+    data = JEPMC.collect!(model; n=1)
     anim = @animate for _ ∈ 1:1200-1
-        tmp = CovidSim.collect!(model; n=1)
+        tmp = JEPMC.collect!(model; n=1)
         for j in 1:size(tmp, 1)
             push!(data[j], tmp[j][end, :])
         end
-        plot(CovidSim.plot_system_graph(model), CovidSim.plot_model(data))
+        plot(JEPMC.plot_system_graph(model), JEPMC.plot_model(data))
     end
     gif(anim, path * "demo_control.gif", fps=20)
     return true
 end
 
 function test_gif_animation_vaccine(path::String)
-    model = CovidSim.init(; numNodes=20, vaccine=true)
-    data = CovidSim.collect!(model; n=1)
+    model = JEPMC.init(; numNodes=20, vaccine=true)
+    data = JEPMC.collect!(model; n=1)
     anim = @animate for _ ∈ 1:1200-1
-        tmp = CovidSim.collect!(model; n=1)
+        tmp = JEPMC.collect!(model; n=1)
         for j in 1:size(tmp, 1)
             push!(data[j], tmp[j][end, :])
         end
-        plot(CovidSim.plot_system_graph(model), CovidSim.plot_model(data))
+        plot(JEPMC.plot_system_graph(model), JEPMC.plot_model(data))
     end
     gif(anim, path * "demo_vaccine.gif", fps=20)
     return true
 end
 
 function test_gif_animation_all(path::String)
-    model = CovidSim.init(; numNodes=20, control=true, vaccine=true)
-    data = CovidSim.collect!(model; n=1)
+    model = JEPMC.init(; numNodes=20, control=true, vaccine=true)
+    data = JEPMC.collect!(model; n=1)
     anim = @animate for _ ∈ 1:1200-1
-        tmp = CovidSim.collect!(model; n=1)
+        tmp = JEPMC.collect!(model; n=1)
         for j in 1:size(tmp, 1)
             push!(data[j], tmp[j][end, :])
         end
-        plot(CovidSim.plot_system_graph(model), CovidSim.plot_model(data))
+        plot(JEPMC.plot_system_graph(model), JEPMC.plot_model(data))
     end
     gif(anim, path * "demo_all_control.gif", fps=20)
     return true
@@ -139,48 +139,48 @@ end
 end
 
 function test_ensemble_abm(path::String)
-    models = [CovidSim.init(; seed=Int64(abs(i))) for i in rand(Int8, 5)]
+    models = [JEPMC.init(; seed=Int64(abs(i))) for i in rand(Int8, 5)]
     properties = [model.properties for model in models]
-    data = CovidSim.ensemble_collect!(models; showprogress=true)
+    data = JEPMC.ensemble_collect!(models; showprogress=true)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
-    plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
+    plts = [JEPMC.plot_model(d; errorstyle=:ribbon) for d in data]
     save_results(path * "ensemblerun/no_control/", properties, d, plts)
     return true
 end
 
 function test_ensemble_abm_controller(path::String)
-    models = [CovidSim.init(; control=true, seed=Int64(abs(i))) for i in rand(Int8, 5)]
+    models = [JEPMC.init(; control=true, seed=Int64(abs(i))) for i in rand(Int8, 5)]
     properties = [model.properties for model in models]
-    data = CovidSim.ensemble_collect!(models; showprogress=true)
+    data = JEPMC.ensemble_collect!(models; showprogress=true)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
-    plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
+    plts = [JEPMC.plot_model(d; errorstyle=:ribbon) for d in data]
     save_results(path * "ensemblerun/control/", properties, d, plts)
     return true
 end
 
 function test_ensemble_abm_vaccine(path::String)
-    models = [CovidSim.init(; vaccine=true, seed=Int64(abs(i))) for i in rand(Int8, 5)]
+    models = [JEPMC.init(; vaccine=true, seed=Int64(abs(i))) for i in rand(Int8, 5)]
     properties = [model.properties for model in models]
-    data = CovidSim.ensemble_collect!(models; showprogress=true)
+    data = JEPMC.ensemble_collect!(models; showprogress=true)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
-    plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
+    plts = [JEPMC.plot_model(d; errorstyle=:ribbon) for d in data]
     save_results(path * "ensemblerun/vaccine/", properties, d, plts)
     return true
 end
 
 function test_ensemble_abm_all(path::String)
     models = [
-        CovidSim.init(; control=true, vaccine=true, seed=Int64(abs(i))) for
+        JEPMC.init(; control=true, vaccine=true, seed=Int64(abs(i))) for
         i in rand(Int8, 5)
     ]
     properties = [model.properties for model in models]
-    data = CovidSim.ensemble_collect!(models; showprogress=true)
+    data = JEPMC.ensemble_collect!(models; showprogress=true)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
-    plts = [CovidSim.plot_model(d; errorstyle=:ribbon) for d in data]
+    plts = [JEPMC.plot_model(d; errorstyle=:ribbon) for d in data]
     save_results(path * "ensemblerun/all/", properties, d, plts)
     return true
 end
@@ -226,7 +226,7 @@ end
 val = nothing
 
 function test_paramscan_abm(path::String, properties)
-    data = CovidSim.collect_paramscan!(properties; showprogress=true)
+    data = JEPMC.collect_paramscan!(properties; showprogress=true)
     plts = []
     global val = nothing
     for i in 1:size(data[2], 1)
@@ -241,12 +241,12 @@ function test_paramscan_abm(path::String, properties)
             push!(r, names(val)[i] * ": " * string(val[i]))
         end
         j = join(r, ", ")
-        push!(plts, CovidSim.plot_model(dd; title=j))
+        push!(plts, JEPMC.plot_model(dd; title=j))
     end
-    CovidSim.save_dataframe(data[1], path * "dataframe/", "SocialNetworkABM")
+    JEPMC.save_dataframe(data[1], path * "dataframe/", "SocialNetworkABM")
     i = 1
     for plt in plts
-        CovidSim.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
+        JEPMC.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
         i += 1
     end
     return true
