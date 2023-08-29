@@ -1,4 +1,4 @@
-module CovidSim
+module JEPMC
 using Pkg
 Pkg.activate(".")
 # Pkg.status()
