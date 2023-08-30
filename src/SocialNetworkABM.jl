@@ -24,7 +24,11 @@ function init(;
     maxTravelingRate = 0.001,
     control::Bool = false,
     vaccine::Bool = false,
-    seed::Int = 1234)
+    seed::Int = 1234,
+    control_options = Dict(:tolerance => 1e-3,
+        :dt => 30.0,
+        :step => 7.0,
+        :maxiters => 100))
     rng = Xoshiro(seed)
     population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
     graph = connected_graph(numNodes, edgesCoverage; rng = rng)
@@ -37,6 +41,7 @@ function init(;
         step=0,
         control,
         vaccine,
+        control_options,
         integrator=nothing)
 
     model = ABM(Node,
@@ -111,7 +116,7 @@ end
 function agent_step!(agent, model::ABM)
     migrate!(agent, model)
     happiness!(agent)
-    model.control ? control!(agent, model) : nothing
+    model.control ? control!(agent, model; model.control_options...) : nothing
 end
 
 function migrate!(agent, model::ABM)
@@ -119,28 +124,24 @@ function migrate!(agent, model::ABM)
     tidxs, tweights = findnz(network)
 
     for i in 1:length(tidxs)
-        try
-            ap = deepcopy(agent.population)
-            as = deepcopy(agent.status)
+        ap = deepcopy(agent.population)
+        as = deepcopy(agent.status)
 
-            out = as .* tweights[i] .* (1 - deepcopy(agent.param[6]))
-            outp = out .* ap
-            new_status = as - out
-            new_population = sum(new_status .* ap)
-            agent.status = new_status .* ap ./ new_population
-            agent.population = round(Int64, new_population)
+        out = as .* tweights[i] .* (1 - deepcopy(agent.param[6]))
+        outp = out .* ap
+        new_status = as - out
+        new_population = sum(new_status .* ap)
+        agent.status = new_status .* ap ./ new_population
+        agent.population = round(Int64, new_population)
 
-            objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
-            os = deepcopy(objective.status)
-            op = deepcopy(objective.population)
+        objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
+        os = deepcopy(objective.status)
+        op = deepcopy(objective.population)
 
-            new_status = (os .* op) + outp
-            new_population = sum(new_status)
-            objective.status = new_status ./ new_population
-            objective.population = round(Int64, new_population)
-        catch ex
-            @debug ex
-        end
+        new_status = (os .* op) + outp
+        new_population = sum(new_status)
+        objective.status = new_status ./ new_population
+        objective.population = round(Int64, new_population)
     end
 end
 
@@ -168,6 +169,7 @@ function control!(agent,
     model::ABM;
     tolerance = 1e-3,
     dt = 30.0,
+    step = 7.0,
     maxiters::Int = 100)
     if agent.status[3] ≥ tolerance && model.step % dt == 0
         agent.param[6] = controller(agent.status,
@@ -181,6 +183,10 @@ function control!(agent,
             rng = model.rng)
     end
 end
+
+model = init(; numNodes = 8, control = true)
+data = collect!(model; n = 300)
+plt = plot_model(data)
 
 function collect!(model::ABM;
     agent_step = agent_step!,

@@ -23,8 +23,8 @@ export save_dataframe,
     download_dataset,
     load_parameters
 
-using JuliaFormatter
-format(".")
+# using JuliaFormatter
+# format(".")
 # using UpdateJulia
 # update_julia() # to update julia version
 end
