@@ -10,28 +10,22 @@ using DrWatson: @dict
 function download_dataset(path::String, url::String)
     title = split(url, "/")
     isdir(path) == false && mkpath(path)
-    return DataFrame(
-        CSV.File(
-            Downloads.download(url, path * title[length(title)]),
-            delim=",",
-            header=1,
-        ),
-    )
+    return DataFrame(CSV.File(Downloads.download(url, path * title[length(title)]),
+        delim = ",",
+        header = 1))
 end
 
 function dataset_from_location(df::DataFrame, iso_code::String)
     df = filter(:iso_code => ==(iso_code), df)
     df[!, :total_susceptible] = df[!, :population] - df[!, :total_cases]
     return select(df, [:date]),
-    select(
-        df,
+    select(df,
         [
             :new_cases_smoothed,
             :new_tests_smoothed,
             :new_vaccinations_smoothed,
             :new_deaths_smoothed,
-        ],
-    ),
+        ]),
     select(df, [:total_susceptible, :total_cases, :total_deaths, :total_tests]),
     select(df, [:reproduction_rate])
 end
@@ -41,14 +35,14 @@ end
     Read a dataset from a specific path and return a DataFrame Object
 """
 function read_dataset(path::String)
-    return DataFrame(CSV.File(path, delim=",", header=1))
+    return DataFrame(CSV.File(path, delim = ",", header = 1))
 end
 
 """
     save_parameters(params::Dict, path::String, [title::String])
     Save a dictionary of parameters into a specific path. If no title is provided then a default one is used.
 """
-function save_parameters(params, path::String, title::String="parameters")
+function save_parameters(params, path::String, title::String = "parameters")
     isdir(path) == false && mkpath(path)
     save(path * title * ".jld2", params)
 end
@@ -63,7 +57,7 @@ load_parameters(path) = load(path)
     save_dataframe(data::DataFrame, path::String, [title::String])
     Save a DataFrame into a specific path. If no title is provided then a default one is used.
 """
-function save_dataframe(data::DataFrame, path::String, title="StandardABM")
+function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
     isdir(path) == false && mkpath(path)
     CSV.write(path * title * ".csv", data)
 end
@@ -72,7 +66,7 @@ end
     save_plot(plot, path::String, [title::String], [format::String])
     Save a plot into a specific path. If no title is provided then a default one is used. If no format is specified then .png is used
 """
-function save_plot(plot, path="", title="title", format="png")
+function save_plot(plot, path = "", title = "title", format = "png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "." * format)
 end

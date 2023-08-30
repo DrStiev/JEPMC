@@ -16,59 +16,59 @@ include("Controller.jl")
 end
 
 function init(;
-    numNodes::Int=50,
-    edgesCoverage::Symbol=:high,
-    initialNodeInfected::Int=1,
-    param::Vector{Float64}=[3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
-    avgPopulation::Int=10_000,
-    maxTravelingRate::Float64=0.001,
-    tspan::Tuple=(1.0, Inf),
-    control::Bool=false,
-    vaccine::Bool=false,
-    seed::Int=1234
-)
-
+    numNodes::Int = 50,
+    edgesCoverage::Symbol = :high,
+    initialNodeInfected::Int = 1,
+    param::Vector = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
+    avgPopulation::Int = 10_000,
+    maxTravelingRate = 0.001,
+    control::Bool = false,
+    vaccine::Bool = false,
+    seed::Int = 1234)
     rng = Xoshiro(seed)
     population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
-    graph = connected_graph(numNodes, edgesCoverage; rng=rng)
+    graph = connected_graph(numNodes, edgesCoverage; rng = rng)
     migrationMatrix = get_migration_matrix(graph, population, maxTravelingRate)
 
-    properties = @dict(
-        numNodes, param, graph, migrationMatrix, step = 0, control, vaccine, integrator = nothing
-    )
+    properties = @dict(numNodes,
+        param,
+        graph,
+        migrationMatrix,
+        step=0,
+        control,
+        vaccine,
+        integrator=nothing)
 
-    model = ABM(
-        Node,
-        ContinuousSpace((100, 100); spacing=4.0, periodic=true);
-        properties=properties,
-        rng
-    )
+    model = ABM(Node,
+        ContinuousSpace((100, 100); spacing = 4.0, periodic = true);
+        properties = properties,
+        rng)
 
     Is = [zeros(Int, numNodes)...]
-    for i = 1:initialNodeInfected
+    for i in 1:initialNodeInfected
         Is[rand(model.rng, 1:numNodes)] = 1
     end
 
-    for node = 1:numNodes
-        status =
-            Is[node] == 1 ?
-            [(population[node] - 1) / population[node], 0, 1 / population[node], 0, 0] :
-            [1.0, 0, 0, 0, 0]
+    for node in 1:numNodes
+        status = Is[node] == 1 ?
+                 [
+            (population[node] - 1) / population[node],
+            0,
+            1 / population[node],
+            0,
+            0,
+        ] :
+                 [1.0, 0, 0, 0, 0]
         happiness = rand(model.rng)
         parameters = vcat(param, [0.0, 0.0])
         add_agent!(model, (0, 0), population[node], status, parameters, happiness)
     end
 
-    prob = [
-        OrdinaryDiffEq.ODEProblem(seir!, a.status, tspan, a.param) for a in allagents(model)
-    ]
-    integrator = [
-        OrdinaryDiffEq.init(
-            p,
-            OrdinaryDiffEq.Tsit5();
-            advance_to_tstop=true
-        ) for p in prob
-    ]
+    prob = [OrdinaryDiffEq.ODEProblem(seir!, a.status, (1.0, Inf), a.param)
+            for a in allagents(model)]
+    integrator = [OrdinaryDiffEq.init(p, OrdinaryDiffEq.Tsit5(); advance_to_tstop = true)
+                  for
+                  p in prob]
     model.integrator = integrator
 
     return model
@@ -118,7 +118,7 @@ function migrate!(agent, model::ABM)
     network = model.migrationMatrix[agent.id, :]
     tidxs, tweights = findnz(network)
 
-    for i = 1:length(tidxs)
+    for i in 1:length(tidxs)
         try
             ap = deepcopy(agent.population)
             as = deepcopy(agent.status)
@@ -145,8 +145,10 @@ function migrate!(agent, model::ABM)
 end
 
 function happiness!(agent)
-    agent.happiness = agent.happiness - (agent.status[3] + agent.status[5]) + (agent.status[4] * (1 - agent.param[6]) - agent.param[6])
-    agent.happiness = agent.happiness < 0.0 ? 0.0 : agent.happiness > 1.0 ? 1.0 : agent.happiness
+    agent.happiness = agent.happiness - (agent.status[3] + agent.status[5]) +
+                      (agent.status[4] * (1 - agent.param[6]) - agent.param[6])
+    agent.happiness = agent.happiness < 0.0 ? 0.0 :
+                      agent.happiness > 1.0 ? 1.0 : agent.happiness
 end
 
 function voc!(model::ABM)
@@ -162,38 +164,37 @@ function voc!(model::ABM)
     end
 end
 
-function control!(
-    agent,
+function control!(agent,
     model::ABM;
-    tolerance::Float64=1e-3,
-    dt::Float64=30.0,
-    maxiters::Int=100
-)
+    tolerance = 1e-3,
+    dt = 30.0,
+    maxiters::Int = 100)
     if agent.status[3] ≥ tolerance && model.step % dt == 0
-        agent.param[6] = controller(
-            agent.status,
-            vcat(agent.param[1:5], agent.param[7]),
-            agent.happiness,
-            (0.0, dt),
-            maxiters;
-            loss_step=Int(maxiters / 10),
-            υ_max=Distributions.cdf(Distributions.Beta(2, 5), agent.status[3]),
-            rng=model.rng
-        )
+        agent.param[6] = controller(agent.status,
+            vcat(agent.param[1:5], agent.param[7]);
+            h = agent.happiness,
+            timeframe = (0.0, dt),
+            step = 7.0,
+            maxiters = maxiters,
+            loss_step = Int(maxiters / 10),
+            υ_max = Distributions.cdf(Distributions.Beta(2, 5), agent.status[3]),
+            rng = model.rng)
     end
 end
 
-function collect!(
-    model::ABM;
-    agent_step=agent_step!,
-    model_step=model_step!,
-    n=1200,
-    showprogress=false,
-    split_result=true,
-    adata=get_observable_data()
-)
-    data, _ =
-        run!(model, agent_step, model_step, n; showprogress=showprogress, adata=adata)
+function collect!(model::ABM;
+    agent_step = agent_step!,
+    model_step = model_step!,
+    n::Int = 1200,
+    showprogress::Bool = false,
+    split_result::Bool = true,
+    adata = get_observable_data())
+    data, _ = run!(model,
+        agent_step,
+        model_step,
+        n;
+        showprogress = showprogress,
+        adata = adata)
     if split_result
         return [filter(:id => ==(i), data) for i in unique(data[!, :id])]
     else
@@ -201,25 +202,21 @@ function collect!(
     end
 end
 
-function ensemble_collect!(
-    models::Vector;
-    agent_step=agent_step!,
-    model_step=model_step!,
-    n=1200,
-    showprogress=false,
-    parallel=true,
-    adata=get_observable_data(),
-    split_result=true
-)
-    data, _ = ensemblerun!(
-        models,
+function ensemble_collect!(models::Vector;
+    agent_step = agent_step!,
+    model_step = model_step!,
+    n::Int = 1200,
+    showprogress::Bool = false,
+    parallel::Bool = true,
+    adata = get_observable_data(),
+    split_result::Bool = true)
+    data, _ = ensemblerun!(models,
         agent_step,
         model_step,
         n;
-        showprogress=showprogress,
-        adata=adata,
-        parallel=parallel
-    )
+        showprogress = showprogress,
+        adata = adata,
+        parallel = parallel)
     if split_result
         res = [filter(:ensemble => ==(i), data) for i in unique(data[!, :ensemble])]
         outres = []
@@ -233,32 +230,25 @@ function ensemble_collect!(
     end
 end
 
-function collect_paramscan!(
-    parameters::Dict=Dict(
-        :maxTravelingRate => Base.collect(0.001:0.003:0.01),
+function collect_paramscan!(parameters::Dict = Dict(:maxTravelingRate => Base.collect(0.001:0.003:0.01),
         :edgesCoverage => [:high, :medium, :low],
         :numNodes => Base.collect(4:8:40),
-        :initialNodeInfected => Base.collect(1:1:4),
-    ),
-    init=init;
-    adata=get_observable_data(),
-    agent_step=agent_step!,
-    model_step=model_step!,
-    n=1200,
-    showprogress=false,
-    parallel=true
-)
-
-    data = paramscan(
-        parameters,
+        :initialNodeInfected => Base.collect(1:1:4)),
+    init = init;
+    adata = get_observable_data(),
+    agent_step = agent_step!,
+    model_step = model_step!,
+    n::Int = 1200,
+    showprogress::Bool = false,
+    parallel::Bool = true)
+    data = paramscan(parameters,
         init;
         adata,
-        (agent_step!)=agent_step,
-        (model_step!)=model_step,
-        n=n,
-        showprogress=showprogress,
-        parallel=parallel
-    )
+        (agent_step!) = agent_step,
+        (model_step!) = model_step,
+        n = n,
+        showprogress = showprogress,
+        parallel = parallel)
 
     return data
 end

@@ -5,27 +5,24 @@
 ### See file LICENSE in top folder for copyright and licensing
 ### information.
 
-
 using DifferentialEquations, Optimization
 using Zygote, OptimizationOptimJL, OptimizationPolyalgorithms
 using Lux, OptimizationOptimisers, OrdinaryDiffEq
 using SciMLSensitivity, Random, ComponentArrays
 using Statistics: mean
 
-
-function controller(initial_condition::Vector{Float64},
-                    p_true::Vector{Float64} =
-                        [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
-                    h::Float64 = rand(),
-                    timeframe::Tuple{Float64, Float64} = (0.0, 30.0),
-                    maxiters::Int = 100;
-                    loss_step::Int = 10,
-                    υ_max::Float64 = 1.0,
-                    rng::AbstractRNG=Random.default_rng()
-                    )
+function controller(initial_condition::Vector,
+    p_true::Vector = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01];
+    h = rand(),
+    timeframe::Tuple = (0.0, 30.0),
+    maxiters::Int = 100,
+    step = 7.0,
+    loss_step::Int = 10,
+    υ_max = 1.0,
+    rng::AbstractRNG = Random.default_rng())
     ann = Lux.Chain(Lux.Dense(6, 64, swish),
-                    Lux.Dense(64, 64, swish),
-                    Lux.Dense(64, 1, tanh))
+        Lux.Dense(64, 64, swish),
+        Lux.Dense(64, 1, tanh))
     p, state = Lux.setup(rng, ann)
 
     function dudt_(du, u, p, t, p_true)
@@ -41,39 +38,32 @@ function controller(initial_condition::Vector{Float64},
         du[5] = δ * γ * I # dD
         du[6] = -(du[3] + du[5]) + (du[4] * (1 - η)) # dH
     end
+
     dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
-    step = trunc(timeframe[end] / 4.0) # weekly over 30 days
-    step = step < 1.0 ? 1.0 : step
-    ts = Float32.(collect(0.0:step:timeframe[end]))
-    ic = deepcopy(initial_condition)
-    push!(ic, h)
+    ts = collect(0.0:step:timeframe[end])
+    ic = vcat(deepcopy(initial_condition), h)
     prob = ODEProblem(dudt_, ic, timeframe, p)
 
     function predict(p)
         _prob = remake(prob, u0 = ic, tspan = timeframe, p = p)
-        Array(
-            solve(_prob,
-                  Tsit5(),
-                  saveat = ts,
-                  abstol = 1e-10,
-                  reltol = 1e-10,
-                  verbose = false
-                  )
-        )
+        Array(solve(_prob,
+            Tsit5(),
+            saveat = ts,
+            abstol = 1e-10,
+            reltol = 1e-10,
+            verbose = false))
     end
 
     function loss(p)
         pred = predict(p)
-        sum(abs2, pred[3, :]) / sum(abs2, pred[6, :])
+        sum(abs2, pred[3, :]) / sum(abs2, pred[end, :])
     end
-
 
     losses = Float64[]
     callback = function (p, l; loss_step = loss_step)
         push!(losses, l)
         ## Exit early if not improving...
-        if length(losses) > 1 &&
-            (abs(losses[end-1] - losses[end])) < eps()
+        if length(losses) > 1 && (abs(losses[end - 1] - losses[end])) < eps()
             return true
         end
         if length(losses) % loss_step == 0
@@ -83,18 +73,10 @@ function controller(initial_condition::Vector{Float64},
     end
 
     adtype = Optimization.AutoZygote()
-    optf =
-        Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
-    optprob =
-        Optimization.OptimizationProblem(optf,
-                                         ComponentVector{Float64}(p))
-    res1 = Optimization.solve(optprob,
-                              ADAM(0.01),
-                              callback=callback,
-                              maxiters=maxiters
-                              )
+    optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
+    optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
+    res1 = Optimization.solve(optprob, ADAM(0.01), callback = callback, maxiters = maxiters)
     return abs.(first(ann(ic, res1.u, state)))[1]
 end
-
 
 ### end of file -- Controller.jl
