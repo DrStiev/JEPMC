@@ -76,9 +76,10 @@ This additional parameters cannot be modified for now but could be in a future u
 
 Once the model is being instantiated, it's time to make it run and collect the output. The function that is responsible to that takes as input a bunch of parameters but only a few is really important and useful
 ```julia
-data = JEPMC.collect!(model; # the model we want to simulate
-						n = ..., # the amount of steps we want our models to do
-					)
+data = JEPMC.collect!(
+	model; # the model we want to simulate
+	n = ..., # the amount of steps we want our models to do
+)
 ```
 The result will be an array of *DataFrames* encoding the evolution of each of the nodes in the graph
 ```julia
@@ -116,7 +117,19 @@ plt = JEPMC.plot_model(data)
 ## Now let's try activating some type of control
 Let's create a model in which the controller is active as a non-pharmaceutical tipe of control, like mask, smart working, social distancing etc...
 ```julia
-model = JEPMC.init(; numNodes=8, edgesCoverage=:low, avgPopulation=1000, control=true)
+options=Dict(
+	:tolerance => ..., # minimum threshold of infected individuals 
+						# to call the controller
+	:dt => ..., # timestep used to update the controller countermeasures
+	:step => ..., # integration step for the ODE resolutor
+	:maxiters => ..., # maximum number of iterations for the neural network controller
+)
+
+model = JEPMC.init(; 
+	numNodes=8, edgesCoverage=:low, 
+	avgPopulation=1000, control=true, 
+	control_options=options
+)
 data = JEPMC.collect!(model; n=300)
 plt = JEPMC.plot_model(data)
 ```

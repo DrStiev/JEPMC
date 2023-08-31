@@ -184,10 +184,6 @@ function control!(agent,
     end
 end
 
-model = init(; numNodes = 8, control = true)
-data = collect!(model; n = 300)
-plt = plot_model(data)
-
 function collect!(model::ABM;
     agent_step = agent_step!,
     model_step = model_step!,
