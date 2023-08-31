@@ -72,9 +72,13 @@ params = Dict(
 )
 ```
 
-Now that we know the set of parameters useful to run the simulation, we create our first model as follow:
+Now that we know the set of parameters useful to run the simulation,
+we create our first model as follow:
+
 ```julia
-model = JEPMC.init(; numNodes=8, edgesCoverage=:low, avgPopulation=1000)
+model = JEPMC.init(; numNodes = 8,
+                     edgesCoverage = :low,
+                     avgPopulation = 1000)
 julia> StandardABM with 8 agents of type Node
  space: periodic continuous space with (100.0, 100.0) extent and spacing=4.0
  scheduler: fastest
@@ -92,15 +96,27 @@ julia> 8×8 SparseArrays.SparseMatrixCSC{Float64, Int64} with 32 stored entries:
  1.61393e-5   ⋅           ⋅           7.83197e-6  2.94039e-5   ⋅           0.000108267   ⋅
 ```
 
-The property *integrator* of the model is created once the model is instantiated and is used to create an array of **ODEProblem** storing the relative ODE system of each node. Here the initial parameter *:param* is modified adding two extra values η, ξ corresponding to the strictness of the non-pharmaceutical countermeasures applied in a specific node and the vaccine coverage when a vaccine is found. The η value try to summarize very roughly the contermeasures associated to the [OxCGRT project](https://github.com/OxCGRT/covid-policy-tracker).
+The property *integrator* of the model is created once the model is
+instantiated and is used to create an array of **ODEProblem** storing
+the relative ODE system of each node. Here the initial parameter
+*:param* is modified adding two extra values η, ξ corresponding to the
+strictness of the non-pharmaceutical countermeasures applied in a
+specific node and the vaccine coverage when a vaccine is found. The η
+value try to summarize very roughly the contermeasures associated to
+the [OxCGRT project](https://github.com/OxCGRT/covid-policy-tracker).
 
-This additional parameters cannot be modified for now but could be in a future update.
+This additional parameters cannot be modified for now but could be in
+a future update.
 
-Once the model is being instantiated, it's time to make it run and collect the output. The function that is responsible to that takes as input a bunch of parameters but only a few is really important and useful
+Once the model is being instantiated, it's time to make it run and
+collect the output. The function that is responsible to that takes as
+input a bunch of parameters but only a few is really important and
+useful
+
 ```julia
 data = JEPMC.collect!(
-	model; # the model we want to simulate
-	n = ..., # the amount of steps we want our models to do
+    model; # the model we want to simulate
+    n = ..., # the amount of steps we want our models to do
 )
 ```
 The result will be an array of *DataFrames* encoding the evolution of each of the nodes in the graph
@@ -136,27 +152,40 @@ plt = JEPMC.plot_model(data)
 ```
 ![Plot Without Intervention](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/plot.svg?raw=true)
 
-## Now let's try activating some type of control
-Let's create a model in which the controller is active as a non-pharmaceutical tipe of control, like mask, smart working, social distancing etc...
+
+## Now let's try to activate some type of control
+
+Let's create a model in which the controller is active as a
+non-pharmaceutical tipe of control, like mask, smart working, social
+distancing etc...
+
 ```julia
 options=Dict(
-	:tolerance => ..., # minimum threshold of infected individuals 
-						# to call the controller
-	:dt => ..., # timestep used to update the controller countermeasures
-	:step => ..., # integration step for the ODE resolutor
-	:maxiters => ..., # maximum number of iterations for the neural network controller
+    :tolerance => ..., # Minimum threshold of infected individuals 
+                       # to call the controller
+	:dt => ..., # Timestep used to update the controller
+                # countermeasures
+	:step => ..., # Integration step for the ODE resolutor
+	:maxiters => ..., # Maximum number of iterations for the neural
+                      # network controller
 )
 
 model = JEPMC.init(; 
-	numNodes=8, edgesCoverage=:low, 
-	avgPopulation=1000, control=true, 
-	control_options=options
+    numNodes = 8,
+    edgesCoverage = :low, 
+    avgPopulation = 1000,
+    control = true, 
+    control_options = options
 )
-data = JEPMC.collect!(model; n=300)
+data = JEPMC.collect!(model; n = 300)
 plt = JEPMC.plot_model(data)
 ```
 
 ![Non-Pharmaceutical Countermeasures Plot](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/controlPlot.svg?raw=true)
 
-The controller function is not currently available to be modified from the user, but it could be in the future. The reason for now is because mainly the controller function is modeled to be flexible on a general type of compartmental model, in this case the SEIR(S) one, that it's not intended to be externally modified. 
+The controller function is not currently available to be modified from
+the user, but it could be in the future. The reason for now is because
+mainly the controller function is modeled to be flexible on a general
+type of compartmental model, in this case the SEIR(S) one, that it's
+not intended to be externally modified.
 
