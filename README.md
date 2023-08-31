@@ -112,7 +112,7 @@ The last thing we want to do is plot our data
 ```julia
 plt = JEPMC.plot_model(data)
 ```
-![Plot Without Intervention](readmeimg\plot.svg "Plot Without Intervention")
+![Plot Without Intervention](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/plot.svg?raw=true)
 
 ## Now let's try activating some type of control
 Let's create a model in which the controller is active as a non-pharmaceutical tipe of control, like mask, smart working, social distancing etc...
@@ -134,7 +134,7 @@ data = JEPMC.collect!(model; n=300)
 plt = JEPMC.plot_model(data)
 ```
 
-![Non-Pharmaceutical Countermeasures Plot](readmeimg\controlPlot.svg "Non-Pharmaceutical Countermeasures Plot")
+![Non-Pharmaceutical Countermeasures Plot](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/controlPlot.svg?raw=true)
 
 The controller function is not currently available to be modified from the user, but it could be in the future. The reason for now is because mainly the controller function is modeled to be flexible on a general type of compartmental model, in this case the SEIR(S) one, that it's not intended to be externally modified. 
 
