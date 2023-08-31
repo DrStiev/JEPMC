@@ -160,13 +160,13 @@ non-pharmaceutical tipe of control, like mask, smart working, social
 distancing etc...
 
 ```julia
-options=Dict(
+options = Dict(
     :tolerance => ..., # Minimum threshold of infected individuals 
                        # to call the controller
-	:dt => ..., # Timestep used to update the controller
+    :dt => ..., # Timestep used to update the controller
                 # countermeasures
-	:step => ..., # Integration step for the ODE resolutor
-	:maxiters => ..., # Maximum number of iterations for the neural
+    :step => ..., # Integration step for the ODE resolutor
+    :maxiters => ..., # Maximum number of iterations for the neural
                       # network controller
 )
 
