@@ -35,7 +35,7 @@ following set of parameters:
 params = Dict(
     :numNodes => ..., # number of total nodes that make the
                       # graph. Default 50
-	:edgesCoverage => ..., # try to generalize the how many edges
+    :edgesCoverage => ..., # try to generalize the how many edges
                            # there are between the nodes. Generally
                            # more edges mean a flux of migration more
                            # wide.
@@ -55,19 +55,19 @@ params = Dict(
                            # population of each node is created
                            # following an exponential distribution.
                            # Default 10_000
-	:maxTravelingRate => ..., # maximum flux of people from one node
+    :maxTravelingRate => ..., # maximum flux of people from one node
                               # to another.
                               # This value is used to create a matrix
                               # of migration between nodes.
                               # Default 0.001 
-	:control => ..., # boolean value that notify the use of a
+    :control => ..., # boolean value that notify the use of a
                      # non-pharmaceutical control.
                      # Default false
-	:vaccine => ..., # boolean value that notify the simulation of a 
+    :vaccine => ..., # boolean value that notify the simulation of a 
                      # random research and than application of a
                      # pharmaceutical control.
                      # Default false
-	:seed => ..., # For reproducibility.
+    :seed => ..., # For reproducibility.
                   # Default 1234
 )
 ```
