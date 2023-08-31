@@ -4,49 +4,71 @@ A library to explore epidemic models and their controls.
 
 [![SciML Code Style](https://img.shields.io/static/v1?label=code%20style&message=SciML&color=9558b2&labelColor=389826)](https://github.com/SciML/SciMLStyle)
 
+
 # How to use the library
+
 First of all be sure to import the package correctly running 
 ```julia
 julia> import Pkg; Pkg.add("JPEMC")
 ```
 
-After correctly importing the library you should be able to use it inside your own project as follow
+After correctly importing the library you should be able to use it
+inside your own project as follow
 ```julia
 using JEPMC
 ```
 
 ## Let's look at a simple example
-Let's say we want to simulate the behaviour of a specific epidemiology phenomena like COVID-19. First of all it's good to know how the simulation works. The simulation works try to mimic a *Social Network Graph*, with each node represents a *Point of Interest (PoI)* where the simulation of the epidemic take place as a system of *Ordinary Differentiable Equation (ODE)*. 
 
-Now we are ready to define our model. We roughly need to know the following set of parameters:
+Let's say we want to simulate the behaviour of a specific epidemiology
+phenomena like COVID-19. First of all it's good to know how the
+simulation works. The simulation works try to mimic a *Social Network
+Graph*, with each node represents a *Point of Interest (PoI)* where
+the simulation of the epidemic take place as a system of *Ordinary
+Differentiable Equation (ODE)*.
+
+Now we are ready to define our model. We roughly need to know the
+following set of parameters:
+
 
 ```julia
 params = Dict(
-	:numNodes => ..., # number of total nodes that make the graph. Default 50
-	:edgesCoverage => ..., # try to generalize the how many edges there are
- 							# between the nodes. Generally more edges mean 
-							# a flux of migration more wide. 
-							# If not specified is assumed :high.
-							# The possible values are :high, :medium and :low
-	:initialNodeInfected => ..., # number of initial node from where the epidemic start. 
-								# Default 1
-	:param => ..., # a vector that identify the parameters of an epidemic.
-					# Typically represents the following variables:
-					# R₀, γ = infectivity period, σ = exposed period,
-					# ω = immunity period, δ = mortality rate.
-					# Default [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
-	:avgPopulation => ..., # average population from wich the population of
-							# each node is created following an exponential distribution.
-							# Default 10_000
-	:maxTravelingRate => ..., # maximum flux of people from one node to another.
-								# This value is used to create a matrix of migration
-								# between nodes. Default 0.001
-	:control => ..., # boolean value that notify the use of a non-pharmaceutical control.
-						# Default false
+    :numNodes => ..., # number of total nodes that make the
+                      # graph. Default 50
+	:edgesCoverage => ..., # try to generalize the how many edges
+                           # there are between the nodes. Generally
+                           # more edges mean a flux of migration more
+                           # wide.
+                           # If not specified is assumed :high.
+                           # The possible values are :high, :medium
+                           # and :low 
+    :initialNodeInfected => ..., # number of initial node from where
+                                 # the epidemic start. 
+                                 # Default 1
+    :param => ..., # a vector that identify the parameters of an
+                   # epidemic.
+                   # Typically represents the following variables:
+                   # R₀, γ = infectivity period, σ = exposed period,
+                   # ω = immunity period, δ = mortality rate.
+                   # Default [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]
+    :avgPopulation => ..., # average population from wich the
+                           # population of each node is created
+                           # following an exponential distribution.
+                           # Default 10_000
+	:maxTravelingRate => ..., # maximum flux of people from one node
+                              # to another.
+                              # This value is used to create a matrix
+                              # of migration between nodes.
+                              # Default 0.001 
+	:control => ..., # boolean value that notify the use of a
+                     # non-pharmaceutical control.
+                     # Default false
 	:vaccine => ..., # boolean value that notify the simulation of a 
-						# random research and than application of a pharmaceutical control.
-						# Default false
-	:seed => ..., # for reproducibility. Default 1234
+                     # random research and than application of a
+                     # pharmaceutical control.
+                     # Default false
+	:seed => ..., # For reproducibility.
+                  # Default 1234
 )
 ```
 
