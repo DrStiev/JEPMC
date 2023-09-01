@@ -4,7 +4,7 @@ addprocs(Int(Sys.CPU_THREADS / 4))
 @everywhere include("../src/JEPMC.jl")
 
 using Test, Dates, DataFrames, Plots
-include("../src/JEPMC.jl")
+# include("../src/JEPMC.jl")
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
     JEPMC.save_parameters(p, path * "parameters/", "SocialNetworkABM")
@@ -37,7 +37,7 @@ end
 
 function test_abm_controller(path::String)
     model = JEPMC.init(; control = true)
-    data = JEPMC.collect!(model; n=300, showprogress = true)
+    data = JEPMC.collect!(model; showprogress = true)
     d = reduce(vcat, data)
     plt = JEPMC.plot_model(data; errorstyle = :ribbon, title = "no pharmaceutical control")
     save_results(path * "singlerun/control/", model.properties, d, plt)
@@ -275,7 +275,7 @@ end
 end
 
 function test_sensitivity(path::String)
-    x, dp = JEPMC.sensitivity_analisys(seir!,
+    x, dp = JEPMC.sensitivity_analisys(JEPMC.seir!,
         [0.999, 0.0, 0.001, 0.0, 0.0],
         (0.0, 1200.0),
         [3.54, 1 / 14, 1 / 5, 1 / 280, 0.001, 0.0, 0.0])

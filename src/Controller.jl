@@ -29,11 +29,6 @@ function controller(initial_condition::Vector,
         Lux.Dense(64, 1, tanh))
     p, state = Lux.setup(rng, ann)
 
-    function l(x)
-        loss_function === missing ? sum(abs2, x[3, :]) / sum(abs2, x[end, :]) :
-        loss_function
-    end
-
     function dudt_(du, u, p, t, p_true)
         S, E, I, R, D, h = u
         R₀, γ, σ, ω, δ, ξ = p_true
@@ -63,11 +58,12 @@ function controller(initial_condition::Vector,
             verbose = false))
     end
 
-    function loss(p)
-        # pred = predict(p)
-        l(predict(p))
-        # sum(abs2, pred[3, :]) / sum(abs2, pred[end, :])
+    function l(x)
+        loss_function === missing ? sum(abs2, x[3, :]) / sum(abs2, x[end, :]) :
+        loss_function
     end
+
+    loss(p) = l(predict(p))
 
     losses = Float64[]
     callback = function (p, l; loss_step = loss_step)

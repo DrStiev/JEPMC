@@ -14,7 +14,7 @@ include("Utils.jl")
 include("Controller.jl")
 
 export init, collect!, ensemble_collect!, collect_paramscan!, plot_system_graph
-export plot_system_graph, plot_model, sensitivity_analisys
+export plot_system_graph, plot_model, sensitivity_analisys, seir!
 export save_dataframe,
     save_plot,
     save_parameters,
