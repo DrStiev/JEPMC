@@ -1,6 +1,6 @@
 module JEPMC
-using Pkg
-Pkg.activate(".")
+# using Pkg
+# Pkg.activate(".")
 # Pkg.status()
 # Pkg.update()
 # Pkg.precompile()

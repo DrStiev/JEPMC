@@ -37,7 +37,7 @@ end
 
 function test_abm_controller(path::String)
     model = JEPMC.init(; control = true)
-    data = JEPMC.collect!(model; showprogress = true)
+    data = JEPMC.collect!(model; n=300, showprogress = true)
     d = reduce(vcat, data)
     plt = JEPMC.plot_model(data; errorstyle = :ribbon, title = "no pharmaceutical control")
     save_results(path * "singlerun/control/", model.properties, d, plt)

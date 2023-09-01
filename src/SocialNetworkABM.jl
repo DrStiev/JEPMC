@@ -26,9 +26,11 @@ function init(;
     vaccine::Bool = false,
     seed::Int = 1234,
     control_options = Dict(:tolerance => 1e-3,
-        :dt => 30.0,
-        :step => 7.0,
-        :maxiters => 100))
+        :dt => 10.0,
+        :step => 3.0,
+        :maxiters => 100,
+        :loss => missing,
+        :υ_max => missing))
     rng = Xoshiro(seed)
     population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
     graph = connected_graph(numNodes, edgesCoverage; rng = rng)
@@ -170,16 +172,21 @@ function control!(agent,
     tolerance = 1e-3,
     dt = 30.0,
     step = 7.0,
-    maxiters::Int = 100)
+    maxiters::Int = 100,
+    loss = missing,
+    υ_max = missing)
     if agent.status[3] ≥ tolerance && model.step % dt == 0
+        υ_max = υ_max === missing ?
+                Distributions.cdf(Distributions.Beta(2, 5), agent.status[3]) : υ_max
         agent.param[6] = controller(agent.status,
             vcat(agent.param[1:5], agent.param[7]);
             h = agent.happiness,
             timeframe = (0.0, dt),
-            step = 7.0,
+            step = step,
             maxiters = maxiters,
             loss_step = Int(maxiters / 10),
-            υ_max = Distributions.cdf(Distributions.Beta(2, 5), agent.status[3]),
+            loss_function = loss,
+            υ_max = υ_max,
             rng = model.rng)
     end
 end
