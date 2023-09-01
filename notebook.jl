@@ -177,8 +177,8 @@ So, the controller act as follow:
 
 # ╔═╡ 4f3b494e-7dad-47d7-8716-638307c69669
 control_options = Dict(
-	:tolerance => 1e-4, # Minimum threshoild of infected individuals before call the controller. Default 1e-4
-	:dt => 14, # Timestep used to update the controller countermeasures
+	:tolerance => 1e-3, # Minimum threshoild of infected individuals before call the controller. Default 1e-3
+	:dt => 10, # Timestep used to update the controller countermeasures
 	:step => 3, # Integration step for the ODE solver
 	:maxiters => 100, # Maximum number of iterations for the neural network training loop
 	:loss => missing, # custom loss function passed to the neural network
@@ -225,7 +225,7 @@ model_control = JEPMC.init(;
 data_control = JEPMC.collect!(model_control; n = 400)
 
 # ╔═╡ 249453ed-9fe7-49e4-aac7-3a4407ff560d
-plt_control = JEPMC.plot_model(data)
+plt_control = JEPMC.plot_model(data_control)
 
 # ╔═╡ Cell order:
 # ╠═111f56e9-c901-4606-8e5f-26663e6353c2

@@ -163,8 +163,8 @@ So, the controller act as follow:
 
 ```julia
 control_options = Dict(
-	:tolerance => 1e-4, # Minimum threshoild of infected individuals before call the controller. Default 1e-4
-	:dt => 14, # Timestep used to update the controller countermeasures
+	:tolerance => 1e-3, # Minimum threshoild of infected individuals before call the controller. Default 1e-3
+	:dt => 10, # Timestep used to update the controller countermeasures
 	:step => 3, # Integration step for the ODE solver
 	:maxiters => 100, # Maximum number of iterations for the neural network training loop
 	:loss => missing, # custom loss function passed to the neural network
