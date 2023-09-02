@@ -77,8 +77,10 @@ Now that we know the set of parameter useful to run a simulation, we can create 
 
 ```julia
 model = JEPMC.init(;
-	numNodes = 8, avgPopulation = 1000, edgesCoverage = :high,
-	seed = 42
+	numNodes = 8, 
+    avgPopulation = 1000, 
+    edgesCoverage = :high,
+    seed = 42
 )
 julia> StandardABM with 8 agents of type Node
  space: periodic continuous space with (100.0, 100.0) extent and spacing=4.0
@@ -146,6 +148,11 @@ plt = JEPMC.plot_model(data)
 ```
 ![Plot Without Intervention](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/plot.svg?raw=true)
 
+The curves showed in the graph represents the behaviour of each node of the model graph with the corresponding epidemiology trend. Sometimes these curves are more accentuated, this case represent a specific trend that is more common across the entire model.
+
+The more accentuated curves in foreground represents the average trend of the entire model. The ribbon style confidence interval of the other two plots represents the confidence interval (CI) of the curve. However this CI, due to the type of plot used to represent the data are prone to show sometimes an incorrect behaviour of the curves. Sometimes when the data are not all equal and are very close to the upper (or lower) limit, this will be ignored to show a CI higher or lower than the maximum (or minimum) possible value.
+
+This behaviour is perfectly shown in the plot below.
 
 ## Let's try something different
 
@@ -163,12 +170,16 @@ So, the controller act as follow:
 
 ```julia
 control_options = Dict(
-	:tolerance => 1e-3, # Minimum threshoild of infected individuals before call the controller. Default 1e-3
+	:tolerance => 1e-3, # Minimum threshoild of infected 
+                        # individuals before call the controller. 
+                        # Default 1e-3
 	:dt => 10, # Timestep used to update the controller countermeasures
 	:step => 3, # Integration step for the ODE solver
-	:maxiters => 100, # Maximum number of iterations for the neural network training loop
+	:maxiters => 100, # Maximum number of iterations for the neural network 
+                      # training loop
 	:loss => missing, # custom loss function passed to the neural network
-	:υ_max => missing, # custom attention threshold used as additional upper limit to the controller countermeasures result
+	:υ_max => missing, # custom attention threshold used as additional 
+                       # upper limit to the controller countermeasures result
 )
 ```
 
@@ -200,3 +211,6 @@ plt = JEPMC.plot_model(data)
 ```
 
 ![Non-Pharmaceutical Countermeasures Plot](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/controlPlot.svg?raw=true)
+
+We can see from the plot that the general behaviour of the model is shift ahead in time, slowing the spreading of the pandemic due to the use of non-pharmaceutical countermeasures. In addition, all the curves related directly to the force of infectin (FoI) have a less deeper pit and less higher peak; in particular the S-Curve do not drop far below the 25%, and the I-Curve do not peak higher as before without the countermeasures.
+
