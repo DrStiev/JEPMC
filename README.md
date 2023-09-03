@@ -118,7 +118,7 @@ Incorporating the controller into your model can be done as follows:
 ```julia
 model = JEPMC.init(; 
     numNodes = 8,
-    edgesCoverage = :low, 
+    edgesCoverage = :high, 
     avgPopulation = 1000,
     control = true, 
     control_options = control_options
