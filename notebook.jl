@@ -32,6 +32,7 @@ JEPMC is a library designed for the exploration of epidemic models and their cor
 
 [![SciML Code Style](https://img.shields.io/static/v1?label=code%20style&message=SciML&color=9558b2&labelColor=389826)](https://github.com/SciML/SciMLStyle)
 
+[![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 """
 
 # ╔═╡ f3b43cb5-6859-4ada-b516-31416287c3bd
@@ -170,11 +171,11 @@ Incorporating the controller into your model can be done as follows:
 @bind control Select([true, false])
 
 # ╔═╡ 399b8e88-9203-4db6-b71b-d22a205e5624
-model_control = JEPMC.init(; 
+model_control = JEPMC.init(;
     numNodes = numNodes,
-    edgesCoverage = edgesCoverage, 
+    edgesCoverage = edgesCoverage,
     avgPopulation = avgPopulation,
-    control = control, 
+    control = control,
     control_options = control_options
 )
 

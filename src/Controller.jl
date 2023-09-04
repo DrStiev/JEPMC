@@ -14,6 +14,25 @@ using Statistics: mean
 # https://enzyme.mit.edu/julia/stable/#Activity-of-temporary-storage
 Enzyme.API.runtimeActivity!(true)
 
+"""
+    function that implements a NeuralODE controller to learn about the spread of a specific disease and try to mitigate it via non pharmaceutical interventions
+    controller(initial_condition::Vector, p_true::Vector = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01]; h = rand(), timeframe::Tuple = (0.0, 30.0), maxiters::Int = 100, step = 7.0, loss_step::Int = 10, loss_function = missing, υ_max = 1.0, rng::AbstractRNG = Random.default_rng())
+
+    # Arguments
+    - initial_condition::Vector: initial conditions of the problem
+    - p_true::Vector: parameters of the disease
+    - h::Float64: happiness value associated to the specific problem
+    - timeframe::Tuple: timewindow to be analyzed
+    - maxiters::Int: maximum number of iterations to be performed by the learning loop of the controller
+    - step::Float64: time step of the integration of the ODE system
+    - loss_step::Int: number of step after which the callback function print the actual loss value of the loss function
+    - loss_function::Function: loss function to be minimized
+    - υ_max::Float64: alert threshold. Additional upper limit for the control measurements
+    - rng::AbstractRNG: random number generator
+
+    # Returns
+    - cumulative value for the countermeasures
+"""
 function controller(initial_condition::Vector,
     p_true::Vector = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01];
     h = rand(),

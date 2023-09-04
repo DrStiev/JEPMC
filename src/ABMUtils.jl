@@ -6,8 +6,12 @@ using Statistics: mean
 
 gr()
 
-adapt_R₀!(x) = return 1.1730158534328545 + 0.21570538523224972 * x
+# adapt_R₀!(x) = return 1.1730158534328545 + 0.21570538523224972 * x
 
+"""
+    function that computes the migration matrix of a graph
+    get_migration_matrix(g::SimpleGraph, population::Vector{Int}, maxTravelingRate::Float64)
+"""
 function get_migration_matrix(g::SimpleGraph,
     population::Vector{Int},
     maxTravelingRate::Float64)
@@ -31,6 +35,10 @@ function get_migration_matrix(g::SimpleGraph,
     return migrationMatrix .* adjacency_matrix(g)
 end
 
+"""
+    function that creates a connected graph with a specific arc coverage
+    connected_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
+"""
 function connected_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
     function edge_to_add(n::Int, coverage::Symbol, rng::AbstractRNG)
         low = n - 1
@@ -65,6 +73,10 @@ function connected_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
     return g
 end
 
+"""
+    function that describe an SEIR(S) model
+    seir!(du, u, p, t)
+"""
 function seir!(du, u, p, t)
     S, E, I, R, D = u
     R₀, γ, σ, ω, δ, η, ξ = p
@@ -76,6 +88,10 @@ function seir!(du, u, p, t)
     du[5] = δ * γ * I # dD
 end
 
+"""
+    function that plot the visual representation of a graph using GraphRecipes given a ABM
+    plot_system_graph(model::ABM)
+"""
 function plot_system_graph(model::ABM)
     max = maximum([agent.population for agent in allagents(model)])
     status = [a.status for a in allagents(model)]
@@ -95,6 +111,9 @@ function plot_system_graph(model::ABM)
         markercolor = nodefillc)
 end
 
+"""
+    function that returns the observable data of the model
+"""
 function get_observable_data()
     status(x) = x.status
     happiness(x) = x.happiness
@@ -104,6 +123,14 @@ function get_observable_data()
     return [status, happiness, η, υ, R₀]
 end
 
+"""
+    function that return the plot of all the relevant information of the model given a DataFrame of data.
+    There are 3 main information:
+        - SEIR model
+        - happiness over countermeasures
+        - R₀ index
+    plot_model(data; errorstyle = :ribbon, title::String = "")
+"""
 function plot_model(data; errorstyle = :ribbon, title::String = "")
     get_cumulative_plot(data,
         length(data),
@@ -180,6 +207,11 @@ function get_cumulative_plot(data::Vector{DataFrame},
 end
 
 # need generalization
+"""
+    function that return the sensitivity of the model about certain parameters
+    sensitivity_analisys(f, u0, tspan, p; doplot::Bool = true)
+    *IMPORTANT: * this feature is not yet fully generalized. Be careful 
+"""
 function sensitivity_analisys(f,
     u0,
     tspan,

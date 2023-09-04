@@ -1,10 +1,29 @@
-# using JEPMC
-using Distributed
-addprocs(Int(Sys.CPU_THREADS / 4))
-@everywhere include("../src/JEPMC.jl")
+using JEPMC
+using Aqua
+# Aqua.test_all(JEPMC;
+#     ambiguities = true,
+#     unbound_args = true,
+#     undefined_exports = true,
+#     piracy=true,
+#     project_extras=true,
+#     stale_deps=false, # not abled because WIP
+#     deps_compat=false, # not abled because WIP
+#     project_toml_formatting=true)
+# Aqua.test_stale_deps(JEPMC) # not abled because WIP
+# Aqua.test_deps_compat(JEPMC) # not abled because WIP
+Aqua.test_project_toml_formatting(JEPMC)
+Aqua.test_project_extras(JEPMC)
+Aqua.test_unbound_args(JEPMC)
+Aqua.test_undefined_exports(JEPMC)
+Aqua.test_ambiguities(JEPMC)
+Aqua.test_piracy(JEPMC)
 
+#############################################################################
+
+using Distributed
 using Test, Dates, DataFrames, Plots
-# include("../src/JEPMC.jl")
+addprocs(Int(Sys.CPU_THREADS / 4))
+@everywhere using JEPMC
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
     JEPMC.save_parameters(p, path * "parameters/", "SocialNetworkABM")
@@ -274,8 +293,11 @@ end
         Dict(:initialNodeInfected => Base.collect(1:3:10))) == true
 end
 
+@everywhere include("../src/ABMUtils.jl")
+# include("../src/JEPMC.jl")
+
 function test_sensitivity(path::String)
-    x, dp = JEPMC.sensitivity_analisys(JEPMC.seir!,
+    x, dp = sensitivity_analisys(seir!,
         [0.999, 0.0, 0.001, 0.0, 0.0],
         (0.0, 1200.0),
         [3.54, 1 / 14, 1 / 5, 1 / 280, 0.001, 0.0, 0.0])
