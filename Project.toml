@@ -6,6 +6,7 @@ version = "0.2.1"
 
 [deps]
 Agents = "46ada45e-f475-11e8-01d0-f70cc89e6671"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
 ComponentArrays = "b0b7db55-cfe3-40fc-9ded-d10e2dbeff66"

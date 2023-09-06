@@ -15,24 +15,22 @@ macro bind(def, element)
 end
 
 # ╔═╡ 59935147-8e82-4196-aa5b-dc6d0739eccb
-import Pkg; Pkg.activate(".")#Pkg.add("JEPMC")
+import Pkg; Pkg.activate(".");Pkg.add("JEPMC")
 
 # ╔═╡ 3352e19d-983d-41fa-933c-92f53c5445a9
 using PlutoUI
 
 # ╔═╡ 4f24027b-6571-46d3-bd74-a2feb9e2b264
-# using JEPMC
-include("src/JEPMC.jl")
+using JEPMC
 
 # ╔═╡ 111f56e9-c901-4606-8e5f-26663e6353c2
 md"""
 # Julia Epidemiology Model and Control (JEPMC)
 
-JEPMC is a library designed for the exploration of epidemic models and their corresponding control mechanisms.
-
 [![SciML Code Style](https://img.shields.io/static/v1?label=code%20style&message=SciML&color=9558b2&labelColor=389826)](https://github.com/SciML/SciMLStyle)
-
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+
+JEPMC is a library designed for the exploration of epidemic models and their corresponding control mechanisms.
 """
 
 # ╔═╡ f3b43cb5-6859-4ada-b516-31416287c3bd

@@ -1,10 +1,9 @@
 # Julia Epidemiology Model and Control (JEPMC)
 
-JEPMC is a library designed for the exploration of epidemic models and their corresponding control mechanisms.
-
 [![SciML Code Style](https://img.shields.io/static/v1?label=code%20style&message=SciML&color=9558b2&labelColor=389826)](https://github.com/SciML/SciMLStyle)
-
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+
+JEPMC is a library designed for the exploration of epidemic models and their corresponding control mechanisms.
 
 ## Overview of the Library
 
@@ -88,7 +87,7 @@ You can visualize the results of your simulation using the following command:
 plt = JEPMC.plot_model(data)
 ```
 
-![Plot Without Intervention](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/plot.svg?raw=true)
+![Plot Without Intervention](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/plot.png?raw=true)
 
 This command generates graphical representations of the model's behavior, illustrating the epidemiological trends of each node within the graph.
 
@@ -129,7 +128,7 @@ data = JEPMC.collect!(model; n = 300)
 plt = JEPMC.plot_model(data)
 ```
 
-![Non-Pharmaceutical Countermeasures Plot](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/controlPlot.svg?raw=true)
+![Non-Pharmaceutical Countermeasures Plot](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/controlPlot.png?raw=true)
 
 This modification shifts the behavior of the model in time, slowing the spread of the pandemic due to the application of non-pharmaceutical countermeasures. Notably, curves related to the force of infection (FoI) exhibit shallower troughs and lower peaks, signifying the effectiveness of the countermeasures.
 
