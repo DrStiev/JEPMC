@@ -1,7 +1,9 @@
-using Distributed, Aqua, BenchmarkTools
+# using Distributed
+using Aqua, BenchmarkTools
 using Test, Dates, DataFrames, Plots
-addprocs(Int(Sys.CPU_THREADS / 4))
-@everywhere using JEPMC
+# addprocs(Int(Sys.CPU_THREADS / 4))
+# @everywhere using JEPMC
+using JEPMC
 
 # Aqua tests
 
@@ -236,10 +238,11 @@ end
 
 # save results sensitivity analisys
 
-@everywhere include("../src/ABMUtils.jl")
+# @everywhere include("../src/ABMUtils.jl")
+include("../src/ABMUtils.jl")
 
 function test_sensitivity(path::String)
-    x, dp = sensitivity_analisys(seir!,
+    x, dp, pltout = sensitivity_analisys(seir!,
         [0.999, 0.0, 0.001, 0.0, 0.0],
         (0.0, 1200.0),
         [3.54, 1 / 14, 1 / 5, 1 / 280, 0.001, 0.0, 0.0])
