@@ -63,7 +63,7 @@ function controller(initial_condition::Vector,
         du[3] = σ * E - γ * I - δ * I - μ * I # dI
         du[4] = (1 - δ) * γ * I - ω * R + ξ * S - μ * R # dR
         du[5] = δ * γ * I # dD
-        du[6] = -(du[2] + du[3] + du[5]) + ((du[1] + du[4]) * (1 - η) - η) # dH
+        du[6] = -(du[2] + du[3] + du[5]) + (du[1] + (du[4] * (1 - η)) - η) # dH
     end
 
     dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)

@@ -15,7 +15,7 @@ macro bind(def, element)
 end
 
 # ╔═╡ 59935147-8e82-4196-aa5b-dc6d0739eccb
-import Pkg; Pkg.activate(".");Pkg.add("JEPMC")
+import Pkg; Pkg.add("JEPMC")
 
 # ╔═╡ 3352e19d-983d-41fa-933c-92f53c5445a9
 using PlutoUI

@@ -203,7 +203,7 @@ end
 """
 function happiness!(agent)
     agent.happiness = -(agent.status[2] + agent.status[3] + agent.status[5]) +
-                      ((agent.status[1] + agent.status[4]) * (1 - agent.param[6]) -
+                      (agent.status[1] + (agent.status[4] * (1 - agent.param[6])) -
                        agent.param[6])
     agent.happiness = agent.happiness < 0.0 ? 0.0 :
                       agent.happiness > 1.0 ? 1.0 : agent.happiness
