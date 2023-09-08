@@ -111,18 +111,18 @@ function controller(initial_condition::Vector,
     adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, ComponentVector(p))
-    @debug "Optimizer: ADAM()"
+    # @debug "Optimizer: ADAM()"
     res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = maxiters)
 
     patience_temp = 0
     optprob2 = remake(optprob, u0 = res1.u)
-    @debug "Optimizer: BFGS()"
+    # @debug "Optimizer: BFGS()"
     res2 = Optimization.solve(optprob2,
         Optim.BFGS(),
         callback = callback,
         maxiters = maxiters)
 
-    @debug "Loss: $(losses), final loss: $(loss(res1.u))"
+    # @debug "Node: $(id), losses: $(losses), final loss: $(loss(res1.u))"
     if doplot
         display(plot(losses, title = "Loss node $(id)"))
     end

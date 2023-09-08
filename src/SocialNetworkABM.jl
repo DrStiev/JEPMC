@@ -243,7 +243,6 @@ function control!(agent,
     if agent.status[3] ≥ tolerance && model.step % dt == 0
         υ_max = υ_max === missing ?
                 Distributions.cdf(Distributions.Beta(2, 5), agent.status[3]) : υ_max
-        @debug "Controller over node: $(agent.id)"
         agent.param[6] = controller(agent.status,
             vcat(agent.param[1:5], agent.param[7]);
             h = agent.happiness,
