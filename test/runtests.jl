@@ -1,9 +1,9 @@
-# using Distributed
+using Distributed
 using Aqua, BenchmarkTools
 using Test, Dates, DataFrames, Plots
-# addprocs(Int(Sys.CPU_THREADS / 4))
-# @everywhere using JEPMC
-using JEPMC
+addprocs(Int(Sys.CPU_THREADS / 4))
+@everywhere using JEPMC
+# using JEPMC
 
 # Aqua tests
 
@@ -16,6 +16,7 @@ Aqua.test_piracy(JEPMC)
 
 # Benchmark tests
 
+@everywhere include("../src/JEPMC.jl")
 model = JEPMC.init()
 @benchmark JEPMC.collect!(model)
 
@@ -31,9 +32,9 @@ model = JEPMC.init(; control = true, vaccine = true)
 # save results singlerun
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
-    JEPMC.save_parameters(p, path * "parameters/", "SocialNetworkABM")
-    JEPMC.save_dataframe(d, path * "dataframe/", "SocialNetworkABM")
-    JEPMC.save_plot(plt, path * "plot/", "SocialNetworkABM", "pdf")
+    JEPMC.save_parameters(p, path, "SocialNetworkABM")
+    JEPMC.save_dataframe(d, path, "SocialNetworkABM")
+    JEPMC.save_plot(plt, path, "SocialNetworkABM", "pdf")
 end
 
 function test_abm(path::String)
@@ -87,13 +88,13 @@ end
 function save_results(path::String, properties::Vector, d::DataFrame, plts::Vector)
     i = 1
     for p in properties
-        JEPMC.save_parameters(p, path * "parameters/", "SocialNetworkABM_$i")
+        JEPMC.save_parameters(p, path, "SocialNetworkABM_$i")
         i += 1
     end
-    JEPMC.save_dataframe(d, path * "dataframe/", "SocialNetworkABM")
+    JEPMC.save_dataframe(d, path, "SocialNetworkABM")
     i = 1
     for plt in plts
-        JEPMC.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
+        JEPMC.save_plot(plt, path, "SocialNetworkABM_$i", "pdf")
         i += 1
     end
 end
@@ -209,10 +210,10 @@ function test_paramscan_abm(path::String, properties)
         j = join(r, ", ")
         push!(plts, JEPMC.plot_model(dd; title = j))
     end
-    JEPMC.save_dataframe(data[1], path * "dataframe/", "SocialNetworkABM")
+    JEPMC.save_dataframe(data[1], path, "SocialNetworkABM")
     i = 1
     for plt in plts
-        JEPMC.save_plot(plt, path * "plot/", "SocialNetworkABM_$i", "pdf")
+        JEPMC.save_plot(plt, path, "SocialNetworkABM_$i", "pdf")
         i += 1
     end
     return true
@@ -234,6 +235,35 @@ end
         Dict(:numNodes => Base.collect(5:25:80))) == true
     @test test_paramscan_abm(path * "initialNodeInfected/",
         Dict(:initialNodeInfected => Base.collect(1:3:10))) == true
+end
+
+function test_param_controller(option, title)
+    model = JEPMC.init(; control = true, control_options = option)
+    data = JEPMC.collect!(model)
+    d = reduce(vcat, data)
+    plt = JEPMC.plot_model(data; title = title)
+    save_results(path * "controller_paramscan/", model.properties, d, plt)
+    return true
+end
+
+# save results controller paramscan
+@testset "controller_paramscan" begin
+    path = "results/" * string(today()) * "/controller_paramscan/"
+    isdir(path) == false && mkpath(path)
+
+    for i in [1e-4, 1e-3, 1e-2, 1e-1]
+        for j in 7:7:28
+            control_options = Dict(:tolerance => i,
+                :dt => j,
+                :step => 3.0,
+                :maxiters => 10,
+                :patience => 3,
+                :doplot => false,
+                :loss => missing,
+                :υ_max => missing)
+            @test test_param_controller(control_options, "tolerance $i, dt $j") == true
+        end
+    end
 end
 
 # save results sensitivity analisys

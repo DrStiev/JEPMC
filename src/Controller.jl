@@ -10,6 +10,7 @@ using Zygote, OptimizationOptimJL, OptimizationPolyalgorithms
 using Lux, OptimizationOptimisers, OrdinaryDiffEq
 using SciMLSensitivity, Random, ComponentArrays, Enzyme
 using Statistics: mean
+using DiffEqFlux: swish
 
 # https://enzyme.mit.edu/julia/stable/#Activity-of-temporary-storage
 Enzyme.API.runtimeActivity!(true)
@@ -94,12 +95,14 @@ function controller(initial_condition::Vector,
     losses = Float64[]
     callback = function (p, l; lstep = loss_step)
         push!(losses, l)
+        # Exit early if not improving...
         if length(losses) > 0 && l ≥ losses[end]
             patience_temp += 1
-            ## Exit early if not improving...
             if patience_temp > patience
                 return true
             end
+        else
+            patience_temp = 0
         end
 
         if length(losses) % lstep == 0
@@ -110,7 +113,7 @@ function controller(initial_condition::Vector,
 
     adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
-    optprob = Optimization.OptimizationProblem(optf, ComponentVector(p))
+    optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
     # @debug "Optimizer: ADAM()"
     res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = maxiters)
 

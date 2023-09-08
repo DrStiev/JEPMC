@@ -56,8 +56,8 @@ function init(;
     control_options = Dict(:tolerance => 1e-3,
         :dt => 10.0,
         :step => 3.0,
-        :maxiters => 100,
-        :patience => 10,
+        :maxiters => 10,
+        :patience => 3,
         :doplot => false,
         :loss => missing,
         :υ_max => missing))
