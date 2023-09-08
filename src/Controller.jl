@@ -5,7 +5,7 @@
 ### See file LICENSE in top folder for copyright and licensing
 ### information.
 
-using DifferentialEquations, Optimization
+using DifferentialEquations, Optimization, Plots #, Distributions
 using Zygote, OptimizationOptimJL, OptimizationPolyalgorithms
 using Lux, OptimizationOptimisers, OrdinaryDiffEq
 using SciMLSensitivity, Random, ComponentArrays, Enzyme
@@ -39,9 +39,12 @@ function controller(initial_condition::Vector,
     timeframe::Tuple = (0.0, 30.0),
     maxiters::Int = 100,
     step = 7.0,
-    loss_step::Int = 10,
+    patience::Int = 3,
+    loss_step::Int = Int(maxiters / 10),
     loss_function = missing,
     υ_max = 1.0,
+    doplot::Bool = false,
+    id::Int = missing,
     rng::AbstractRNG = Random.default_rng())
     ann = Lux.Chain(Lux.Dense(6, 64, swish),
         Lux.Dense(64, 64, swish),
@@ -51,7 +54,8 @@ function controller(initial_condition::Vector,
     function dudt_(du, u, p, t, p_true)
         S, E, I, R, D, h = u
         R₀, γ, σ, ω, δ, ξ = p_true
-        η = abs.(ann(u, p, state)[1])[1]
+        η = abs(ann(u, p, state)[1][1])
+        # υ_max = Distributions.cdf(Distributions.Beta(2, 5), I)
         η = η ≤ υ_max ? η : υ_max
         μ = δ / 1111
         du[1] = μ * sum(u[1:5]) - R₀ * γ * (1 - η) * S * I + ω * R - ξ * S - μ * S # dS
@@ -59,7 +63,7 @@ function controller(initial_condition::Vector,
         du[3] = σ * E - γ * I - δ * I - μ * I # dI
         du[4] = (1 - δ) * γ * I - ω * R + ξ * S - μ * R # dR
         du[5] = δ * γ * I # dD
-        du[6] = -(du[3] + du[5]) + (du[4] * (1 - η)) # dH
+        du[6] = -(du[2] + du[3] + du[5]) + ((du[1] + du[4]) * (1 - η) - η) # dH
     end
 
     dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
@@ -78,20 +82,27 @@ function controller(initial_condition::Vector,
     end
 
     function l(x)
-        loss_function === missing ? sum(abs2, x[3, :]) / sum(abs2, x[end, :]) :
-        loss_function
+        loss_function === missing ?
+        (sum(abs2, x[2, :]) + sum(abs2, x[3, :]) + sum(abs2, x[5, :])) /
+        (sum(abs2, x[1, :]) + sum(abs2, x[4, :])) /
+        sum(abs2, x[end, :]) : loss_function
     end
 
     loss(p) = l(predict(p))
 
+    patience_temp = 0
     losses = Float64[]
-    callback = function (p, l; loss_step = loss_step)
+    callback = function (p, l; lstep = loss_step)
         push!(losses, l)
-        ## Exit early if not improving...
-        if length(losses) > 1 && (abs(losses[end - 1] - losses[end])) < eps()
-            return true
+        if length(losses) > 0 && l ≥ losses[end]
+            patience_temp += 1
+            ## Exit early if not improving...
+            if patience_temp > patience
+                return true
+            end
         end
-        if length(losses) % loss_step == 0
+
+        if length(losses) % lstep == 0
             @debug "Current loss after $(length(losses)) iterations: $(losses[end])"
         end
         return false
@@ -99,9 +110,23 @@ function controller(initial_condition::Vector,
 
     adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
-    optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
-    res1 = Optimization.solve(optprob, ADAM(0.01), callback = callback, maxiters = maxiters)
-    return abs.(first(ann(ic, res1.u, state)))[1]
+    optprob = Optimization.OptimizationProblem(optf, ComponentVector(p))
+    @debug "Optimizer: ADAM()"
+    res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = maxiters)
+
+    patience_temp = 0
+    optprob2 = remake(optprob, u0 = res1.u)
+    @debug "Optimizer: BFGS()"
+    res2 = Optimization.solve(optprob2,
+        Optim.BFGS(),
+        callback = callback,
+        maxiters = maxiters)
+
+    @debug "Loss: $(losses), final loss: $(loss(res1.u))"
+    if doplot
+        display(plot(losses, title = "Loss node $(id)"))
+    end
+    return abs((ann(ic, res2.u, state))[1][1])
 end
 
 ### end of file -- Controller.jl

@@ -35,6 +35,7 @@ end
         :dt => 10.0,
         :step => 3.0,
         :maxiters => 100,
+        :patience => 3,
         :loss => missing,
         :υ_max => missing)
 
@@ -56,6 +57,8 @@ function init(;
         :dt => 10.0,
         :step => 3.0,
         :maxiters => 100,
+        :patience => 10,
+        :doplot => false,
         :loss => missing,
         :υ_max => missing))
     rng = Xoshiro(seed)
@@ -199,8 +202,9 @@ end
     happiness!(agent)
 """
 function happiness!(agent)
-    agent.happiness = agent.happiness - (agent.status[3] + agent.status[5]) +
-                      (agent.status[4] * (1 - agent.param[6]) - agent.param[6])
+    agent.happiness = -(agent.status[2] + agent.status[3] + agent.status[5]) +
+                      ((agent.status[1] + agent.status[4]) * (1 - agent.param[6]) -
+                       agent.param[6])
     agent.happiness = agent.happiness < 0.0 ? 0.0 :
                       agent.happiness > 1.0 ? 1.0 : agent.happiness
 end
@@ -232,20 +236,26 @@ function control!(agent,
     dt = 30.0,
     step = 7.0,
     maxiters::Int = 100,
+    patience::Int = 3,
+    doplot::Bool = false,
     loss = missing,
     υ_max = missing)
     if agent.status[3] ≥ tolerance && model.step % dt == 0
         υ_max = υ_max === missing ?
                 Distributions.cdf(Distributions.Beta(2, 5), agent.status[3]) : υ_max
+        @debug "Controller over node: $(agent.id)"
         agent.param[6] = controller(agent.status,
             vcat(agent.param[1:5], agent.param[7]);
             h = agent.happiness,
             timeframe = (0.0, dt),
             step = step,
             maxiters = maxiters,
+            patience = patience,
             loss_step = Int(maxiters / 10),
             loss_function = loss,
             υ_max = υ_max,
+            doplot = doplot,
+            id = agent.id,
             rng = model.rng)
     end
 end

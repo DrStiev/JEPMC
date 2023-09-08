@@ -210,7 +210,7 @@ end
 """
     function that return the sensitivity of the model about certain parameters
     sensitivity_analisys(f, u0, tspan, p; doplot::Bool = true)
-    *IMPORTANT: * this feature is not yet fully generalized. Be careful 
+    *IMPORTANT: * this feature is not yet fully generalized. Be careful
 """
 function sensitivity_analisys(f,
     u0,
