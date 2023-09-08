@@ -13,7 +13,7 @@ using Statistics: mean
 using DiffEqFlux: swish
 
 # https://enzyme.mit.edu/julia/stable/#Activity-of-temporary-storage
-Enzyme.API.runtimeActivity!(true)
+# Enzyme.API.runtimeActivity!(true)
 
 """
     function that implements a NeuralODE controller to learn about the spread of a specific disease and try to mitigate it via non pharmaceutical interventions
@@ -52,7 +52,7 @@ function controller(initial_condition::Vector,
         Lux.Dense(64, 1, tanh))
     p, state = Lux.setup(rng, ann)
 
-    function dudt_(du, u, p, t, p_true)
+    function dudt_(du, u, p, t)#, p_true)
         S, E, I, R, D, h = u
         R₀, γ, σ, ω, δ, ξ = p_true
         η = abs(ann(u, p, state)[1][1])
@@ -67,7 +67,7 @@ function controller(initial_condition::Vector,
         du[6] = -(du[2] + du[3] + du[5]) + (du[1] + (du[4] * (1 - η)) - η) # dH
     end
 
-    dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
+    # dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
     ts = collect(0.0:step:timeframe[end])
     ic = vcat(deepcopy(initial_condition), h)
     prob = ODEProblem(dudt_, ic, timeframe, p)

@@ -1,9 +1,9 @@
-using Distributed
+# using Distributed
 using Aqua, BenchmarkTools
 using Test, Dates, DataFrames, Plots
-addprocs(Int(Sys.CPU_THREADS / 4))
-@everywhere using JEPMC
-# using JEPMC
+# addprocs(Int(Sys.CPU_THREADS / 4))
+# @everywhere using JEPMC
+using JEPMC
 
 # Aqua tests
 
@@ -16,7 +16,7 @@ Aqua.test_piracy(JEPMC)
 
 # Benchmark tests
 
-@everywhere include("../src/JEPMC.jl")
+include("../src/JEPMC.jl")
 model = JEPMC.init()
 @benchmark JEPMC.collect!(model)
 

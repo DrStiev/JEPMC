@@ -15,7 +15,10 @@ macro bind(def, element)
 end
 
 # ╔═╡ 59935147-8e82-4196-aa5b-dc6d0739eccb
-import Pkg; Pkg.add("JEPMC")
+import Pkg; Pkg.activate(".")
+
+# ╔═╡ a0b8b803-67a6-4c92-9a84-0b4355f4c64e
+Pkg.add("JEPMC")
 
 # ╔═╡ 3352e19d-983d-41fa-933c-92f53c5445a9
 using PlutoUI
@@ -133,6 +136,9 @@ You can visualize the results of your simulation using the following command:
 # ╔═╡ 174eaad4-8308-418e-87af-1d2855852de6
 plt = JEPMC.plot_model(data)
 
+# ╔═╡ c09ab9b9-a822-4972-baf6-7f96264a4d30
+display(plt)
+
 # ╔═╡ eba06c21-e306-4ddb-906f-9fee3043d631
 md"""
 This command generates graphical representations of the model's behavior, illustrating the epidemiological trends of each node within the graph.
@@ -183,6 +189,9 @@ data_control = JEPMC.collect!(model_control; n = 300)
 # ╔═╡ ed12a389-a6c5-4837-92b3-8bc09822d2d3
 plt_control = JEPMC.plot_model(data_control)
 
+# ╔═╡ b9c77fad-df27-4ae9-94b6-04c88b7c7a7e
+display(plt_control)
+
 # ╔═╡ 2af22f3f-9c91-4a53-aa74-968c05894ef3
 md"""
 This modification shifts the behavior of the model in time, slowing the spread of the pandemic due to the application of non-pharmaceutical countermeasures. Notably, curves related to the force of infection (FoI) exhibit shallower troughs and lower peaks, signifying the effectiveness of the countermeasures.
@@ -194,6 +203,7 @@ Please note that interpreting the results of the controller's actions may requir
 # ╠═111f56e9-c901-4606-8e5f-26663e6353c2
 # ╠═f3b43cb5-6859-4ada-b516-31416287c3bd
 # ╠═59935147-8e82-4196-aa5b-dc6d0739eccb
+# ╠═a0b8b803-67a6-4c92-9a84-0b4355f4c64e
 # ╠═3352e19d-983d-41fa-933c-92f53c5445a9
 # ╠═a31858a1-1ccd-45f0-ac36-12912fa74fa8
 # ╠═4f24027b-6571-46d3-bd74-a2feb9e2b264
@@ -209,6 +219,7 @@ Please note that interpreting the results of the controller's actions may requir
 # ╠═f7710138-b78d-4bf9-9cce-5953e73a8183
 # ╠═874b14a3-aeae-4185-b1af-e9d0c2eb91dd
 # ╠═174eaad4-8308-418e-87af-1d2855852de6
+# ╠═c09ab9b9-a822-4972-baf6-7f96264a4d30
 # ╠═eba06c21-e306-4ddb-906f-9fee3043d631
 # ╠═4f3b494e-7dad-47d7-8716-638307c69669
 # ╠═2a16a68f-ecf6-469e-be4f-4d83adeefed8
@@ -216,4 +227,5 @@ Please note that interpreting the results of the controller's actions may requir
 # ╠═399b8e88-9203-4db6-b71b-d22a205e5624
 # ╠═332c69ff-249c-43b6-95b0-85e508f002c4
 # ╠═ed12a389-a6c5-4837-92b3-8bc09822d2d3
+# ╠═b9c77fad-df27-4ae9-94b6-04c88b7c7a7e
 # ╠═2af22f3f-9c91-4a53-aa74-968c05894ef3
