@@ -36,15 +36,15 @@ end
         :step => 3.0,
         :maxiters => 100,
         :patience => 3,
-        :loss => missing,
-        :υ_max => missing)
+        :doplot => false,
+        :loss => missing)
 
     # Returns
     - model::ABM -> initialized ABM
 
 """
 function init(;
-    numNodes::Int = 50,
+    numNodes::Int = 30,
     edgesCoverage::Symbol = :high,
     initialNodeInfected::Int = 1,
     param::Vector = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
@@ -59,8 +59,7 @@ function init(;
         :maxiters => 100,
         :patience => 3,
         :doplot => false,
-        :loss => missing,
-        :υ_max => missing))
+        :loss => missing))
     rng = Xoshiro(seed)
     population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
     graph = connected_graph(numNodes, edgesCoverage; rng = rng)
@@ -203,8 +202,8 @@ end
 """
 function happiness!(agent)
     agent.happiness = -(agent.status[2] + agent.status[3] + agent.status[5]) +
-                      (agent.status[1] + (agent.status[4] * (1 - agent.param[6])) -
-                       agent.param[6])
+                      (agent.status[1] + agent.status[4]) * (1 - agent.param[6]) -
+                      agent.param[6]
     agent.happiness = agent.happiness < 0.0 ? 0.0 :
                       agent.happiness > 1.0 ? 1.0 : agent.happiness
 end
@@ -233,16 +232,13 @@ end
 function control!(agent,
     model::ABM;
     tolerance = 1e-3,
-    dt = 30.0,
-    step = 7.0,
-    maxiters::Int = 100,
+    dt = 14.0,
+    step = 5.0,
+    maxiters::Int = 30,
     patience::Int = 3,
     doplot::Bool = false,
-    loss = missing,
-    υ_max = missing)
+    loss = missing)
     if agent.status[3] ≥ tolerance && model.step % dt == 0
-        υ_max = υ_max === missing ?
-                Distributions.cdf(Distributions.Beta(2, 5), agent.status[3]) : υ_max
         agent.param[6] = controller(agent.status,
             vcat(agent.param[1:5], agent.param[7]);
             h = agent.happiness,
@@ -252,7 +248,6 @@ function control!(agent,
             patience = patience,
             loss_step = Int(maxiters / 10),
             loss_function = loss,
-            υ_max = υ_max,
             doplot = doplot,
             id = agent.id,
             rng = model.rng)

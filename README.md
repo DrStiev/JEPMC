@@ -107,12 +107,11 @@ control_options = Dict(
     :dt => 10, # Time step for controller countermeasure updates (default: 10)
     :step => 3, # Integration step for the ODE solver (default: 3)
     :maxiters => 100, # Maximum number of iterations for the neural network training loop (default: 100)
-    :loss => missing, # Custom loss function for the neural network (default: missing)
-    :υ_max => missing # Custom attention threshold used as an upper limit for controller countermeasures (default: missing)
+    :loss => missing # Custom loss function for the neural network (default: missing)
 )
 ```
 
-The `tolerance` parameter determines when the controller becomes alert to even small changes in population health. The `dt` parameter simulates the time between countermeasures and their research and validation. You can specify a custom `loss` function for the neural network training, although it requires expertise in the NN structure. The `υ_max` function serves as an alert meter for the population, usually based on a Cumulative Distribution Function (CDF) of a Beta distribution.
+The `tolerance` parameter determines when the controller becomes alert to even small changes in population health. The `dt` parameter simulates the time between countermeasures and their research and validation. You can specify a custom `loss` function for the neural network training, although it requires expertise in the NN structure. 
 
 Incorporating the controller into your model can be done as follows:
 
