@@ -5,15 +5,12 @@
 ### See file LICENSE in top folder for copyright and licensing
 ### information.
 
-using DifferentialEquations, Optimization, Plots #, Distributions
+using DifferentialEquations, Optimization, Plots
 using Zygote, OptimizationOptimJL, OptimizationPolyalgorithms
 using Lux, OptimizationOptimisers, OrdinaryDiffEq
 using SciMLSensitivity, Random, ComponentArrays, Enzyme
 using Statistics: mean
 using DiffEqFlux: swish
-
-# https://enzyme.mit.edu/julia/stable/#Activity-of-temporary-storage
-# Enzyme.API.runtimeActivity!(true)
 
 """
     function that implements a NeuralODE controller to learn about the spread of a specific disease and try to mitigate it via non pharmaceutical interventions
@@ -56,7 +53,6 @@ function controller(initial_condition::Vector,
         S, E, I, R, D, h = u
         R₀, γ, σ, ω, δ, ξ = p_true
         η = abs(ann(u, p, state)[1][1])
-        # υ_max = Distributions.cdf(Distributions.Beta(2, 5), I)
         η = η ≤ υ_max ? η : υ_max
         μ = δ / 1111
         du[1] = μ * sum(u[1:5]) - R₀ * γ * (1 - η) * S * I + ω * R - ξ * S - μ * S # dS
@@ -67,7 +63,6 @@ function controller(initial_condition::Vector,
         du[6] = -(du[2] + du[3] + du[5]) + (du[1] + (du[4] * (1 - η)) - η) # dH
     end
 
-    # dudt_(du, u, p, t) = dudt_(du, u, p, t, p_true)
     ts = collect(0.0:step:timeframe[end])
     ic = vcat(deepcopy(initial_condition), h)
     prob = ODEProblem(dudt_, ic, timeframe, p)
@@ -117,19 +112,18 @@ function controller(initial_condition::Vector,
     # @debug "Optimizer: ADAM()"
     res1 = Optimization.solve(optprob, ADAM(), callback = callback, maxiters = maxiters)
 
-    patience_temp = 0
-    optprob2 = remake(optprob, u0 = res1.u)
-    # @debug "Optimizer: BFGS()"
-    res2 = Optimization.solve(optprob2,
-        Optim.BFGS(),
-        callback = callback,
-        maxiters = maxiters)
+    # good to have but too much memory consuming
+    # patience_temp = 0
+    # optprob2 = remake(optprob, u0 = res1.u)
+    # # @debug "Optimizer: LBFGS()"
+    # res2 = Optimization.solve(optprob2,
+    #     Optim.LBFGS(),
+    #     callback = callback,
+    #     maxiters = maxiters)
 
     # @debug "Node: $(id), losses: $(losses), final loss: $(loss(res1.u))"
-    if doplot
-        display(plot(losses, title = "Loss node $(id)"))
-    end
-    return abs((ann(ic, res2.u, state))[1][1])
+    doplot ? display(plot(losses, title = "Loss node $(id)")) : nothing
+    return abs((ann(ic, res1.u, state))[1][1])
 end
 
 ### end of file -- Controller.jl
