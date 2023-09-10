@@ -95,7 +95,7 @@ function init(;
             0,
         ] :
                  [1.0, 0, 0, 0, 0]
-        happiness = rand(model.rng)
+        happiness = 1 # rand(model.rng)
         parameters = vcat(param, [0.0, 0.0])
         add_agent!(model, (0, 0), population[node], status, parameters, happiness)
     end
@@ -201,9 +201,9 @@ end
     happiness!(agent)
 """
 function happiness!(agent)
-    agent.happiness = -(agent.status[2] + agent.status[3] + agent.status[5]) +
-                      (agent.status[1] + agent.status[4]) * (1 - agent.param[6]) -
-                      agent.param[6]
+    agent.happiness = (1 - agent.param[6]) * (agent.status[1] + agent.status[4]) -
+                      Distributions.cdf(Distributions.Beta(2, 5),
+        agent.status[2] + agent.status[3] + agent.status[5])
     agent.happiness = agent.happiness < 0.0 ? 0.0 :
                       agent.happiness > 1.0 ? 1.0 : agent.happiness
 end
