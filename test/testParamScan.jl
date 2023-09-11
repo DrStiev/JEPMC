@@ -1,6 +1,6 @@
 using Test, Dates, DataFrames, Plots, Distributed
 addprocs(Int(Sys.CPU_THREADS / 4))
-@everywhere include("../src/SocialNetworkABM.jl")
+@everywhere include("../src/JEPMC.jl")
 
 function complex_filter(x, y, z, w, k, j, h)
     x == val[1] &&

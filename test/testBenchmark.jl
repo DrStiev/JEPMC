@@ -1,5 +1,5 @@
 using BenchmarkTools
-include("../src/SocialNetworkABM.jl")
+include("../src/JEPMC.jl")
 
 # Benchmark tests
 model = JEPMC.init()

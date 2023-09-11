@@ -1,5 +1,5 @@
 using Test, Dates, DataFrames, Plots
-include("../src/SocialNetworkABM.jl")
+include("../src/JEPMC.jl")
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
     JEPMC.save_parameters(p, path, "SocialNetworkABM")

@@ -1,5 +1,5 @@
 using Test, Dates, Plots
-include("../src/SocialNetworkABM.jl")
+include("../src/JEPMC.jl")
 
 function test_gif_animation_no_control(path::String)
     model = JEPMC.init(; numNodes = 20)

@@ -1,6 +1,6 @@
 using Test, Dates, DataFrames, Plots, Distributed
 addprocs(Int(Sys.CPU_THREADS / 4))
-@everywhere include("../src/SocialNetworkABM.jl")
+@everywhere include("../src/JEPMC.jl")
 
 function save_results(path::String, properties::Vector, d::DataFrame, plts::Vector)
     i = 1
@@ -17,7 +17,7 @@ function save_results(path::String, properties::Vector, d::DataFrame, plts::Vect
 end
 
 function test_ensemble_abm(path::String)
-    models = [JEPMC.init(; seed = Int64(abs(i))) for i in rand(Int8, 5)]
+    models = [JEPMC.init(; seed = abs(i)) for i in rand(Int64, 5)]
     properties = [model.properties for model in models]
     data = JEPMC.ensemble_collect!(models)
     d = reduce(vcat, data)
@@ -28,7 +28,7 @@ function test_ensemble_abm(path::String)
 end
 
 function test_ensemble_abm_controller(path::String)
-    models = [JEPMC.init(; control = true, seed = Int64(abs(i))) for i in rand(Int8, 5)]
+    models = [JEPMC.init(; control = true, seed = abs(i)) for i in rand(Int64, 5)]
     properties = [model.properties for model in models]
     data = JEPMC.ensemble_collect!(models)
     d = reduce(vcat, data)
@@ -39,7 +39,7 @@ function test_ensemble_abm_controller(path::String)
 end
 
 function test_ensemble_abm_vaccine(path::String)
-    models = [JEPMC.init(; vaccine = true, seed = Int64(abs(i))) for i in rand(Int8, 5)]
+    models = [JEPMC.init(; vaccine = true, seed = abs(i)) for i in rand(Int64, 5)]
     properties = [model.properties for model in models]
     data = JEPMC.ensemble_collect!(models)
     d = reduce(vcat, data)
@@ -50,8 +50,8 @@ function test_ensemble_abm_vaccine(path::String)
 end
 
 function test_ensemble_abm_all(path::String)
-    models = [JEPMC.init(; control = true, vaccine = true, seed = Int64(abs(i))) for
-              i in rand(Int8, 5)]
+    models = [JEPMC.init(; control = true, vaccine = true, seed = abs(i)) for
+              i in rand(Int64, 5)]
     properties = [model.properties for model in models]
     data = JEPMC.ensemble_collect!(models)
     d = reduce(vcat, data)

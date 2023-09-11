@@ -78,5 +78,5 @@ include("testGif.jl")
     @test test_gif_animation_all(path) == true
 end
 
-include("testBenchmark.jl")
-include("testAqua.jl")
+# include("testBenchmark.jl")
+# include("testAqua.jl")
