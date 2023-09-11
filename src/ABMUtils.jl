@@ -163,7 +163,7 @@ function get_cumulative_plot(data::Vector{DataFrame},
     errorline!(1:n, y[:, :, 4], errorstyle = :plume, label = "R")
     errorline!(1:n, y[:, :, 5], errorstyle = :plume, label = "D")
 
-    states = 2
+    states = 3
     y = fill(NaN, n, nodes, states)
     for i in 1:states
         res = []
@@ -175,17 +175,23 @@ function get_cumulative_plot(data::Vector{DataFrame},
     end
     p2 = errorline(1:n, y[:, :, 1], errorstyle = errorstyle, label = "happiness")
     errorline!(1:n, y[:, :, 2], errorstyle = errorstyle, label = "countermeasures")
+    # errorline!(1:n, y[:, :, 3], errorstyle = errorstyle, label = "vaccine efficacy")
     vax = []
     for d in data
         push!(vax, findfirst(d[:, 6] .!= 0.0))
     end
-    vax = filter(x -> !isnothing(x), vax)
+    vax = sort(unique(filter(x -> !isnothing(x), vax)))
     if !isempty(vax)
-        v = minimum(vax)
-        plot!(p2, [v - 0.01, v + 0.01], [0.0, 1.0], lw = 3, color = :green, label = nothing)
-        annotate!([(v,
-            1.0,
-            text("Vaccine \nFound", 6, :center, :top, :black, "Helvetica"))])
+        label = "vaccine"
+        for v in vax
+            plot!(p2,
+                [v - 0.01, v + 0.01],
+                [0.0, 1.0],
+                lw = 3,
+                color = :green,
+                label = label)
+            label = nothing
+        end
     end
 
     states = 1

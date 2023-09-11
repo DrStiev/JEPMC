@@ -26,7 +26,9 @@ include("testParamScan.jl")
     properties = Dict(:maxTravelingRate => Base.collect(0.001:0.003:0.01),
         :edgesCoverage => [:high, :medium, :low],
         :numNodes => Base.collect(5:25:80),
-        :initialNodeInfected => Base.collect(1:3:10))
+        :initialNodeInfected => Base.collect(1:3:10),
+        :dt => Base.collect(7:7:28),
+        :tolerance => [1e-4, 1e-3, 1e-2, 1e-1])
     path = "results/" * string(today()) * "/paramscanrun/"
     isdir(path) == false && mkpath(path)
 
@@ -38,25 +40,6 @@ include("testParamScan.jl")
         Dict(:numNodes => Base.collect(5:25:80))) == true
     @test test_paramscan_abm(path * "initialNodeInfected/",
         Dict(:initialNodeInfected => Base.collect(1:3:10))) == true
-end
-
-@testset "controller_paramscan" begin
-    path = "results/" * string(today()) * "/controller_paramscan/"
-    isdir(path) == false && mkpath(path)
-
-    for i in [1e-4, 1e-3, 1e-2, 1e-1]
-        for j in 7:7:28
-            control_options = Dict(:tolerance => i,
-                :dt => j,
-                :step => 3.0,
-                :maxiters => 10,
-                :patience => 3,
-                :doplot => false,
-                :loss => missing,
-                :υ_max => missing)
-            @test test_param_controller(control_options, "tolerance $i, dt $j") == true
-        end
-    end
 end
 
 include("testSensitivity.jl")

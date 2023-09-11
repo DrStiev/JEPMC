@@ -53,10 +53,9 @@ With these parameters defined, you can create your initial model as follows:
 
 ```julia
 model = JEPMC.init(;
-    numNodes = 8,
+    numNodes = 4,
     avgPopulation = 1000,
-    edgesCoverage = :high,
-    seed = 42
+    edgesCoverage = :high
 )
 ```
 
@@ -107,7 +106,7 @@ control_options = Dict(
     :dt => 10, # Time step for controller countermeasure updates (default: 10)
     :step => 3, # Integration step for the ODE solver (default: 3)
     :maxiters => 100, # Maximum number of iterations for the neural network training loop (default: 100)
-    :loss => missing # Custom loss function for the neural network (default: missing)
+	:patience => 3, # Maximum number of iterations without improvement
 )
 ```
 
@@ -117,11 +116,13 @@ Incorporating the controller into your model can be done as follows:
 
 ```julia
 model = JEPMC.init(; 
-    numNodes = 8,
+    numNodes = 4,
     edgesCoverage = :high, 
     avgPopulation = 1000,
     control = true, 
-    control_options = control_options
+    dt = 14,
+    maxiters = 100,
+    patience = 3
 )
 data = JEPMC.collect!(model; n = 300)
 plt = JEPMC.plot_model(data)
@@ -132,4 +133,21 @@ plt = JEPMC.plot_model(data)
 This modification shifts the behavior of the model in time, slowing the spread of the pandemic due to the application of non-pharmaceutical countermeasures. Notably, curves related to the force of infection (FoI) exhibit shallower troughs and lower peaks, signifying the effectiveness of the countermeasures.
 
 Please note that interpreting the results of the controller's actions may require human intervention, as the learned countermeasures are expressed as cumulative values rather than specific instructions (e.g., mask mandates or lockdowns).
+
+## Introducing Pharmaceutical Control Simulation
+
+We are introducing a mechanism that simulates the process of researching a vaccine, similar to a random search. The goal is to propagate this simulation across all Points of Interest (PoI) within the model. This simulation represents the sharing of vaccine doses once they are discovered. It's important to note that this method relies on several assumptions, but it effectively highlights the significance of vaccines and pharmaceutical control measures in general.
+
+```julia
+model_vaccine = JEPMC.init(;
+    numNodes = 4,
+    edgesCoverage = :high,
+    avgPopulation = 1000,
+    vaccine = true
+)
+data_vaccine = JEPMC.collect!(model_vaccine; n = 300)
+plt_vaccine = JEPMC.plot_model(data_vaccine, title="PHARMACEUTICAL CONTROL")
+```
+
+![Pharmaceutical Countermeasures Plot](https://github.com/DrStiev/JEPMC/blob/main/readmeimg/vaccinePlot.png?raw=true)
 

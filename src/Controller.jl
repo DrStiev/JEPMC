@@ -5,12 +5,13 @@
 ### See file LICENSE in top folder for copyright and licensing
 ### information.
 
-using DifferentialEquations, Optimization, Plots
+using DifferentialEquations, Optimization, CUDA
 using Zygote, OptimizationOptimJL, OptimizationPolyalgorithms
 using Lux, OptimizationOptimisers, OrdinaryDiffEq
 using SciMLSensitivity, Random, ComponentArrays, Enzyme
-using Statistics: mean
+using Plots
 using DiffEqFlux: swish
+using Statistics: mean
 
 """
     function that implements a NeuralODE controller to learn about the spread of a specific disease and try to mitigate it via non pharmaceutical interventions
@@ -24,32 +25,28 @@ using DiffEqFlux: swish
     - maxiters::Int: maximum number of iterations to be performed by the learning loop of the controller
     - step::Float64: time step of the integration of the ODE system
     - loss_step::Int: number of step after which the callback function print the actual loss value of the loss function
-    - loss_function::Function: loss function to be minimized
-    - υ_max::Float64: alert threshold. Additional upper limit for the control measurements
     - rng::AbstractRNG: random number generator
 
     # Returns
     - cumulative value for the countermeasures
 """
 function controller(initial_condition::Vector,
-    p_true::Vector = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01];
+    p_true::Vector = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01, 0.0];
     h = rand(),
     timeframe::Tuple = (0.0, 14.0),
-    maxiters::Int = 30,
+    maxiters = 30,
     step = 5.0,
-    patience::Int = 3,
-    loss_step::Int = Int(maxiters / 10),
-    loss_function = missing,
+    patience = 3,
+    loss_step = Int(maxiters / 10),
     doplot::Bool = false,
-    id::Int = missing,
+    verbose::Bool = false,
+    id = missing,
     rng::AbstractRNG = Random.default_rng())
-    ann = Lux.Chain(Lux.Dense(6, 64, swish),
-        Lux.Dense(64, 64, swish),
-        Lux.Dense(64, 1, tanh))
+    ann = Lux.Chain(Lux.Dense(5, 64, swish), Lux.Dense(64, 1))
     p, state = Lux.setup(rng, ann)
 
     function dudt_(du, u, p, t)
-        S, E, I, R, D, h = u
+        S, E, I, R, D = u
         R₀, γ, σ, ω, δ, ξ = p_true
         η = abs(ann(u, p, state)[1][1])
         μ = δ / 1111
@@ -58,37 +55,32 @@ function controller(initial_condition::Vector,
         du[3] = σ * E - γ * I - δ * I - μ * I # dI
         du[4] = (1 - δ) * γ * I - ω * R + ξ * S - μ * R # dR
         du[5] = δ * γ * I # dD
-        du[6] = (1 - η) * (du[1] + du[4]) - (du[2] + du[3] + du[5]) # dH
     end
 
     ts = collect(0.0:step:timeframe[end])
-    ic = vcat(deepcopy(initial_condition), h)
-    prob = ODEProblem(dudt_, ic, timeframe, p)
+    prob = ODEProblem(dudt_, initial_condition, timeframe, p)
 
     function predict(p)
-        _prob = remake(prob, u0 = ic, tspan = timeframe, p = p)
+        _prob = remake(prob, u0 = initial_condition, tspan = timeframe, p = p)
         Array(solve(_prob,
             Tsit5(),
             saveat = ts,
             abstol = 1e-10,
             reltol = 1e-10,
-            verbose = false))
+            verbose = false)) # suppress unwanted warning. Always active
     end
 
-    function l(x)
-        loss_function === missing ?
-        (sum(abs2, x[2, :]) + sum(abs2, x[3, :]) + sum(abs2, x[5, :])) /
-        sum(abs2, x[end, :]) : loss_function
+    function loss(p)
+        pred = predict(p)
+        (sum(abs2, pred[3, :]) + sum(abs2, pred[5, :]) + sum(abs2, pred[2, :])) / h
     end
-
-    loss(p) = l(predict(p))
 
     patience_temp = 0
     losses = Float64[]
     callback = function (p, l; lstep = loss_step)
         push!(losses, l)
         # Exit early if not improving...
-        if length(losses) > 1 && l ≥ losses[end - 1]
+        if length(losses) > 1 && (abs(l - losses[end - 1]) < 1e-4 || isinf(l))
             patience_temp += 1
             if patience_temp > patience
                 return true
@@ -96,31 +88,34 @@ function controller(initial_condition::Vector,
         else
             patience_temp = 0
         end
-
-        if length(losses) % lstep == 0
-            @debug "Current loss after $(length(losses)) iterations: $(losses[end])"
-        end
         return false
     end
 
-    iter = Int(maxiters / 5)
+    iter = 0 # Int(maxiters / 5)
     adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
     optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
     res1 = Optimization.solve(optprob,
-        ADAM(),
+        ADAM(0.001),
         callback = callback,
         maxiters = maxiters - iter)
 
     # good to have but very memory consuming
-    optprob2 = remake(optprob, u0 = res1.u)
-    res2 = Optimization.solve(optprob2,
-        Optim.LBFGS(),
-        callback = callback,
-        maxiters = iter)
+    # optprob2 = remake(optprob, u0 = res1.u)
+    # res2 = Optimization.solve(optprob2,
+    #     Optim.LBFGS(),
+    #     callback = callback,
+    #     maxiters = iter)
 
+    res = abs((ann(initial_condition, res1.u, state))[1][1])
+    # res = abs((ann(initial_condition, res2.u, state))[1][1])
+    # sometimes the value skyrockets so it needs to be capped
+    res -= floor(res)
     doplot ? display(plot(losses, title = "Loss node $(id)")) : nothing
-    return abs((ann(ic, res2.u, state))[1][1])
+    verbose ?
+    println("Current loss after $(length(losses)) iterations: $(losses[end]) \nCountermeasure value for agent $(id) is $(res)") :
+    nothing
+    return res
 end
 
 ### end of file -- Controller.jl

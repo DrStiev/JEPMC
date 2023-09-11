@@ -36,34 +36,41 @@ end
         :step => 3.0,
         :maxiters => 100,
         :patience => 3,
-        :doplot => false,
-        :loss => missing)
+        :doplot => false)
 
     # Returns
     - model::ABM -> initialized ABM
 
 """
 function init(;
-    numNodes::Int = 30,
-    edgesCoverage::Symbol = :high,
-    initialNodeInfected::Int = 1,
+    numNodes = 50,
+    edgesCoverage = :high,
+    initialNodeInfected = 1,
     param::Vector = [3.54, 1 / 14, 1 / 5, 1 / 280, 0.01],
-    avgPopulation::Int = 10_000,
+    avgPopulation = 10_000,
     maxTravelingRate = 0.001,
     control::Bool = false,
     vaccine::Bool = false,
-    seed::Int = 1234,
-    control_options = Dict(:tolerance => 1e-3,
-        :dt => 10.0,
-        :step => 3.0,
-        :maxiters => 100,
-        :patience => 3,
-        :doplot => false,
-        :loss => missing))
+    seed = 1234,
+    tolerance = 1e-3,
+    dt = 10.0,
+    step = 3.0,
+    maxiters = 100,
+    patience = 3,
+    doplot = false,
+    verbose = false)
     rng = Xoshiro(seed)
     population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
     graph = connected_graph(numNodes, edgesCoverage; rng = rng)
     migrationMatrix = get_migration_matrix(graph, population, maxTravelingRate)
+
+    control_options = @dict(tolerance,
+        dt,
+        step,
+        maxiters,
+        patience,
+        doplot,
+        verbose)
 
     properties = @dict(numNodes,
         param,
@@ -95,7 +102,7 @@ function init(;
             0,
         ] :
                  [1.0, 0, 0, 0, 0]
-        happiness = 1 # rand(model.rng)
+        happiness = 1
         parameters = vcat(param, [0.0, 0.0])
         add_agent!(model, (0, 0), population[node], status, parameters, happiness)
     end
@@ -115,8 +122,7 @@ end
     model_step!(model)
 """
 function model_step!(model::ABM)
-    agents = [agent for agent in allagents(model)]
-    for agent in agents
+    for agent in allagents(model)
         # notify the integrator that the condition may be altered
         model.integrator[agent.id].u = agent.status
         model.integrator[agent.id].p = agent.param
@@ -141,14 +147,14 @@ function vaccine!(model::ABM)
         agent = random_agent(model)
         agent.param[7] = vaccine
     end
-    for agent in allagents(model)
-        if agent.param[7] > 0.0
-            network = model.migrationMatrix[agent.id, :]
-            tidxs, tweights = findnz(network)
-            id = sample(model.rng, tidxs, Weights(tweights))
-            objective = filter(x -> x.id == id, [a for a in allagents(model)])[1]
-            objective.param[7] = agent.param[7]
-        end
+end
+
+function spread_vaccine!(agent, model::ABM)
+    network = model.migrationMatrix[agent.id, :]
+    tidxs, tweights = findnz(network)
+    for i in 1:length(tidxs)
+        objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
+        objective.param[7] = agent.param[7]
     end
 end
 
@@ -160,6 +166,7 @@ function agent_step!(agent, model::ABM)
     migrate!(agent, model)
     happiness!(agent)
     model.control ? control!(agent, model; model.control_options...) : nothing
+    agent.param[7] > 0.0 ? spread_vaccine!(agent, model) : nothing
 end
 
 """
@@ -234,10 +241,10 @@ function control!(agent,
     tolerance = 1e-3,
     dt = 14.0,
     step = 5.0,
-    maxiters::Int = 30,
-    patience::Int = 3,
+    maxiters = 30,
+    patience = 3,
     doplot::Bool = false,
-    loss = missing)
+    verbose::Bool = false)
     if agent.status[3] ≥ tolerance && model.step % dt == 0
         agent.param[6] = controller(agent.status,
             vcat(agent.param[1:5], agent.param[7]);
@@ -247,8 +254,8 @@ function control!(agent,
             maxiters = maxiters,
             patience = patience,
             loss_step = Int(maxiters / 10),
-            loss_function = loss,
             doplot = doplot,
+            verbose = verbose,
             id = agent.id,
             rng = model.rng)
     end

@@ -86,7 +86,7 @@ With these parameters defined, you can create your initial model as follows:
 """
 
 # ╔═╡ f77570f7-6a41-456b-8b6d-c194943fb83d
-@bind numNodes Slider(8:8:80, default=8)
+@bind numNodes Slider(2:2:20, default=4)
 
 # ╔═╡ 2499c056-9b5a-4fd8-b7b1-6cf3b9c576fa
 @bind avgPopulation Slider(1000:1000:10_000, default=1000)
@@ -98,8 +98,7 @@ With these parameters defined, you can create your initial model as follows:
 model = JEPMC.init(;
     numNodes = numNodes,
     avgPopulation = avgPopulation,
-    edgesCoverage = edgesCoverage,
-    seed = 42
+    edgesCoverage = edgesCoverage
 )
 
 # ╔═╡ de089f9c-4508-4e9c-8e9b-c6c3b13e706a
@@ -134,7 +133,7 @@ You can visualize the results of your simulation using the following command:
 """
 
 # ╔═╡ 174eaad4-8308-418e-87af-1d2855852de6
-plt = JEPMC.plot_model(data)
+plt = JEPMC.plot_model(data, title="NO CONTROL")
 
 # ╔═╡ c09ab9b9-a822-4972-baf6-7f96264a4d30
 display(plt)
@@ -160,8 +159,9 @@ control_options = Dict(
     :dt => 10, # Time step for controller countermeasure updates (default: 10)
     :step => 3, # Integration step for the ODE solver (default: 3)
     :maxiters => 100, # Maximum number of iterations for the neural network training loop (default: 100)
-    :loss => missing, # Custom loss function for the neural network (default: missing)
-    :υ_max => missing # Custom attention threshold used as an upper limit for controller countermeasures (default: missing)
+	:patience => 3, # Maximum number of iterations without improvement
+	:doplot => false,
+	:verbose => false
 )
 
 # ╔═╡ 2a16a68f-ecf6-469e-be4f-4d83adeefed8
@@ -174,23 +174,38 @@ Incorporating the controller into your model can be done as follows:
 # ╔═╡ b87f0638-a6d9-481e-87cf-e4f10a361a54
 @bind control Select([true, false])
 
+# ╔═╡ 038eccd7-5539-4878-8fe8-91b0690cfa1d
+@bind dt Slider(7:7:28, default=7)
+
+# ╔═╡ 1bb1cbeb-fed7-4219-be3b-9dc1b0d82478
+@bind maxiters Slider(10:10:500, default=100)
+
+# ╔═╡ 75fa6c10-5753-40d7-b1a6-ec44b046f90f
+@bind patience Slider(1:1:10, default=3)
+
 # ╔═╡ 399b8e88-9203-4db6-b71b-d22a205e5624
 model_control = JEPMC.init(;
     numNodes = numNodes,
     edgesCoverage = edgesCoverage,
     avgPopulation = avgPopulation,
     control = control,
-    control_options = control_options
+    dt = dt,
+    maxiters = maxiters,
+    patience = patience
 )
 
 # ╔═╡ 332c69ff-249c-43b6-95b0-85e508f002c4
 data_control = JEPMC.collect!(model_control; n = 300)
 
 # ╔═╡ ed12a389-a6c5-4837-92b3-8bc09822d2d3
-plt_control = JEPMC.plot_model(data_control)
+#=╠═╡
+plt_control = JEPMC.plot_model(data_control, title="NON-PHARMACEUTICAL CONTROL")
+  ╠═╡ =#
 
 # ╔═╡ b9c77fad-df27-4ae9-94b6-04c88b7c7a7e
+#=╠═╡
 display(plt_control)
+  ╠═╡ =#
 
 # ╔═╡ 2af22f3f-9c91-4a53-aa74-968c05894ef3
 md"""
@@ -198,6 +213,34 @@ This modification shifts the behavior of the model in time, slowing the spread o
 
 Please note that interpreting the results of the controller's actions may require human intervention, as the learned countermeasures are expressed as cumulative values rather than specific instructions (e.g., mask mandates or lockdowns).
 """
+
+# ╔═╡ 44a136b9-676d-45d6-98b1-fbc285e06a22
+md"""
+## Introducing Pharmaceutical Control Simulation
+
+We are introducing a mechanism that simulates the process of researching a vaccine, similar to a random search. The goal is to propagate this simulation across all Points of Interest (PoI) within the model. This simulation represents the sharing of vaccine doses once they are discovered. It's important to note that this method relies on several assumptions, but it effectively highlights the significance of vaccines and pharmaceutical control measures in general.
+"""
+
+# ╔═╡ 62b1c7ae-e050-475e-96c4-a2369babc1ae
+@bind vaccine Select([true, false])
+
+# ╔═╡ ad964971-cd1a-4f34-bb86-16450610baa3
+model_vaccine = JEPMC.init(;
+    numNodes = numNodes,
+    edgesCoverage = edgesCoverage,
+    avgPopulation = avgPopulation,
+    vaccine = vaccine,
+	seed = 42
+)
+
+# ╔═╡ 23c6a57c-bd20-4298-b3bf-21b8a8523ab7
+data_vaccine = JEPMC.collect!(model_vaccine; n = 300)
+
+# ╔═╡ 455dc7ed-a4bc-4f96-a624-299c5582a293
+plt_vaccine = JEPMC.plot_model(data_vaccine, title="PHARMACEUTICAL CONTROL")
+
+# ╔═╡ 07bc09fa-8028-4c12-b754-89f04d715527
+display(plt_vaccine)
 
 # ╔═╡ Cell order:
 # ╠═111f56e9-c901-4606-8e5f-26663e6353c2
@@ -224,8 +267,17 @@ Please note that interpreting the results of the controller's actions may requir
 # ╠═4f3b494e-7dad-47d7-8716-638307c69669
 # ╠═2a16a68f-ecf6-469e-be4f-4d83adeefed8
 # ╠═b87f0638-a6d9-481e-87cf-e4f10a361a54
+# ╠═038eccd7-5539-4878-8fe8-91b0690cfa1d
+# ╠═1bb1cbeb-fed7-4219-be3b-9dc1b0d82478
+# ╠═75fa6c10-5753-40d7-b1a6-ec44b046f90f
 # ╠═399b8e88-9203-4db6-b71b-d22a205e5624
 # ╠═332c69ff-249c-43b6-95b0-85e508f002c4
 # ╠═ed12a389-a6c5-4837-92b3-8bc09822d2d3
 # ╠═b9c77fad-df27-4ae9-94b6-04c88b7c7a7e
 # ╠═2af22f3f-9c91-4a53-aa74-968c05894ef3
+# ╠═44a136b9-676d-45d6-98b1-fbc285e06a22
+# ╠═62b1c7ae-e050-475e-96c4-a2369babc1ae
+# ╠═ad964971-cd1a-4f34-bb86-16450610baa3
+# ╠═23c6a57c-bd20-4298-b3bf-21b8a8523ab7
+# ╠═455dc7ed-a4bc-4f96-a624-299c5582a293
+# ╠═07bc09fa-8028-4c12-b754-89f04d715527
