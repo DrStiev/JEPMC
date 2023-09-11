@@ -198,9 +198,7 @@ model_control = JEPMC.init(;
 data_control = JEPMC.collect!(model_control; n = 300)
 
 # ╔═╡ ed12a389-a6c5-4837-92b3-8bc09822d2d3
-#=╠═╡
 plt_control = JEPMC.plot_model(data_control, title="NON-PHARMACEUTICAL CONTROL")
-  ╠═╡ =#
 
 # ╔═╡ b9c77fad-df27-4ae9-94b6-04c88b7c7a7e
 #=╠═╡
@@ -230,7 +228,7 @@ model_vaccine = JEPMC.init(;
     edgesCoverage = edgesCoverage,
     avgPopulation = avgPopulation,
     vaccine = vaccine,
-	seed = 42
+	seed = 1
 )
 
 # ╔═╡ 23c6a57c-bd20-4298-b3bf-21b8a8523ab7
