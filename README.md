@@ -110,7 +110,7 @@ control_options = Dict(
 )
 ```
 
-The `tolerance` parameter determines when the controller becomes alert to even small changes in population health. The `dt` parameter simulates the time between countermeasures and their research and validation. You can specify a custom `loss` function for the neural network training, although it requires expertise in the NN structure. 
+The `tolerance` parameter determines when the controller becomes alert to even small changes in population health. The `dt` parameter simulates the time between countermeasures and their research and validation. 
 
 Incorporating the controller into your model can be done as follows:
 
