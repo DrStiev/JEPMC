@@ -170,7 +170,7 @@ function get_cumulative_plot(data::Vector{DataFrame},
     errorline!(1:n, y[:, :, 4], errorstyle = :plume, label = "R")
     errorline!(1:n, y[:, :, 5], errorstyle = :plume, label = "D")
 
-    states = 3
+    states = 2
     y = fill(NaN, n, nodes, states)
     for i in 1:states
         res = []

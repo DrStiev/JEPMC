@@ -1,15 +1,4 @@
-using Test
-
-include("testBenchmark.jl")
-@testset "benchmark" begin
-    path = "results/" * string(today()) * "/benchmark/"
-    isdir(path) == false && mkpath(path)
-
-    @benchmark test_benchmark(false, false)
-    @benchmark test_benchmark(false, true)
-    @benchmark test_benchmark(true, false)
-    @benchmark test_benchmark(true, true)
-end
+using Test, Dates, BenchmarkTools
 
 include("testSingleRun.jl")
 @testset "singlerun" begin
@@ -22,15 +11,21 @@ include("testSingleRun.jl")
     @test test_abm_all(path) == true
 end
 
-include("testEnsembleRun.jl")
-@testset "ensemblerun" begin
-    path = "results/" * string(today()) * "/"
+include("testBenchmark.jl")
+@testset "benchmark" begin
+    path = "results/" * string(today()) * "/benchmark/"
     isdir(path) == false && mkpath(path)
 
-    @test test_ensemble_abm(path) == true
-    @test test_ensemble_abm_controller(path) == true
-    @test test_ensemble_abm_vaccine(path) == true
-    @test test_ensemble_abm_all(path) == true
+    suite = BenchmarkGroup()
+    suite["tag"] = BenchmarkGroup(["tag1", "tag2"])
+    suite["no_control"] = @benchmarkable test_benchmark(false, false)
+    suite["control"] = @benchmarkable test_benchmark(true, false)
+    suite["vaccine"] = @benchmarkable test_benchmark(false, true)
+    suite["all"] = @benchmarkable test_benchmark(true, true)
+
+    tune!(suite)
+    res = BenchmarkTools.run(suite, verbose = true)
+    BenchmarkTools.save(path * "benchmark.json", res)
 end
 
 include("testParamScan.jl")
@@ -51,9 +46,21 @@ include("testParamScan.jl")
     @test test_paramscan_abm(path * "numNodes/", Dict(:numNodes => [8, 16, 32, 64])) == true
     @test test_paramscan_abm(path * "initialNodeInfected/",
         Dict(:initialNodeInfected => Base.collect(1:3:10))) == true
-    @test test_paramscan_abm(path * "dt/", Dict(:dt => Base.collect(7:7:28))) == true
+    @test test_paramscan_abm(path * "dt/",
+        Dict(:dt => Base.collect(7:7:28), :control => [true])) == true
     @test test_paramscan_abm(path * "tolerance/",
-        Dict(:tolerance => [1e-4, 1e-3, 1e-2, 1e-1])) == true
+        Dict(:tolerance => [1e-4, 1e-3, 1e-2, 1e-1], :control => [true])) == true
+end
+
+include("testEnsembleRun.jl")
+@testset "ensemblerun" begin
+    path = "results/" * string(today()) * "/"
+    isdir(path) == false && mkpath(path)
+
+    @test test_ensemble_abm(path) == true
+    @test test_ensemble_abm_controller(path) == true
+    @test test_ensemble_abm_vaccine(path) == true
+    @test test_ensemble_abm_all(path) == true
 end
 
 include("testSensitivity.jl")

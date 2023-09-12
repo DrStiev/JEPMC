@@ -352,20 +352,3 @@ function collect_paramscan!(parameters::Dict = Dict(:maxTravelingRate => Base.co
 end
 
 ### end of file -- SocialNewtorkABM.jl
-
-# include("Controller.jl")
-
-# model = init(; numNodes = 4, control = true)
-# data = collect!(model; n = 1200) # Time: 0:01:40
-
-# model = init(; numNodes = 8, control = true)
-# data = collect!(model; n = 1200) # Time: 0:03:00
-
-# model = init(; numNodes = 16, control = true)
-# data = collect!(model; n = 1200) # Time: 0:05:12
-
-# model = init(; numNodes = 32, control = true)
-# data = collect!(model; n = 1200) # Time: 0:10:23
-
-# model = init(; numNodes = 64, control = true)
-# data = collect!(model; n = 1200) # Time: 0:20:25

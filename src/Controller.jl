@@ -86,7 +86,7 @@ function controller(initial_condition::Vector,
 
     patience_temp = 0
     losses = Float64[]
-    callback = function (p, l; lstep = loss_step)
+    callback = function (p, l)
         push!(losses, l)
         # Exit early if not improving...
         if length(losses) > 1 && (abs(l - losses[end - 1]) < 1e-4 || isinf(l))

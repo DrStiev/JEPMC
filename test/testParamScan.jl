@@ -65,13 +65,3 @@ function test_paramscan_abm(path::String, properties)
     end
     return true
 end
-
-# save results controller paramscan
-function test_param_controller(option, title)
-    model = JEPMC.init(; control = true, control_options = option)
-    data = JEPMC.collect!(model)
-    d = reduce(vcat, data)
-    plt = JEPMC.plot_model(data; title = title)
-    save_results(path * "controller_paramscan/", model.properties, d, plt)
-    return true
-end
