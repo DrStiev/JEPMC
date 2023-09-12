@@ -3,7 +3,7 @@ include("../src/JEPMC.jl")
 
 function test_gif_animation_no_control(path::String)
     model = JEPMC.init(; numNodes = 20)
-    data = JEPMC.collect!(model; n = 1)
+    data = JEPMC.collect!(model; n = 1, showprogress = false)
     anim = @animate for _ in 1:(1200 - 1)
         tmp = JEPMC.collect!(model; n = 1)
         for j in 1:size(tmp, 1)
@@ -17,7 +17,7 @@ end
 
 function test_gif_animation_control(path::String)
     model = JEPMC.init(; numNodes = 20, control = true)
-    data = JEPMC.collect!(model; n = 1)
+    data = JEPMC.collect!(model; n = 1, showprogress = false)
     anim = @animate for _ in 1:(1200 - 1)
         tmp = JEPMC.collect!(model; n = 1)
         for j in 1:size(tmp, 1)
@@ -31,7 +31,7 @@ end
 
 function test_gif_animation_vaccine(path::String)
     model = JEPMC.init(; numNodes = 20, vaccine = true)
-    data = JEPMC.collect!(model; n = 1)
+    data = JEPMC.collect!(model; n = 1, showprogress = false)
     anim = @animate for _ in 1:(1200 - 1)
         tmp = JEPMC.collect!(model; n = 1)
         for j in 1:size(tmp, 1)
@@ -45,7 +45,7 @@ end
 
 function test_gif_animation_all(path::String)
     model = JEPMC.init(; numNodes = 20, control = true, vaccine = true)
-    data = JEPMC.collect!(model; n = 1)
+    data = JEPMC.collect!(model; n = 1, showprogress = false)
     anim = @animate for _ in 1:(1200 - 1)
         tmp = JEPMC.collect!(model; n = 1)
         for j in 1:size(tmp, 1)

@@ -1,6 +1,7 @@
-using Test, Dates, DataFrames, Plots, Distributed
-addprocs(Int(Sys.CPU_THREADS / 4))
-@everywhere include("../src/JEPMC.jl")
+using Test, Dates, DataFrames, Plots #, Distributed
+# addprocs(Int(Sys.CPU_THREADS / 4))
+#@everywhere include("../src/JEPMC.jl")
+include("../src/JEPMC.jl")
 
 function save_results(path::String, properties::Vector, d::DataFrame, plts::Vector)
     i = 1
