@@ -5,13 +5,16 @@
 ### See file LICENSE in top folder for copyright and licensing
 ### information.
 
-using DifferentialEquations, Optimization, CUDA
+using DifferentialEquations, Optimization, CUDA, DiffEqGPU
 using Zygote, OptimizationOptimJL, OptimizationPolyalgorithms
 using Lux, OptimizationOptimisers, OrdinaryDiffEq
 using SciMLSensitivity, Random, ComponentArrays, Enzyme
 using Plots
 using DiffEqFlux: swish
 using Statistics: mean
+
+@info "GPU device: $(CUDA.device()) functional: $(CUDA.functional())"
+Lux.gpu_backend!("CUDA")
 
 """
     function that implements a NeuralODE controller to learn about the spread of a specific disease and try to mitigate it via non pharmaceutical interventions
@@ -42,8 +45,12 @@ function controller(initial_condition::Vector,
     verbose::Bool = false,
     id = missing,
     rng::AbstractRNG = Random.default_rng())
+    CUDA.allowscalar(false)
+
     ann = Lux.Chain(Lux.Dense(5, 64, swish), Lux.Dense(64, 1))
     p, state = Lux.setup(rng, ann)
+    p = p |> ComponentArray |> Lux.gpu_device()
+    state = state |> Lux.gpu_device()
 
     function dudt_(du, u, p, t)
         S, E, I, R, D = u
@@ -57,7 +64,9 @@ function controller(initial_condition::Vector,
         du[5] = δ * γ * I # dD
     end
 
-    ts = collect(0.0:step:timeframe[end])
+    ts = Float32.(collect(0.0:step:timeframe[end]))
+    initial_condition = Float32.(initial_condition)
+    timeframe = Float32.(timeframe)
     prob = ODEProblem(dudt_, initial_condition, timeframe, p)
 
     function predict(p)
@@ -94,7 +103,7 @@ function controller(initial_condition::Vector,
     iter = 0 # Int(maxiters / 5)
     adtype = Optimization.AutoZygote()
     optf = Optimization.OptimizationFunction((x, p) -> loss(x), adtype)
-    optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
+    optprob = Optimization.OptimizationProblem(optf, p)
     res1 = Optimization.solve(optprob,
         ADAM(0.001),
         callback = callback,
@@ -103,7 +112,7 @@ function controller(initial_condition::Vector,
     # good to have but very memory consuming
     # optprob2 = remake(optprob, u0 = res1.u)
     # res2 = Optimization.solve(optprob2,
-    #     Optim.LBFGS(),
+    #     Optim.LBFGS(initial_stepnorm = 0.01),
     #     callback = callback,
     #     maxiters = iter)
 
@@ -115,7 +124,7 @@ function controller(initial_condition::Vector,
     verbose ?
     println("Current loss after $(length(losses)) iterations: $(losses[end]) \nCountermeasure value for agent $(id) is $(res)") :
     nothing
-    return res
+    return Float64(res)
 end
 
 ### end of file -- Controller.jl

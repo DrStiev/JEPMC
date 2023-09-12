@@ -1,3 +1,10 @@
+### -*- Mode: Julia -*-
+
+### Utils.jl
+###
+### See file LICENSE in top folder for copyright and licensing
+### information.
+
 using CSV, DataFrames, Downloads, Random, Plots
 using JLD2, FileIO, Dates, Distributions
 using LinearAlgebra: diagind
@@ -70,3 +77,5 @@ function save_plot(plot, path = "", title = "title", format = "png")
     isdir(path) == false && mkpath(path)
     savefig(plot, path * title * "." * format)
 end
+
+### end of file -- Utils.jl

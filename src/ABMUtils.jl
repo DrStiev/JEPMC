@@ -1,3 +1,10 @@
+### -*- Mode: Julia -*-
+
+### ABMUtils.jl
+###
+### See file LICENSE in top folder for copyright and licensing
+### information.
+
 using Graphs, Random, Agents, DataFrames, Dates, CSV, Plots
 using Distributions, GraphPlot, Colors, GraphRecipes, StatsPlots
 using DifferentialEquations, SciMLSensitivity
@@ -294,3 +301,5 @@ function sensitivity_analisys(f,
 
     return x, dp, pltout
 end
+
+### end of file -- ABMUtils.jl

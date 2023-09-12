@@ -1,3 +1,10 @@
+### -*- Mode: Julia -*-
+
+### SocialNewtorkABM.jl
+###
+### See file LICENSE in top folder for copyright and licensing
+### information.
+
 # imported libraries
 using Agents, Graphs, Random, Distributions, DataFrames
 using SparseArrays: findnz
@@ -268,8 +275,8 @@ end
 function collect!(model::ABM;
     agent_step = agent_step!,
     model_step = model_step!,
-    n::Int = 1200,
-    showprogress::Bool = false,
+    n = 1200,
+    showprogress::Bool = true,
     split_result::Bool = true,
     adata = get_observable_data())
     data, _ = run!(model,
@@ -292,8 +299,8 @@ end
 function ensemble_collect!(models::Vector;
     agent_step = agent_step!,
     model_step = model_step!,
-    n::Int = 1200,
-    showprogress::Bool = false,
+    n = 1200,
+    showprogress::Bool = true,
     parallel::Bool = true,
     adata = get_observable_data(),
     split_result::Bool = true)
@@ -329,8 +336,8 @@ function collect_paramscan!(parameters::Dict = Dict(:maxTravelingRate => Base.co
     adata = get_observable_data(),
     agent_step = agent_step!,
     model_step = model_step!,
-    n::Int = 1200,
-    showprogress::Bool = false,
+    n = 1200,
+    showprogress::Bool = true,
     parallel::Bool = true)
     data = paramscan(parameters,
         init;
@@ -343,3 +350,22 @@ function collect_paramscan!(parameters::Dict = Dict(:maxTravelingRate => Base.co
 
     return data
 end
+
+### end of file -- SocialNewtorkABM.jl
+
+# include("Controller.jl")
+
+# model = init(; numNodes = 4, control = true)
+# data = collect!(model; n = 1200) # Time: 0:01:40
+
+# model = init(; numNodes = 8, control = true)
+# data = collect!(model; n = 1200) # Time: 0:03:00
+
+# model = init(; numNodes = 16, control = true)
+# data = collect!(model; n = 1200) # Time: 0:05:12
+
+# model = init(; numNodes = 32, control = true)
+# data = collect!(model; n = 1200) # Time: 0:10:23
+
+# model = init(; numNodes = 64, control = true)
+# data = collect!(model; n = 1200) # Time: 0:20:25
