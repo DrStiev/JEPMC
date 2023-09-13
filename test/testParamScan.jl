@@ -60,7 +60,7 @@ function test_paramscan_abm(path::String, properties)
     JEPMC.save_dataframe(data[1], path, "SocialNetworkABM")
     i = 1
     for plt in plts
-        JEPMC.save_plot(plt, path, "SocialNetworkABM_$i", "pdf")
+        JEPMC.save_plot(plt, path, "SocialNetworkABM_$i")
         i += 1
     end
     return true

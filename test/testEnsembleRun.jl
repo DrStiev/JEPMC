@@ -12,7 +12,7 @@ function save_results(path::String, properties::Vector, d::DataFrame, plts::Vect
     JEPMC.save_dataframe(d, path, "SocialNetworkABM")
     i = 1
     for plt in plts
-        JEPMC.save_plot(plt, path, "SocialNetworkABM_$i", "pdf")
+        JEPMC.save_plot(plt, path, "SocialNetworkABM_$i")
         i += 1
     end
 end
