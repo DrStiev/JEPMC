@@ -182,12 +182,10 @@ function get_cumulative_plot(data::Vector{DataFrame},
     end
     p2 = errorline(1:n, y[:, :, 1], errorstyle = errorstyle, label = "happiness")
     errorline!(1:n, y[:, :, 2], errorstyle = errorstyle, label = "countermeasures")
-    # errorline!(1:n, y[:, :, 3], errorstyle = errorstyle, label = "vaccine efficacy")
-    vax = []
-    for d in data
-        push!(vax, findfirst(d[:, 6] .!= 0.0))
-    end
-    vax = sort(unique(filter(x -> !isnothing(x), vax)))
+    vax = unique(collect(Iterators.flatten([unique(filter(x -> x .!= 0.0, d[:, 6]))
+                                            for d in data])))
+    vax = sort(unique(filter(x -> !isnothing(x),
+        [findfirst(d[:, 6] .== v) for v in vax for d in data])))
     if !isempty(vax)
         label = "vaccine"
         for v in vax
