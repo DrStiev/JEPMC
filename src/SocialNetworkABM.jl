@@ -352,3 +352,15 @@ function collect_paramscan!(parameters::Dict = Dict(:maxTravelingRate => Base.co
 end
 
 ### end of file -- SocialNewtorkABM.jl
+# using Statistics: mean
+# control = [false, true]
+# vaccine = [false, true]
+# for c in control, v in vaccine
+#     model = init(; control = c, vaccine = v)
+#     data = collect!(model)
+#     m = mean([sum(d[!, :status]) for d in data]) ./ model.numNodes
+#     d = mean(([d[!, :status][end][end] for d in data]))
+#     h = mean([mean(d[!, :happiness]) for d in data])
+#     println("Results for control: $(c), vaccine: $(v)")
+#     println("Cumulative exposed: $(m[2]), Cumulative infected: $(m[3]), Cumulative deaths: $d, Average happiness: $h")
+# end
