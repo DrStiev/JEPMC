@@ -67,8 +67,8 @@ function init(;
     doplot = false,
     verbose = false)
     rng = Xoshiro(seed)
-    population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
     graph = connected_graph(numNodes, edgesCoverage; rng = rng)
+    population = map((x) -> round(Int, x), randexp(rng, numNodes) * avgPopulation)
     migrationMatrix = get_migration_matrix(graph, population, maxTravelingRate)
 
     control_options = @dict(tolerance,
@@ -94,31 +94,24 @@ function init(;
         properties = properties,
         rng)
 
-    Is = [zeros(Int, numNodes)...]
+    Is = zeros(Int, numNodes)
     for i in 1:initialNodeInfected
         Is[rand(model.rng, 1:numNodes)] = 1
     end
 
     for node in 1:numNodes
-        status = Is[node] == 1 ?
-                 [
-            (population[node] - 1) / population[node],
-            0,
-            1 / population[node],
-            0,
-            0,
-        ] :
+        pop = population[node]
+        status = Is[node] == 1 ? [(pop - 1) / pop, 0, 1 / pop, 0, 0] :
                  [1.0, 0, 0, 0, 0]
         happiness = 1
         parameters = vcat(param, [0.0, 0.0])
-        add_agent!(model, (0, 0), population[node], status, parameters, happiness)
+        add_agent!(model, (0, 0), pop, status, parameters, happiness)
     end
 
     prob = [OrdinaryDiffEq.ODEProblem(seir!, a.status, (1.0, Inf), a.param)
             for a in allagents(model)]
     integrator = [OrdinaryDiffEq.init(p, OrdinaryDiffEq.Tsit5(); advance_to_tstop = true)
-                  for
-                  p in prob]
+                  for p in prob]
     model.integrator = integrator
 
     return model
@@ -148,9 +141,9 @@ end
 """
 function vaccine!(model::ABM)
     if rand(model.rng) < 1 / 365
-        R = mean([agent.param[1] for agent in allagents(model)])
+        R = mean(agent.param[1] for agent in allagents(model))
         vaccine = (1 - (1 / R)) / rand(model.rng, Normal(0.83, 0.083))
-        vaccine *= mean([agent.param[4] for agent in allagents(model)])
+        vaccine *= mean(agent.param[4] for agent in allagents(model))
         agent = random_agent(model)
         agent.param[7] = vaccine
     end
@@ -159,7 +152,7 @@ end
 function spread_vaccine!(agent, model::ABM)
     network = model.migrationMatrix[agent.id, :]
     tidxs, tweights = findnz(network)
-    for i in 1:length(tidxs)
+    for i in eachindex(tidxs)
         objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
         objective.param[7] = agent.param[7]
     end
@@ -188,7 +181,7 @@ function migrate!(agent, model::ABM)
     # calculate the amount of individual that travel from each node given the amount of
     # control measure active at each time step. Then update all the relevant information of
     # each agent
-    for i in 1:length(tidxs)
+    for i in eachindex(tidxs)
         ap = deepcopy(agent.population)
         as = deepcopy(agent.status)
 
@@ -260,7 +253,6 @@ function control!(agent,
             step = step,
             maxiters = maxiters,
             patience = patience,
-            loss_step = Int(maxiters / 10),
             doplot = doplot,
             verbose = verbose,
             id = agent.id,
@@ -288,7 +280,7 @@ function collect!(model::ABM;
     if split_result
         return [filter(:id => ==(i), data) for i in unique(data[!, :id])]
     else
-        return data
+        return [data]
     end
 end
 
@@ -320,7 +312,7 @@ function ensemble_collect!(models::Vector;
         end
         return outres
     else
-        return data
+        return [data]
     end
 end
 
@@ -348,19 +340,7 @@ function collect_paramscan!(parameters::Dict = Dict(:maxTravelingRate => Base.co
         showprogress = showprogress,
         parallel = parallel)
 
-    return data
+    return [data]
 end
 
 ### end of file -- SocialNewtorkABM.jl
-# using Statistics: mean
-# control = [false, true]
-# vaccine = [false, true]
-# for c in control, v in vaccine
-#     model = init(; control = c, vaccine = v)
-#     data = collect!(model)
-#     m = mean([sum(d[!, :status]) for d in data]) ./ model.numNodes
-#     d = mean(([d[!, :status][end][end] for d in data]))
-#     h = mean([mean(d[!, :happiness]) for d in data])
-#     println("Results for control: $(c), vaccine: $(v)")
-#     println("Cumulative exposed: $(m[2]), Cumulative infected: $(m[3]), Cumulative deaths: $d, Average happiness: $h")
-# end

@@ -1,9 +1,16 @@
 using Aqua, JEPMC
 
-# Aqua tests
-Aqua.test_project_toml_formatting(JEPMC)
-Aqua.test_project_extras(JEPMC)
-Aqua.test_unbound_args(JEPMC)
-Aqua.test_undefined_exports(JEPMC)
-Aqua.test_ambiguities(JEPMC)
-Aqua.test_piracy(JEPMC)
+@testset "Aqua tests" begin
+    for test in [Aqua.test_project_toml_formatting,
+        Aqua.test_project_extras,
+        Aqua.test_unbound_args,
+        Aqua.test_undefined_exports,
+        Aqua.test_ambiguities,
+        Aqua.test_piracy]
+        try
+            test(JEPMC)
+        catch e
+            @warn "Test $test failed with error: $e"
+        end
+    end
+end

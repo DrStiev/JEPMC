@@ -17,47 +17,14 @@ function save_results(path::String, properties::Vector, d::DataFrame, plts::Vect
     end
 end
 
-function test_ensemble_abm(path::String)
-    models = [JEPMC.init(; seed = abs(i)) for i in rand(Int64, 5)]
+function test_ensemble_abm(path::String, control::Bool, vaccine::Bool)
+    models = [JEPMC.init(; control = control, vaccine = vaccine, seed = abs(i))
+              for i in rand(Int64, 5)]
     properties = [model.properties for model in models]
     data = JEPMC.ensemble_collect!(models)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
     plts = [JEPMC.plot_model(d; errorstyle = :ribbon) for d in data]
-    save_results(path * "ensemblerun/no_control/", properties, d, plts)
-    return true
-end
-
-function test_ensemble_abm_controller(path::String)
-    models = [JEPMC.init(; control = true, seed = abs(i)) for i in rand(Int64, 5)]
-    properties = [model.properties for model in models]
-    data = JEPMC.ensemble_collect!(models)
-    d = reduce(vcat, data)
-    d = reduce(vcat, d)
-    plts = [JEPMC.plot_model(d; errorstyle = :ribbon) for d in data]
-    save_results(path * "ensemblerun/control/", properties, d, plts)
-    return true
-end
-
-function test_ensemble_abm_vaccine(path::String)
-    models = [JEPMC.init(; vaccine = true, seed = abs(i)) for i in rand(Int64, 5)]
-    properties = [model.properties for model in models]
-    data = JEPMC.ensemble_collect!(models)
-    d = reduce(vcat, data)
-    d = reduce(vcat, d)
-    plts = [JEPMC.plot_model(d; errorstyle = :ribbon) for d in data]
-    save_results(path * "ensemblerun/vaccine/", properties, d, plts)
-    return true
-end
-
-function test_ensemble_abm_all(path::String)
-    models = [JEPMC.init(; control = true, vaccine = true, seed = abs(i)) for
-              i in rand(Int64, 5)]
-    properties = [model.properties for model in models]
-    data = JEPMC.ensemble_collect!(models)
-    d = reduce(vcat, data)
-    d = reduce(vcat, d)
-    plts = [JEPMC.plot_model(d; errorstyle = :ribbon) for d in data]
-    save_results(path * "ensemblerun/all/", properties, d, plts)
+    save_results(path, properties, d, plts)
     return true
 end

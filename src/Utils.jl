@@ -10,14 +10,18 @@ using JLD2, FileIO, Dates, Distributions
 using LinearAlgebra: diagind
 using DrWatson: @dict
 
+function ensure_directory_exists(path::String)
+    isdir(path) == false && mkpath(path)
+end
+
 """
     download_dataset(path::String, url::String)
     Download dataset from an URL string into a specific path
 """
 function download_dataset(path::String, url::String)
     title = split(url, "/")
-    isdir(path) == false && mkpath(path)
-    return DataFrame(CSV.File(Downloads.download(url, path * title[length(title)]),
+    ensure_directory_exists(path)
+    return DataFrame(CSV.File(Downloads.download(url, joinpath(path, title[end])),
         delim = ",",
         header = 1))
 end
@@ -50,8 +54,8 @@ end
     Save a dictionary of parameters into a specific path. If no title is provided then a default one is used.
 """
 function save_parameters(params, path::String, title::String = "parameters")
-    isdir(path) == false && mkpath(path)
-    save(path * title * ".jld2", params)
+    ensure_directory_exists(path)
+    save(joinpath(path, "$title.jld2"), params)
 end
 
 """
@@ -65,8 +69,8 @@ load_parameters(path) = load(path)
     Save a DataFrame into a specific path. If no title is provided then a default one is used.
 """
 function save_dataframe(data::DataFrame, path::String, title = "StandardABM")
-    isdir(path) == false && mkpath(path)
-    CSV.write(path * title * ".csv", data)
+    ensure_directory_exists(path)
+    CSV.write(joinpath(path, "$title.csv"), data)
 end
 
 """
@@ -74,8 +78,8 @@ end
     Save a plot into a specific path. If no title is provided then a default one is used. If no format is specified then .png is used
 """
 function save_plot(plot, path = "", title = "title", format = "png")
-    isdir(path) == false && mkpath(path)
-    savefig(plot, path * title * "." * format)
+    ensure_directory_exists(path)
+    savefig(plot, joinpath(path, "$title.$format"))
 end
 
 ### end of file -- Utils.jl

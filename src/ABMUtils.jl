@@ -23,22 +23,11 @@ function get_migration_matrix(g::SimpleGraph,
     population::Vector{Int},
     maxTravelingRate::Float64)
     numNodes = Graphs.nv(g)
-    migrationMatrix = zeros(numNodes, numNodes)
-
-    for n in 1:numNodes
-        for m in 1:numNodes
-            migrationMatrix[n, m] = (population[n] + population[m]) / population[n]
-        end
-    end
-
+    migrationMatrix = (population .+ population') ./ population
     migrationMatrix = (migrationMatrix .* maxTravelingRate) ./ maximum(migrationMatrix)
     migrationMatrix[diagind(migrationMatrix)] .= 1.0
     mmSum = sum(migrationMatrix, dims = 2)
-
-    for c in 1:numNodes
-        migrationMatrix[c, :] ./= mmSum[c]
-    end
-
+    migrationMatrix ./= mmSum
     return migrationMatrix .* adjacency_matrix(g)
 end
 
@@ -49,13 +38,16 @@ end
 function connected_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
     function edge_to_add(n::Int, coverage::Symbol, rng::AbstractRNG)
         low = n - 1
-        max = n * (n - 1) / 2
-        avg = (n * (n - 1) / 2 + (n - 1)) / 2
         if coverage == :low
+            avg = (n * (n - 1) / 2 + (n - 1)) / 2
             return trunc(Int, rand(rng, low:((avg + low) / 2)))
         elseif coverage == :medium
+            avg = (n * (n - 1) / 2 + (n - 1)) / 2
+            max = n * (n - 1) / 2
             return trunc(Int, rand(rng, ((avg + low) / 2):((avg + max) / 2)))
         elseif coverage == :high
+            avg = (n * (n - 1) / 2 + (n - 1)) / 2
+            max = n * (n - 1) / 2
             return trunc(Int, rand(rng, ((avg + max) / 2):max))
         end
     end
@@ -105,7 +97,7 @@ function plot_system_graph(model::ABM)
     nodefillc = [RGBA(status[i][2] + status[i][3], # R
         status[i][1], # G
         status[i][4], # B
-        1.0 - status[i][5]) for i in 1:length(status)]
+        1.0 - status[i][5]) for i in eachindex(status)]
     nodelabel = [agent.id for agent in allagents(model)]
     perm = sortperm(nodelabel)
     nodesize = [agent.population / max for agent in allagents(model)]
@@ -139,6 +131,10 @@ end
     plot_model(data; errorstyle = :ribbon, title::String = "")
 """
 function plot_model(data; errorstyle = :ribbon, title::String = "")
+    # If data is a single DataFrame, convert it to an array of DataFrames
+    if typeof(data) <: DataFrame
+        data = [data]
+    end
     get_cumulative_plot(data,
         length(data),
         length(data[1][!, 1]);
@@ -221,83 +217,32 @@ end
 """
     function that return the sensitivity of the model about certain parameters
     sensitivity_analisys(f, u0, tspan, p; doplot::Bool = true)
-    *IMPORTANT: * this feature is not yet fully generalized. Be careful
 """
-function sensitivity_analisys(f,
-    u0,
-    tspan,
-    p;
-    doplot::Bool = true)
+function sensitivity_analisys(f, u0, tspan, p; doplot::Bool = true)
     prob = ODEForwardSensitivityProblem(f, u0, tspan, p)
     sol = solve(prob, Tsit5())
     x, dp = extract_local_sensitivities(sol)
     pltout = nothing
 
     if doplot
-        dR₀ = dp[1]
-        dγ = dp[2]
-        dσ = dp[3]
-        dω = dp[4]
-        dδ = dp[5]
-        dη = dp[6]
-        dξ = dp[7]
         plt = []
         truesol = solve(ODEProblem(f, u0, tspan, p), Tsit5())
         push!(plt,
             plot(truesol, lw = 2, title = "Data", titlefontsize = 10, legend = false))
-        push!(plt,
-            plot(sol.t,
-                dR₀',
-                lw = 2,
-                title = "Sensitivity to R₀",
-                titlefontsize = 10,
-                legend = false))
-        push!(plt,
-            plot(sol.t,
-                dγ',
-                lw = 2,
-                title = "Sensitivity to γ",
-                titlefontsize = 10,
-                legend = false))
-        push!(plt,
-            plot(sol.t,
-                dσ',
-                lw = 2,
-                title = "Sensitivity to σ",
-                titlefontsize = 10,
-                legend = false))
-        push!(plt,
-            plot(sol.t,
-                dω',
-                lw = 2,
-                title = "Sensitivity to ω",
-                titlefontsize = 10,
-                legend = false))
-        push!(plt,
-            plot(sol.t,
-                dδ',
-                lw = 2,
-                title = "Sensitivity to δ",
-                titlefontsize = 10,
-                legend = false))
-        push!(plt,
-            plot(sol.t,
-                dη',
-                lw = 2,
-                title = "Sensitivity to η",
-                titlefontsize = 10,
-                legend = false))
-        push!(plt,
-            plot(sol.t,
-                dξ',
-                lw = 2,
-                title = "Sensitivity to ξ",
-                titlefontsize = 10,
-                legend = false))
+
+        for i in 1:length(p)
+            push!(plt,
+                plot(sol.t,
+                    dp[i]',
+                    lw = 2,
+                    title = "Sensitivity to param $i",
+                    titlefontsize = 10,
+                    legend = false))
+        end
+
         pltout = plot(plt...)
     end
 
     return x, dp, pltout
 end
-
 ### end of file -- ABMUtils.jl

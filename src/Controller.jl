@@ -40,7 +40,6 @@ function controller(initial_condition::Vector,
     maxiters = 30,
     step = 5.0,
     patience = 3,
-    loss_step = Int(maxiters / 10),
     doplot::Bool = false,
     verbose::Bool = false,
     id = missing,
@@ -57,11 +56,11 @@ function controller(initial_condition::Vector,
         R₀, γ, σ, ω, δ, ξ = p_true
         η = abs(ann(u, p, state)[1][1])
         μ = δ / 1111
-        du[1] = μ * sum(u[1:5]) - R₀ * γ * (1 - η) * S * I + ω * R - ξ * S - μ * S # dS
-        du[2] = R₀ * γ * (1 - η) * S * I - σ * E - μ * E # dE
-        du[3] = σ * E - γ * I - δ * I - μ * I # dI
-        du[4] = (1 - δ) * γ * I - ω * R + ξ * S - μ * R # dR
-        du[5] = δ * γ * I # dD
+        du[1] .= μ * sum(u[1:5]) - R₀ * γ * (1 - η) * S * I + ω * R - ξ * S - μ * S # dS
+        du[2] .= R₀ * γ * (1 - η) * S * I - σ * E - μ * E # dE
+        du[3] .= σ * E - γ * I - δ * I - μ * I # dI
+        du[4] .= (1 - δ) * γ * I - ω * R + ξ * S - μ * R # dR
+        du[5] .= δ * γ * I # dD
     end
 
     ts = Float32.(collect(0.0:step:timeframe[end]))
