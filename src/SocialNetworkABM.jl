@@ -268,7 +268,7 @@ function collect!(model::ABM;
     agent_step = agent_step!,
     model_step = model_step!,
     n = 1200,
-    showprogress::Bool = true,
+    showprogress::Bool = false,
     split_result::Bool = true,
     adata = get_observable_data())
     data, _ = run!(model,
@@ -292,7 +292,7 @@ function ensemble_collect!(models::Vector;
     agent_step = agent_step!,
     model_step = model_step!,
     n = 1200,
-    showprogress::Bool = true,
+    showprogress::Bool = false,
     parallel::Bool = true,
     adata = get_observable_data(),
     split_result::Bool = true)
@@ -329,7 +329,7 @@ function collect_paramscan!(parameters::Dict = Dict(:maxTravelingRate => Base.co
     agent_step = agent_step!,
     model_step = model_step!,
     n = 1200,
-    showprogress::Bool = true,
+    showprogress::Bool = false,
     parallel::Bool = true)
     data = paramscan(parameters,
         init;

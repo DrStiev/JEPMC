@@ -14,9 +14,8 @@ include("testSingleRun.jl")
     vaccine = [false, true]
 
     for c in control, v in vaccine
-        path = path * "singlerun/" * (control ? "control_" : "") *
-               (vaccine ? "vaccine_" : "") * "/"
-        @test test_ensemble_abm(path, c, v)
+        spath = path * (c ? "control_" : "") * (v ? "vaccine_" : "") * "/"
+        @test test_abm(spath, c, v)
     end
 end
 
@@ -67,9 +66,8 @@ include("testEnsembleRun.jl")
     vaccine = [false, true]
 
     for c in control, v in vaccine
-        path = path * "ensemblerun/" * (control ? "control_" : "") *
-               (vaccine ? "vaccine_" : "") * "/"
-        @test test_ensemble_abm(path, c, v)
+        spath = path * (c ? "control_" : "") * (v ? "vaccine_" : "") * "/"
+        @test test_ensemble_abm(spath, c, v)
     end
 end
 
@@ -95,9 +93,8 @@ include("testGif.jl")
     vaccine = [false, true]
 
     for c in control, v in vaccine
-        path = path * "demo_" * (control ? "control_" : "") * (vaccine ? "vaccine_" : "") *
-               ".gif"
-        @test test_gif_animation(path, c, v)
+        spath = path * (c ? "control_" : "") * (v ? "vaccine_" : "") * ".gif"
+        @test test_gif_animation(spath, c, v)
     end
 end
 

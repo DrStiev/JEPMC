@@ -200,7 +200,7 @@ function get_cumulative_plot(data::Vector{DataFrame},
     for i in 1:states
         res = []
         for d in data
-            push!(res, reduce(hcat, d[:, end]))
+            push!(res, reduce(hcat, d[:, 7]))
         end
         res = reduce(hcat, res)
         y[:, :, i] = res

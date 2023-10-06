@@ -201,7 +201,9 @@ data_control = JEPMC.collect!(model_control; n = 300)
 plt_control = JEPMC.plot_model(data_control, title="NON-PHARMACEUTICAL CONTROL")
 
 # ╔═╡ b9c77fad-df27-4ae9-94b6-04c88b7c7a7e
+#=╠═╡
 display(plt_control)
+  ╠═╡ =#
 
 # ╔═╡ 2af22f3f-9c91-4a53-aa74-968c05894ef3
 md"""
