@@ -7,13 +7,14 @@
 
 using DifferentialEquations, Optimization, CUDA, DiffEqGPU
 using Zygote, OptimizationOptimJL, OptimizationPolyalgorithms
-using Lux, OptimizationOptimisers, OrdinaryDiffEq
+using Lux, OptimizationOptimisers, OrdinaryDiffEq, LuxCUDA
 using SciMLSensitivity, Random, ComponentArrays, Enzyme
 using Plots
 using DiffEqFlux: swish
 using Statistics: mean
 
 @info "GPU device: $(CUDA.device()) functional: $(CUDA.functional())"
+@info "LuxCUDA is functional: $(LuxCUDA.functional())"
 Lux.gpu_backend!("CUDA")
 
 """
@@ -48,8 +49,9 @@ function controller(initial_condition::Vector,
 
     ann = Lux.Chain(Lux.Dense(5, 64, swish), Lux.Dense(64, 1))
     p, state = Lux.setup(rng, ann)
-    p = p |> ComponentArray |> Lux.gpu_device()
-    state = state |> Lux.gpu_device()
+    # for reasons gpu_device() is not working properly
+    p = p |> ComponentArray |> Lux.cpu_device()
+    state = state |> Lux.cpu_device()
 
     function dudt_(du, u, p, t)
         S, E, I, R, D = u

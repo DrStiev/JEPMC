@@ -5,10 +5,6 @@ include("../src/JEPMC.jl")
 
 function save_results(path::String, properties::Vector, d::DataFrame, plts::Vector)
     i = 1
-    for p in properties
-        JEPMC.save_parameters(p, path, "SocialNetworkABM_$i")
-        i += 1
-    end
     JEPMC.save_dataframe(d, path, "SocialNetworkABM")
     i = 1
     for plt in plts

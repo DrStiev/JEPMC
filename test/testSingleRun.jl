@@ -2,7 +2,6 @@ using Test, Dates, DataFrames, Plots
 include("../src/JEPMC.jl")
 
 function save_results(path::String, p, d::DataFrame, plt::Plots.Plot)
-    JEPMC.save_parameters(p, path, "SocialNetworkABM")
     JEPMC.save_dataframe(d, path, "SocialNetworkABM")
     JEPMC.save_plot(plt, path, "SocialNetworkABM")
 end
