@@ -178,14 +178,11 @@ function migrate!(agent, model::ABM)
     network = model.migrationMatrix[agent.id, :]
     tidxs, tweights = findnz(network)
 
-    # calculate the amount of individual that travel from each node given the amount of
-    # control measure active at each time step. Then update all the relevant information of
-    # each agent
     for i in eachindex(tidxs)
-        ap = deepcopy(agent.population)
-        as = deepcopy(agent.status)
+        ap = agent.population
+        as = agent.status
 
-        out = as .* tweights[i] .* (1 - deepcopy(agent.param[6]))
+        out = as .* tweights[i] .* (1 - agent.param[6])
         outp = out .* ap
         new_status = as - out
         new_population = sum(new_status .* ap)
@@ -193,8 +190,8 @@ function migrate!(agent, model::ABM)
         agent.population = round(Int64, new_population)
 
         objective = filter(x -> x.id == tidxs[i], [a for a in allagents(model)])[1]
-        os = deepcopy(objective.status)
-        op = deepcopy(objective.population)
+        os = objective.status
+        op = objective.population
 
         new_status = (os .* op) + outp
         new_population = sum(new_status)
@@ -340,7 +337,7 @@ function collect_paramscan!(parameters::Dict = Dict(:maxTravelingRate => Base.co
         showprogress = showprogress,
         parallel = parallel)
 
-    return [data]
+    return data
 end
 
 ### end of file -- SocialNewtorkABM.jl

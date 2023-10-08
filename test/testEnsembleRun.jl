@@ -20,7 +20,7 @@ function test_ensemble_abm(path::String, control::Bool, vaccine::Bool)
     data = JEPMC.ensemble_collect!(models)
     d = reduce(vcat, data)
     d = reduce(vcat, d)
-    plts = [JEPMC.plot_model(d; errorstyle = :ribbon) for d in data]
+    plts = [JEPMC.plot_model(d) for d in data]
     save_results(path, properties, d, plts)
     return true
 end

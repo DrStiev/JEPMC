@@ -10,7 +10,7 @@ function test_abm(path::String, control::Bool, vaccine::Bool)
     model = JEPMC.init(; control = control, vaccine = vaccine)
     data = JEPMC.collect!(model)
     d = reduce(vcat, data)
-    plt = JEPMC.plot_model(data; errorstyle = :ribbon)
+    plt = JEPMC.plot_model(data)
     save_results(path, model.properties, d, plt)
     return true
 end

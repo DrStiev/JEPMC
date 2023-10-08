@@ -22,12 +22,10 @@ gr()
 function get_migration_matrix(g::SimpleGraph,
     population::Vector{Int},
     maxTravelingRate::Float64)
-    numNodes = Graphs.nv(g)
     migrationMatrix = (population .+ population') ./ population
     migrationMatrix = (migrationMatrix .* maxTravelingRate) ./ maximum(migrationMatrix)
     migrationMatrix[diagind(migrationMatrix)] .= 1.0
-    mmSum = sum(migrationMatrix, dims = 2)
-    migrationMatrix ./= mmSum
+    migrationMatrix ./= sum(migrationMatrix, dims = 2)
     return migrationMatrix .* adjacency_matrix(g)
 end
 
@@ -38,27 +36,21 @@ end
 function connected_graph(n::Int, coverage::Symbol; rng::AbstractRNG)
     function edge_to_add(n::Int, coverage::Symbol, rng::AbstractRNG)
         low = n - 1
+        avg = (n * (n - 1) / 2 + (n - 1)) / 2
+        max = n * (n - 1) / 2
         if coverage == :low
-            avg = (n * (n - 1) / 2 + (n - 1)) / 2
             return trunc(Int, rand(rng, low:((avg + low) / 2)))
         elseif coverage == :medium
-            avg = (n * (n - 1) / 2 + (n - 1)) / 2
-            max = n * (n - 1) / 2
             return trunc(Int, rand(rng, ((avg + low) / 2):((avg + max) / 2)))
         elseif coverage == :high
-            avg = (n * (n - 1) / 2 + (n - 1)) / 2
-            max = n * (n - 1) / 2
             return trunc(Int, rand(rng, ((avg + max) / 2):max))
         end
     end
 
     function add_random_edges!(graph::SimpleGraph, n::Int; rng::AbstractRNG)
-        for i in 1:n
-            u = rand(rng, 1:Graphs.nv(graph))
-            v = rand(rng, 1:Graphs.nv(graph))
-            if u ≠ v
-                add_edge!(graph, u, v)
-            end
+        for _ in 1:n
+            u, v = rand(rng, 1:Graphs.nv(graph), 2)
+            u ≠ v && add_edge!(graph, u, v)
         end
     end
 
@@ -130,7 +122,7 @@ end
         - R₀ index
     plot_model(data; errorstyle = :ribbon, title::String = "")
 """
-function plot_model(data; errorstyle = :ribbon, title::String = "")
+function plot_model(data; title::String = "")
     # If data is a single DataFrame, convert it to an array of DataFrames
     if typeof(data) <: DataFrame
         data = [data]
@@ -138,54 +130,47 @@ function plot_model(data; errorstyle = :ribbon, title::String = "")
     get_cumulative_plot(data,
         length(data),
         length(data[1][!, 1]);
-        errorstyle = errorstyle,
         title = title)
 end
 
 function get_cumulative_plot(data::Vector{DataFrame},
     nodes::Int,
     n::Int;
-    errorstyle = :plume,
     title::String = "")
     l = @layout [RecipesBase.grid(1, 1)
         RecipesBase.grid(1, 2)]
-
-    states = 5
-    y = fill(NaN, n, nodes, states)
-    for i in 1:states
-        res = []
-        for d in data
-            push!(res, reduce(hcat, d[:, 3])'[:, i])
+    states = [5, 2, 1]
+    labels = ["S", "E", "I", "R", "D", "happiness", "countermeasures", "R₀"]
+    titles = ["ABM Dynamics ", "Agents response to η", "Variant of Concern"]
+    plots = []
+    for state in states
+        errorstyle = state == 5 ? :plume : :ribbon
+        y = fill(NaN, n, nodes, state)
+        for i in 1:state
+            if state == 5
+                res = [reduce(hcat, d[:, 3])'[:, i] for d in data]
+            elseif state == 2
+                res = [reduce(hcat, d[:, 3 + i]) for d in data]
+            else
+                res = [reduce(hcat, d[:, 7]) for d in data]
+            end
+            y[:, :, i] = reduce(hcat, res)
         end
-        res = reduce(hcat, res)
-        y[:, :, i] = res
-    end
-    p1 = errorline(1:n, y[:, :, 1], errorstyle = :plume, label = "S")
-    errorline!(1:n, y[:, :, 2], errorstyle = :plume, label = "E")
-    errorline!(1:n, y[:, :, 3], errorstyle = :plume, label = "I")
-    errorline!(1:n, y[:, :, 4], errorstyle = :plume, label = "R")
-    errorline!(1:n, y[:, :, 5], errorstyle = :plume, label = "D")
-
-    states = 2
-    y = fill(NaN, n, nodes, states)
-    for i in 1:states
-        res = []
-        for d in data
-            push!(res, reduce(hcat, d[:, 3 + i]))
+        p = errorline(1:n, y[:, :, 1], errorstyle = errorstyle, label = labels[1])
+        for i in 2:state
+            errorline!(1:n, y[:, :, i], errorstyle = errorstyle, label = labels[i])
         end
-        res = reduce(hcat, res)
-        y[:, :, i] = res
+        push!(plots, p)
+        labels = labels[(state + 1):end]
     end
-    p2 = errorline(1:n, y[:, :, 1], errorstyle = errorstyle, label = "happiness")
-    errorline!(1:n, y[:, :, 2], errorstyle = errorstyle, label = "countermeasures")
-    vax = unique(collect(Iterators.flatten([unique(filter(x -> x .!= 0.0, d[:, 6]))
-                                            for d in data])))
     vax = sort(unique(filter(x -> !isnothing(x),
-        [findfirst(d[:, 6] .== v) for v in vax for d in data])))
+        [findfirst(d[:, 6] .== v)
+         for v in unique(collect(Iterators.flatten([unique(filter(x -> x .!= 0.0, d[:, 6]))
+                                                    for d in data]))) for d in data])))
     if !isempty(vax)
         label = "vaccine"
         for v in vax
-            plot!(p2,
+            plot!(plots[2],
                 [v - 0.01, v + 0.01],
                 [0.0, 1.0],
                 lw = 3,
@@ -195,21 +180,9 @@ function get_cumulative_plot(data::Vector{DataFrame},
         end
     end
 
-    states = 1
-    y = fill(NaN, n, nodes, states)
-    for i in 1:states
-        res = []
-        for d in data
-            push!(res, reduce(hcat, d[:, 7]))
-        end
-        res = reduce(hcat, res)
-        y[:, :, i] = res
-    end
-    p3 = errorline(1:n, y[:, :, 1], errorstyle = errorstyle, label = "R₀")
-    plt = plot(plot(p1, title = "ABM Dynamics " * title, titlefontsize = 10),
-        plot(p2, title = "Agents response to η", titlefontsize = 10),
-        plot(p3, title = "Variant of Concern", titlefontsize = 10),
-        layout = l)
+    plt = plot([plot(p, title = titles[i] * title, titlefontsize = 10)
+                for (i, p) in enumerate(plots)]..., layout = l)
+
     return plt
 end
 

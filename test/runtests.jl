@@ -22,13 +22,15 @@ end
 include("testBenchmark.jl")
 @testset "benchmark" begin
     path = create_path("benchmark/")
-
     suite = BenchmarkGroup()
-    suite["tag"] = BenchmarkGroup(["tag1", "tag2"])
-    suite["no_control"] = @benchmarkable test_benchmark(false, false)
-    suite["control"] = @benchmarkable test_benchmark(true, false)
-    suite["vaccine"] = @benchmarkable test_benchmark(false, true)
-    suite["all"] = @benchmarkable test_benchmark(true, true)
+    benchmarks = Dict("no_control" => (false, false),
+        "control" => (true, false),
+        "vaccine" => (false, true),
+        "all" => (true, true))
+
+    for (key, value) in benchmarks
+        suite[key] = @benchmarkable test_benchmark(value...)
+    end
 
     tune!(suite)
     res = BenchmarkTools.run(suite, verbose = true)
@@ -45,17 +47,9 @@ include("testParamScan.jl")
         :tolerance => [1e-4, 1e-3, 1e-2, 1e-1])
     path = create_path("paramscan/")
 
-    @test test_paramscan_abm(path * "maxTravelingRate/",
-        Dict(:maxTravelingRate => Base.collect(0.001:0.003:0.01)))
-    @test test_paramscan_abm(path * "edgesCoverage/",
-        Dict(:edgesCoverage => [:high, :medium, :low]))
-    @test test_paramscan_abm(path * "numNodes/", Dict(:numNodes => [8, 16, 32, 64]))
-    @test test_paramscan_abm(path * "initialNodeInfected/",
-        Dict(:initialNodeInfected => Base.collect(1:3:10)))
-    @test test_paramscan_abm(path * "dt/",
-        Dict(:dt => Base.collect(7:7:28), :control => [true]))
-    @test test_paramscan_abm(path * "tolerance/",
-        Dict(:tolerance => [1e-4, 1e-3, 1e-2, 1e-1], :control => [true]))
+    for (key, value) in properties
+        @test test_paramscan_abm(path * string(key) * "/", Dict(key => value))
+    end
 end
 
 include("testEnsembleRun.jl")
@@ -82,7 +76,7 @@ include("testEffectiveReduction.jl")
 @testset "reduction_effectiveness" begin
     path = create_path("intervention_effectiveness")
 
-    @test test_run_and_plot(; numRuns = 1)
+    @test test_run_and_plot(path; numRuns = 5)
 end
 
 include("testGif.jl")
@@ -99,3 +93,5 @@ include("testGif.jl")
 end
 
 # include("testAqua.jl")
+
+### end of file -- runtests.jl

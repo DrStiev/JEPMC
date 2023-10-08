@@ -24,36 +24,17 @@
 ### OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ### SOFTWARE.
 
-module JEPMC
-
-# included files
-include("SocialNetworkABM.jl")
-include("ABMUtils.jl")
-include("Utils.jl")
-include("Controller.jl")
-
-# exported functions
-export init, collect!, ensemble_collect!, collect_paramscan!, plot_system_graph
-export plot_system_graph, plot_model
-export save_dataframe,
-    save_plot,
-    save_parameters,
-    read_dataset,
-    dataset_from_location,
-    download_dataset,
-    load_parameters
-
 """
         Julia Epidemiology Model and Control (JEPMC)
 
         JEPMC is a library designed for the exploration of epidemic
-            models and their corresponding control mechanisms.
+        models and their corresponding control mechanisms.
 
         # Overview of the Library
 
         The primary focus of this library is to combine the capabilities
         and flexibility of an Agent-Based simulation using the
-        *Agents.jl* framework with the stability and performance
+        Agents.jl framework with the stability and performance
         offered by classical mathematical models defined through
         systems of Ordinary Differential Equations (ODEs).
         Additionally, JEPMC harnesses the power of Neural Networks
@@ -83,7 +64,24 @@ export save_dataframe,
         apply in dynamic situations that change over time.
         A dedicated section will delve deeper into this aspect.
 """
+module JEPMC
 
+# included files
+include("SocialNetworkABM.jl")
+include("ABMUtils.jl")
+include("Utils.jl")
+include("Controller.jl")
+
+# exported functions
+export init, collect!, ensemble_collect!, collect_paramscan!, plot_system_graph
+export plot_system_graph, plot_model
+export save_dataframe,
+    save_plot,
+    save_parameters,
+    read_dataset,
+    dataset_from_location,
+    download_dataset,
+    load_parameters
 end
 
 ### end of file -- JEPMC.jl
