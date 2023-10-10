@@ -1,0 +1,130 @@
+[
+	{
+		"Julia": "1.9.3",
+		"BenchmarkTools": "1.0.0"
+	},
+	[
+		[
+			"BenchmarkGroup",
+			{
+				"data": {
+					"tag": [
+						"BenchmarkGroup",
+						{
+							"data": {},
+							"tags": [
+								"tag1",
+								"tag2"
+							]
+						}
+					],
+					"no_control": [
+						"Trial",
+						{
+							"allocs": 67248133,
+							"gctimes": [
+								5.295072e8
+							],
+							"memory": 4409103848,
+							"params": [
+								"Parameters",
+								{
+									"gctrial": true,
+									"time_tolerance": 0.05,
+									"samples": 10000,
+									"evals": 1,
+									"gcsample": false,
+									"seconds": 5.0,
+									"overhead": 0.0,
+									"memory_tolerance": 0.01
+								}
+							],
+							"times": [
+								1.04262543e10
+							]
+						}
+					],
+					"control": [
+						"Trial",
+						{
+							"allocs": 11170934613,
+							"gctimes": [
+								1.099065954e11
+							],
+							"memory": 995357567272,
+							"params": [
+								"Parameters",
+								{
+									"gctrial": true,
+									"time_tolerance": 0.05,
+									"samples": 10000,
+									"evals": 1,
+									"gcsample": false,
+									"seconds": 5.0,
+									"overhead": 0.0,
+									"memory_tolerance": 0.01
+								}
+							],
+							"times": [
+								9.948095807e11
+							]
+						}
+					],
+					"vaccine": [
+						"Trial",
+						{
+							"allocs": 74275343,
+							"gctimes": [
+								6.480515e8
+							],
+							"memory": 6052979944,
+							"params": [
+								"Parameters",
+								{
+									"gctrial": true,
+									"time_tolerance": 0.05,
+									"samples": 10000,
+									"evals": 1,
+									"gcsample": false,
+									"seconds": 5.0,
+									"overhead": 0.0,
+									"memory_tolerance": 0.01
+								}
+							],
+							"times": [
+								1.14615884e10
+							]
+						}
+					],
+					"all": [
+						"Trial",
+						{
+							"allocs": 3592984901,
+							"gctimes": [
+								3.46869239e10
+							],
+							"memory": 320598899496,
+							"params": [
+								"Parameters",
+								{
+									"gctrial": true,
+									"time_tolerance": 0.05,
+									"samples": 10000,
+									"evals": 1,
+									"gcsample": false,
+									"seconds": 5.0,
+									"overhead": 0.0,
+									"memory_tolerance": 0.01
+								}
+							],
+							"times": [
+								3.33795522e11
+							]
+						}
+					]
+				},
+				"tags": []
+			}
+		]
+	]
+]

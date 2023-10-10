@@ -221,10 +221,10 @@ function voc!(model::ABM)
         agent = random_agent(model)
         if agent.status[3] ≠ 0.0
             agent.param[1] = rand(model.rng, Uniform(3.3, 5.7))
-            agent.param[2] = rand(model.rng, Normal(agent.param[2], agent.param[2] / 10))
-            agent.param[3] = rand(model.rng, Normal(agent.param[3], agent.param[3] / 10))
-            agent.param[4] = rand(model.rng, Normal(agent.param[4], agent.param[4] / 10))
-            agent.param[5] = rand(model.rng, Normal(agent.param[5], agent.param[5] / 10))
+            for i in 2:5
+                agent.param[i] = rand(model.rng,
+                    Normal(agent.param[i], agent.param[i] / 10))
+            end
         end
     end
 end
